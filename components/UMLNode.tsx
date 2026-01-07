@@ -26,6 +26,9 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
   const section1Label = 'Data Properties';
   const section2Label = 'Restrictions / Axioms';
 
+  // Format IRI for display (e.g. show only the fragment if long)
+  const displayIRI = data.iri ? (data.iri.includes('#') ? `:${data.iri.split('#')[1]}` : data.iri) : `:${data.label}`;
+
   return (
     <div className={`w-64 bg-slate-800 rounded-md shadow-lg border ${borderColor} text-xs font-sans overflow-hidden transition-all duration-200`}>
       <Handle type="target" position={Position.Top} className="!bg-slate-400 !w-3 !h-2 !rounded-sm" />
@@ -37,7 +40,7 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
             <span className="truncate">{data.label}</span>
         </div>
         {data.stereotype && <span className="text-[10px] opacity-75 font-mono text-current">{data.stereotype}</span>}
-        {!data.stereotype && <span className="text-[9px] opacity-60 font-mono text-current">IRI: :{data.label}</span>}
+        <span className="text-[9px] opacity-60 font-mono text-current mt-0.5 truncate max-w-full" title={data.iri}>{displayIRI}</span>
       </div>
 
       {/* Section 1: Data Properties */}

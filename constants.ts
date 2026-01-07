@@ -9,6 +9,7 @@ export const INITIAL_NODES: Node[] = [
     data: {
       label: 'Person',
       type: ElementType.OWL_CLASS,
+      iri: 'http://example.org/ontology#Person',
       attributes: [
         { id: 'a1', name: 'hasAge', type: 'xsd:integer', visibility: '+' },
       ],
@@ -22,6 +23,7 @@ export const INITIAL_NODES: Node[] = [
     data: {
       label: 'Mary',
       type: ElementType.OWL_NAMED_INDIVIDUAL,
+      iri: 'http://example.org/ontology#Mary',
       attributes: [],
       methods: [],
     },

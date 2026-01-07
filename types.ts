@@ -28,9 +28,10 @@ export interface Method {
 export interface UMLNodeData {
   label: string;
   type: ElementType;
+  iri?: string;            // Unique Resource Identifier
   attributes: Attribute[]; // Mapped to Data Properties
   methods: Method[];       // Mapped to Axioms/Restrictions
-  stereotype?: string;     // Used for IRI or <<Stereotypes>>
+  stereotype?: string;     // Used for <<Stereotypes>>
   description?: string;
 }
 

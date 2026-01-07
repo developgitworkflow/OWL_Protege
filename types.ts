@@ -1,16 +1,14 @@
 import { Node, Edge } from 'reactflow';
 
 export enum DiagramType {
-  UML = 'UML',
   OWL = 'OWL'
 }
 
 export enum ElementType {
-  CLASS = 'class',
-  INTERFACE = 'interface',
-  ENUM = 'enum',
+  // OWL 2
   OWL_CLASS = 'owl_class',
-  OWL_DATATYPE = 'owl_datatype'
+  OWL_DATATYPE = 'owl_datatype',
+  OWL_NAMED_INDIVIDUAL = 'owl_named_individual'
 }
 
 export interface Attribute {
@@ -30,9 +28,9 @@ export interface Method {
 export interface UMLNodeData {
   label: string;
   type: ElementType;
-  attributes: Attribute[];
-  methods: Method[];
-  stereotype?: string;
+  attributes: Attribute[]; // Mapped to Data Properties
+  methods: Method[];       // Mapped to Axioms/Restrictions
+  stereotype?: string;     // Used for IRI or <<Stereotypes>>
   description?: string;
 }
 

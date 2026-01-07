@@ -15,9 +15,22 @@ export const generateDiagramFromPrompt = async (prompt: string): Promise<{ nodes
   }
 
   const systemInstruction = `
-    You are an expert software architect and ontologist specialized in UML and OWL2.
-    Your task is to generate a JSON structure representing a diagram based on the user's description.
-    
+    You are an expert ontologist specialized in W3C OWL 2 (Web Ontology Language).
+    Your task is to generate a JSON structure representing an ontology diagram based on the user's description.
+
+    MAPPING RULES (OWL 2 Syntax):
+    1. **Classes**: Use type 'owl_class'.
+    2. **Individuals**: Use type 'owl_named_individual'.
+    3. **Datatypes**: Use type 'owl_datatype'.
+    4. **Data Properties**: Map these to the 'attributes' array of a node. 
+       - 'name' = Property IRI or Label (e.g., 'hasAge').
+       - 'type' = XSD Type (e.g., 'xsd:integer').
+    5. **Object Properties**: Map these to 'edges' connecting nodes. 
+       - 'label' = Property IRI (e.g., 'isLocatedIn', 'hasPart').
+    6. **Axioms/Restrictions**: Map these to the 'methods' array of a node for visualization.
+       - 'name' = Restriction type (e.g., 'DisjointWith', 'EquivalentTo').
+       - 'returnType' = The value (e.g., 'Vegetable', 'min 1 hasPart').
+
     The output must strictly adhere to the following schema compatible with ReactFlow:
     {
       "nodes": [
@@ -27,7 +40,7 @@ export const generateDiagramFromPrompt = async (prompt: string): Promise<{ nodes
           "position": { "x": number, "y": number },
           "data": {
             "label": "string",
-            "type": "class" | "interface" | "owl_class",
+            "type": "owl_class" | "owl_named_individual" | "owl_datatype",
             "attributes": [{ "id": "string", "name": "string", "type": "string", "visibility": "+" | "-" }],
             "methods": [{ "id": "string", "name": "string", "returnType": "string", "visibility": "+" | "-" }]
           }
@@ -40,7 +53,6 @@ export const generateDiagramFromPrompt = async (prompt: string): Promise<{ nodes
     
     Lay out the nodes reasonably (e.g. x, y coordinates) so they don't overlap too much.
     Spread them out. Start x at 100, y at 100.
-    For UML, use standard conventions. For OWL, use 'owl_class' as type.
   `;
 
   try {
@@ -137,7 +149,9 @@ export const explainDiagram = async (nodes: Node[], edges: Edge[]): Promise<stri
     try {
         const response = await ai.models.generateContent({
             model: MODEL_NAME,
-            contents: `Analyze this UML/OWL model structure and provide a summary of the system architecture, potential design patterns used, and suggestions for improvement.\n\nData: ${context}`
+            contents: `Analyze this OWL 2 ontology structure. 
+            Discuss Classes, Object Properties, Data Properties, and Individuals.
+            Provide a summary of the semantics and logic.\n\nData: ${context}`
         });
         return response.text || "Could not generate explanation.";
     } catch (e) {

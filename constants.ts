@@ -7,15 +7,12 @@ export const INITIAL_NODES: Node[] = [
     type: 'umlNode',
     position: { x: 250, y: 100 },
     data: {
-      label: 'User',
-      type: ElementType.CLASS,
+      label: 'Person',
+      type: ElementType.OWL_CLASS,
       attributes: [
-        { id: 'a1', name: 'id', type: 'UUID', visibility: '-' },
-        { id: 'a2', name: 'email', type: 'String', visibility: '+' },
+        { id: 'a1', name: 'hasAge', type: 'xsd:integer', visibility: '+' },
       ],
-      methods: [
-        { id: 'm1', name: 'login', returnType: 'void', visibility: '+' },
-      ],
+      methods: [],
     },
   },
   {
@@ -23,19 +20,14 @@ export const INITIAL_NODES: Node[] = [
     type: 'umlNode',
     position: { x: 550, y: 100 },
     data: {
-      label: 'Order',
-      type: ElementType.CLASS,
-      attributes: [
-        { id: 'o1', name: 'orderId', type: 'UUID', visibility: '-' },
-        { id: 'o2', name: 'total', type: 'Decimal', visibility: '+' },
-      ],
-      methods: [
-        { id: 'm2', name: 'calculateTotal', returnType: 'Decimal', visibility: '+' },
-      ],
+      label: 'Mary',
+      type: ElementType.OWL_NAMED_INDIVIDUAL,
+      attributes: [],
+      methods: [],
     },
   },
 ];
 
 export const INITIAL_EDGES: Edge[] = [
-  { id: 'e1-2', source: 'node-1', target: 'node-2', label: 'places', type: 'smoothstep' },
+  { id: 'e1-2', source: 'node-2', target: 'node-1', label: 'rdf:type', type: 'smoothstep' },
 ];

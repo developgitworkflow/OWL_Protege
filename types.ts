@@ -47,3 +47,10 @@ export interface ChatMessage {
   text: string;
   timestamp: number;
 }
+
+export interface ProjectData {
+  name: string;
+  language?: string;
+  description?: string;
+  file?: File;
+}

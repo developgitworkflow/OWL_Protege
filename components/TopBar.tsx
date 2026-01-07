@@ -1,12 +1,13 @@
 import React from 'react';
-import { Download, Upload, Share2, Layers } from 'lucide-react';
+import { Download, Upload, Share2, Layers, FilePlus } from 'lucide-react';
 
 interface TopBarProps {
     onSave: () => void;
     onLoad: (event: React.ChangeEvent<HTMLInputElement>) => void;
+    onNewProject: () => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ onSave, onLoad }) => {
+const TopBar: React.FC<TopBarProps> = ({ onSave, onLoad, onNewProject }) => {
   return (
     <div className="h-16 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-6 shadow-md z-20 text-white">
       <div className="flex items-center gap-3">
@@ -26,6 +27,14 @@ const TopBar: React.FC<TopBarProps> = ({ onSave, onLoad }) => {
          </div>
 
          <div className="h-6 w-px bg-slate-700 mx-2"></div>
+         
+         <button 
+            onClick={onNewProject}
+            className="flex items-center gap-2 text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors"
+         >
+            <FilePlus size={16} />
+            <span className="hidden sm:inline">New</span>
+         </button>
 
          <button 
             onClick={onSave}

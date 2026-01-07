@@ -17,8 +17,9 @@ import PropertiesPanel from './components/PropertiesPanel';
 import TopBar from './components/TopBar';
 import UMLNode from './components/UMLNode';
 import AIAssistant from './components/AIAssistant';
+import CreateProjectModal from './components/CreateProjectModal';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
-import { ElementType, UMLNodeData } from './types';
+import { ElementType, UMLNodeData, ProjectData } from './types';
 
 // Must be defined outside component to avoid re-creation
 const nodeTypes = {
@@ -29,6 +30,8 @@ const Flow = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [projectMetadata, setProjectMetadata] = useState<ProjectData>({ name: 'Untitled Project' });
 
   const onConnect = useCallback((params: Connection) => {
       setEdges((eds) => addEdge({ ...params, type: 'smoothstep', label: 'use' }, eds));
@@ -105,12 +108,12 @@ const Flow = () => {
   }, [setNodes, setEdges]);
 
   const handleSave = () => {
-      const data = JSON.stringify({ nodes, edges });
+      const data = JSON.stringify({ metadata: projectMetadata, nodes, edges });
       const blob = new Blob([data], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'diagram.json';
+      link.download = `${projectMetadata.name.replace(/\s+/g, '_') || 'diagram'}.json`;
       link.click();
   };
 
@@ -125,6 +128,7 @@ const Flow = () => {
                   if (flow.nodes && flow.edges) {
                       setNodes(flow.nodes);
                       setEdges(flow.edges);
+                      if (flow.metadata) setProjectMetadata(flow.metadata);
                   }
               } catch (err) {
                   console.error("Failed to load file", err);
@@ -135,13 +139,45 @@ const Flow = () => {
       }
   };
 
+  const handleCreateProject = (data: ProjectData) => {
+    setProjectMetadata(data);
+    
+    if (data.file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = e.target?.result as string;
+          const flow = JSON.parse(content);
+          if (flow.nodes && flow.edges) {
+            setNodes(flow.nodes);
+            setEdges(flow.edges);
+          }
+        } catch (err) {
+          console.error("Failed to load existing source", err);
+          alert("Invalid source file format");
+        }
+      };
+      reader.readAsText(data.file);
+    } else {
+      // Start fresh
+      setNodes([]);
+      setEdges([]);
+      setSelectedNodeId(null);
+    }
+    setIsCreateModalOpen(false);
+  };
+
   const selectedNode = useMemo(() => {
       return nodes.find(n => n.id === selectedNodeId) || null;
   }, [nodes, selectedNodeId]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50 text-gray-900 font-sans">
-      <TopBar onSave={handleSave} onLoad={handleLoad} />
+      <TopBar 
+        onSave={handleSave} 
+        onLoad={handleLoad} 
+        onNewProject={() => setIsCreateModalOpen(true)}
+      />
       
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
@@ -169,6 +205,9 @@ const Flow = () => {
                 className="!bg-white !border-gray-200 !shadow-sm !rounded-md" 
             />
             <Panel position="top-right" className="bg-white/80 backdrop-blur-sm p-2 rounded text-xs text-gray-500">
+                {projectMetadata.name} • {projectMetadata.language ? `Lang: ${projectMetadata.language}` : 'No Language'}
+            </Panel>
+            <Panel position="bottom-left" className="bg-white/80 backdrop-blur-sm p-2 rounded text-xs text-gray-500 ml-12">
                 Double-click canvas to deselect • Drag from sidebar to add
             </Panel>
           </ReactFlow>
@@ -187,6 +226,12 @@ const Flow = () => {
         onDiagramGenerated={onDiagramGenerated} 
         currentNodes={nodes}
         currentEdges={edges}
+      />
+
+      <CreateProjectModal 
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onCreate={handleCreateProject}
       />
     </div>
   );

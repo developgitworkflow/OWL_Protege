@@ -34,7 +34,7 @@ const Flow = () => {
   const [projectMetadata, setProjectMetadata] = useState<ProjectData>({ name: 'Untitled Project' });
 
   const onConnect = useCallback((params: Connection) => {
-      setEdges((eds) => addEdge({ ...params, type: 'smoothstep', label: 'use' }, eds));
+      setEdges((eds) => addEdge({ ...params, type: 'smoothstep', label: 'use', style: { stroke: '#94a3b8' }, labelStyle: { fill: '#cbd5e1' } }, eds));
   }, [setEdges]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -104,7 +104,7 @@ const Flow = () => {
 
   const onDiagramGenerated = useCallback((newNodes: Node[], newEdges: Edge[]) => {
       setNodes(newNodes);
-      setEdges(newEdges);
+      setEdges(newEdges.map(e => ({ ...e, style: { stroke: '#94a3b8' }, labelStyle: { fill: '#cbd5e1' } })));
   }, [setNodes, setEdges]);
 
   const handleSave = () => {
@@ -172,7 +172,7 @@ const Flow = () => {
   }, [nodes, selectedNodeId]);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-gray-50 text-gray-900 font-sans">
+    <div className="flex flex-col h-screen overflow-hidden bg-slate-950 text-slate-200 font-sans">
       <TopBar 
         onSave={handleSave} 
         onLoad={handleLoad} 
@@ -193,21 +193,22 @@ const Flow = () => {
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             fitView
-            className="bg-slate-50"
+            className="bg-slate-950"
           >
-            <Background color="#cbd5e1" gap={16} size={1} />
-            <Controls className="!bg-white !border-gray-200 !shadow-sm !rounded-md" />
+            <Background color="#334155" gap={16} size={1} />
+            <Controls className="!bg-slate-800 !border-slate-700 !shadow-sm !rounded-md [&>button]:!fill-slate-400 [&>button:hover]:!bg-slate-700" />
             <MiniMap 
                 nodeColor={(n) => {
-                    if (n.type === 'umlNode') return '#3b82f6';
-                    return '#eee';
+                    if (n.type === 'umlNode') return '#6366f1';
+                    return '#334155';
                 }}
-                className="!bg-white !border-gray-200 !shadow-sm !rounded-md" 
+                className="!bg-slate-800 !border-slate-700 !shadow-sm !rounded-md"
+                maskColor="rgba(15, 23, 42, 0.6)"
             />
-            <Panel position="top-right" className="bg-white/80 backdrop-blur-sm p-2 rounded text-xs text-gray-500">
+            <Panel position="top-right" className="bg-slate-800/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 border border-slate-700/50">
                 {projectMetadata.name} • {projectMetadata.language ? `Lang: ${projectMetadata.language}` : 'No Language'}
             </Panel>
-            <Panel position="bottom-left" className="bg-white/80 backdrop-blur-sm p-2 rounded text-xs text-gray-500 ml-12">
+            <Panel position="bottom-left" className="bg-slate-800/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 ml-12 border border-slate-700/50">
                 Double-click canvas to deselect • Drag from sidebar to add
             </Panel>
           </ReactFlow>

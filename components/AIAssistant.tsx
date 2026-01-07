@@ -64,7 +64,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onDiagramGenerated, currentNo
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-full shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 z-50 flex items-center gap-2"
+          className="fixed bottom-6 right-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-full shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 z-50 flex items-center gap-2 border border-blue-500/50"
         >
           <Sparkles className="w-6 h-6" />
           <span className="font-semibold">AI Architect</span>
@@ -73,27 +73,27 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onDiagramGenerated, currentNo
 
       {/* Chat Interface */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 w-96 h-[500px] bg-white rounded-xl shadow-2xl border border-gray-200 z-50 flex flex-col overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300">
+        <div className="fixed bottom-6 right-6 w-96 h-[500px] bg-slate-900 rounded-xl shadow-2xl border border-slate-700 z-50 flex flex-col overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300">
           
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 flex justify-between items-center text-white">
+          <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-4 flex justify-between items-center text-white border-b border-indigo-700/50">
             <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5" />
                 <h3 className="font-bold">AI Architect</h3>
             </div>
-            <button onClick={() => setIsOpen(false)} className="hover:bg-white/20 p-1 rounded">
+            <button onClick={() => setIsOpen(false)} className="hover:bg-white/10 p-1 rounded transition-colors">
                 <X size={18} />
             </button>
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 bg-slate-950 space-y-4">
             {messages.map((msg, idx) => (
                 <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[85%] p-3 rounded-lg text-sm ${
                         msg.role === 'user' 
                         ? 'bg-blue-600 text-white rounded-br-none' 
-                        : 'bg-white border border-gray-200 text-gray-700 rounded-bl-none shadow-sm'
+                        : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-bl-none shadow-sm'
                     }`}>
                         {msg.text}
                     </div>
@@ -101,8 +101,8 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onDiagramGenerated, currentNo
             ))}
              {loading && (
                  <div className="flex justify-start">
-                     <div className="bg-white border border-gray-200 p-3 rounded-lg rounded-bl-none shadow-sm">
-                        <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                     <div className="bg-slate-800 border border-slate-700 p-3 rounded-lg rounded-bl-none shadow-sm">
+                        <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
                      </div>
                  </div>
              )}
@@ -110,18 +110,18 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onDiagramGenerated, currentNo
           </div>
 
           {/* Quick Actions */}
-          <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex gap-2">
+          <div className="px-4 py-2 bg-slate-900 border-t border-slate-800 flex gap-2">
             <button 
                 onClick={handleAnalyze}
                 disabled={currentNodes.length === 0 || loading}
-                className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full hover:bg-indigo-200 disabled:opacity-50"
+                className="text-xs bg-indigo-900/50 text-indigo-300 border border-indigo-800 px-3 py-1 rounded-full hover:bg-indigo-900 hover:text-indigo-200 disabled:opacity-50 transition-colors"
             >
                 Analyze Diagram
             </button>
           </div>
 
           {/* Input */}
-          <div className="p-4 bg-white border-t border-gray-200">
+          <div className="p-4 bg-slate-900 border-t border-slate-800">
             <div className="flex gap-2">
                 <input
                     type="text"
@@ -129,12 +129,12 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onDiagramGenerated, currentNo
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                     placeholder="Describe a system..."
-                    className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="flex-1 bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-blue-600 outline-none placeholder-slate-600"
                 />
                 <button 
                     onClick={handleSend}
                     disabled={loading || !input.trim()}
-                    className="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    className="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                     <Send size={18} />
                 </button>

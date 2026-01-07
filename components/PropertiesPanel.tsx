@@ -22,13 +22,13 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
 
   if (!selectedNode || !localData) {
     return (
-      <div className="w-80 bg-gray-50 border-l border-gray-200 p-6 flex flex-col items-center justify-center text-center h-full">
-        <div className="bg-gray-200 p-4 rounded-full mb-4">
-            <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="w-80 bg-slate-900 border-l border-slate-800 p-6 flex flex-col items-center justify-center text-center h-full">
+        <div className="bg-slate-800 p-4 rounded-full mb-4">
+            <svg className="w-8 h-8 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
         </div>
-        <p className="text-gray-500 font-medium">Select an element to edit properties</p>
+        <p className="text-slate-500 font-medium">Select an element to edit properties</p>
       </div>
     );
   }
@@ -61,12 +61,12 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
   }
 
   return (
-    <div className="w-80 bg-white border-l border-gray-200 h-full overflow-y-auto flex flex-col">
-      <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-        <h2 className="font-bold text-gray-800">Properties</h2>
+    <div className="w-80 bg-slate-900 border-l border-slate-800 h-full overflow-y-auto flex flex-col text-slate-300">
+      <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
+        <h2 className="font-bold text-slate-200">Properties</h2>
         <button 
           onClick={() => onDeleteNode(selectedNode.id)}
-          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition-colors"
+          className="text-red-400 hover:text-red-300 hover:bg-red-900/30 p-1.5 rounded transition-colors"
           title="Delete Element"
         >
           <Trash2 size={16} />
@@ -76,10 +76,10 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
       <div className="p-4 space-y-6">
         {/* Basic Info */}
         <div className="space-y-3">
-          <label className="block text-xs font-semibold text-gray-500 uppercase">Name</label>
+          <label className="block text-xs font-semibold text-slate-500 uppercase">Name</label>
           <input
             type="text"
-            className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none placeholder-slate-500"
             value={localData.label}
             onChange={(e) => handleChange('label', e.target.value)}
           />
@@ -87,10 +87,10 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
 
         {/* Stereotype */}
         <div className="space-y-3">
-            <label className="block text-xs font-semibold text-gray-500 uppercase">Stereotype</label>
+            <label className="block text-xs font-semibold text-slate-500 uppercase">Stereotype</label>
              <input
                 type="text"
-                className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none placeholder-slate-500"
                 value={localData.stereotype || ''}
                 placeholder="e.g. <<Service>>"
                 onChange={(e) => handleChange('stereotype', e.target.value)}
@@ -100,19 +100,19 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
         {/* Attributes */}
         <div>
           <div className="flex justify-between items-center mb-3">
-             <label className="block text-xs font-semibold text-gray-500 uppercase">Attributes</label>
-             <button onClick={addAttribute} className="text-blue-600 hover:bg-blue-50 p-1 rounded">
+             <label className="block text-xs font-semibold text-slate-500 uppercase">Attributes</label>
+             <button onClick={addAttribute} className="text-blue-400 hover:bg-slate-800 p-1 rounded">
                 <Plus size={14} />
              </button>
           </div>
           
           <div className="space-y-2">
             {localData.attributes?.map((attr) => (
-              <div key={attr.id} className="flex gap-1 items-center bg-gray-50 p-1.5 rounded border border-gray-100">
+              <div key={attr.id} className="flex gap-1 items-center bg-slate-800 p-1.5 rounded border border-slate-700">
                 <select 
                     value={attr.visibility} 
                     onChange={(e) => updateAttribute(attr.id, 'visibility', e.target.value)}
-                    className="bg-transparent text-xs font-mono border-none focus:ring-0 p-0 w-8 text-center cursor-pointer"
+                    className="bg-transparent text-slate-400 text-xs font-mono border-none focus:ring-0 p-0 w-8 text-center cursor-pointer"
                 >
                     <option value="+">+</option>
                     <option value="-">-</option>
@@ -120,23 +120,23 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                     <option value="~">~</option>
                 </select>
                 <input 
-                    className="bg-transparent border-b border-transparent focus:border-blue-300 w-20 text-xs px-1 outline-none"
+                    className="bg-transparent border-b border-transparent focus:border-blue-500 w-20 text-xs px-1 outline-none text-slate-200 placeholder-slate-600"
                     value={attr.name}
                     onChange={(e) => updateAttribute(attr.id, 'name', e.target.value)}
                 />
-                <span className="text-gray-400">:</span>
+                <span className="text-slate-500">:</span>
                  <input 
-                    className="bg-transparent border-b border-transparent focus:border-blue-300 w-16 text-xs px-1 outline-none text-gray-600"
+                    className="bg-transparent border-b border-transparent focus:border-blue-500 w-16 text-xs px-1 outline-none text-slate-400 placeholder-slate-600"
                     value={attr.type}
                     onChange={(e) => updateAttribute(attr.id, 'type', e.target.value)}
                 />
-                <button onClick={() => removeAttribute(attr.id)} className="ml-auto text-gray-400 hover:text-red-500">
+                <button onClick={() => removeAttribute(attr.id)} className="ml-auto text-slate-500 hover:text-red-400">
                     <X size={12} />
                 </button>
               </div>
             ))}
              {(!localData.attributes || localData.attributes.length === 0) && (
-                <p className="text-xs text-gray-400 italic">No attributes defined.</p>
+                <p className="text-xs text-slate-600 italic">No attributes defined.</p>
             )}
           </div>
         </div>

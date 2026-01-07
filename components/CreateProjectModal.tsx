@@ -109,25 +109,25 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" 
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity" 
         onClick={onClose}
       />
 
       {/* Modal Content */}
-      <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl ring-1 ring-gray-200 transform transition-all flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-lg bg-slate-900 rounded-xl shadow-2xl ring-1 ring-slate-700 transform transition-all flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-800">
         
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800 bg-slate-900">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <FolderPlus className="w-5 h-5 text-blue-600" />
+            <h2 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
+              <FolderPlus className="w-5 h-5 text-blue-500" />
               New Project
             </h2>
-            <p className="text-sm text-gray-500 mt-0.5">Start a new UML or OWL design project</p>
+            <p className="text-sm text-slate-400 mt-0.5">Start a new UML or OWL design project</p>
           </div>
           <button 
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="text-slate-500 hover:text-slate-300 hover:bg-slate-800 p-2 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           >
             <X size={20} />
           </button>
@@ -139,7 +139,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
           <div className="space-y-4">
             {/* Project Name */}
             <div className="space-y-1.5">
-              <label htmlFor="projectName" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="projectName" className="block text-sm font-medium text-slate-400">
                 Project Name <span className="text-red-500">*</span>
               </label>
               <input 
@@ -149,13 +149,13 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                 placeholder="e.g. Inventory Management System"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder:text-gray-400 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm"
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm"
               />
             </div>
 
             {/* Language */}
             <div className="space-y-1.5">
-              <label htmlFor="language" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="language" className="block text-sm font-medium text-slate-400">
                 Language
               </label>
               <div className="relative">
@@ -163,28 +163,28 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                   id="language"
                   value={language}
                   onChange={(e) => setLanguage(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm appearance-none focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm text-gray-700"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 appearance-none focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm"
                 >
-                  <option value="" disabled>Select a language...</option>
+                  <option value="" disabled className="text-slate-500">Select a language...</option>
                   {LANGUAGES.map((lang) => (
-                    <option key={lang.code} value={lang.code}>
+                    <option key={lang.code} value={lang.code} className="bg-slate-800 text-slate-200">
                       {lang.name} ({lang.code})
                     </option>
                   ))}
                 </select>
                 {/* Chevron Icon */}
-                <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-gray-500">
+                <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-slate-500">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
                 </div>
               </div>
-              <p className="text-[11px] text-gray-500">
+              <p className="text-[11px] text-slate-500">
                 Select from standard IANA language registry codes.
               </p>
             </div>
 
             {/* Description */}
             <div className="space-y-1.5">
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="description" className="block text-sm font-medium text-slate-400">
                 Description
               </label>
               <textarea 
@@ -193,20 +193,20 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                 placeholder="Briefly describe the purpose of this project..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder:text-gray-400 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm resize-none"
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm resize-none"
               />
             </div>
 
             {/* File Upload Area */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-slate-400">
                 Import Existing Source (Optional)
               </label>
               <div 
                 className={`
                     border-2 border-dashed rounded-xl p-6 transition-all cursor-pointer text-center group
-                    ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-400 hover:bg-gray-50'}
-                    ${file ? 'bg-blue-50/50 border-blue-200' : ''}
+                    ${isDragging ? 'border-blue-500 bg-blue-500/10' : 'border-slate-700 hover:border-blue-500 hover:bg-slate-800'}
+                    ${file ? 'bg-blue-500/10 border-blue-500/50' : ''}
                 `}
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
@@ -224,23 +224,23 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                 <div className="flex flex-col items-center justify-center gap-2">
                     {file ? (
                         <>
-                            <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-full bg-blue-900/30 text-blue-400 flex items-center justify-center">
                                 <FileText size={20} />
                             </div>
-                            <div className="text-sm font-medium text-blue-700 max-w-full truncate px-4">
+                            <div className="text-sm font-medium text-blue-400 max-w-full truncate px-4">
                                 {file.name}
                             </div>
                             <div className="text-xs text-blue-500">Click to change</div>
                         </>
                     ) : (
                         <>
-                            <div className="w-10 h-10 rounded-full bg-gray-100 text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-500 transition-colors flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-full bg-slate-800 text-slate-500 group-hover:bg-blue-900/30 group-hover:text-blue-400 transition-colors flex items-center justify-center">
                                 <Upload size={20} />
                             </div>
-                            <div className="text-sm text-gray-600">
-                                <span className="font-semibold text-blue-600 hover:underline">Click to upload</span> or drag and drop
+                            <div className="text-sm text-slate-400">
+                                <span className="font-semibold text-blue-500 hover:underline">Click to upload</span> or drag and drop
                             </div>
-                            <p className="text-xs text-gray-400">JSON files only</p>
+                            <p className="text-xs text-slate-500">JSON files only</p>
                         </>
                     )}
                 </div>
@@ -253,7 +253,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
             <button 
               type="button" 
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-600 transition-colors"
             >
               Cancel
             </button>

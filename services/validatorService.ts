@@ -239,12 +239,14 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
   interface PropMeta {
       id: string;
       label: string;
+      type: ElementType.OWL_OBJECT_PROPERTY | ElementType.OWL_DATA_PROPERTY | 'Unknown';
       characteristics: Set<string>;
       domains: string[];
       ranges: string[];
   }
   const propertyMeta: Record<string, PropMeta> = {};
 
+  // Initialize explicit properties
   nodes.forEach(n => {
       if (n.data.type === ElementType.OWL_OBJECT_PROPERTY || n.data.type === ElementType.OWL_DATA_PROPERTY) {
           const characteristics = new Set<string>();
@@ -261,13 +263,64 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
               }
           });
 
-          propertyMeta[n.id] = { id: n.id, label: n.data.label, characteristics, domains, ranges };
-          // Map label to ID for edge lookup
+          propertyMeta[n.id] = { id: n.id, label: n.data.label, type: n.data.type, characteristics, domains, ranges };
           labelToId[n.data.label] = n.id;
       }
   });
 
-  // --- 6. Individual Assertion Validation ---
+  // --- 6. Edge Property Type Inference & Validation ---
+  const STANDARD_LABELS = new Set(['rdf:type', 'a', 'rdfs:subClassOf', 'subClassOf', 'owl:disjointWith', 'disjointWith']);
+  
+  // Track inferred usage of properties that aren't explicit nodes
+  const inferredUsage: Record<string, 'Object' | 'Data' | 'Ambiguous'> = {};
+
+  edges.forEach(e => {
+      const label = e.label as string;
+      if (!label || STANDARD_LABELS.has(label)) return;
+
+      const targetNode = nodeMap.get(e.target);
+      if (!targetNode) return;
+
+      const explicitPropId = labelToId[label] || labelToId[label.split(':')[1] || ''];
+      
+      // Determine implied type based on target
+      const targetIsDatatype = targetNode.data.type === ElementType.OWL_DATATYPE;
+      const usageType = targetIsDatatype ? ElementType.OWL_DATA_PROPERTY : ElementType.OWL_OBJECT_PROPERTY;
+
+      // 1. Validate against explicit definition
+      if (explicitPropId && propertyMeta[explicitPropId]) {
+          const def = propertyMeta[explicitPropId];
+          if (def.type !== usageType) {
+              issues.push({
+                  id: `prop-type-mismatch-${e.id}`,
+                  elementId: e.id,
+                  severity: 'error',
+                  title: 'Property Type Mismatch',
+                  message: `Property '${label}' is defined as ${def.type === ElementType.OWL_OBJECT_PROPERTY ? 'ObjectProperty' : 'DataProperty'}, but is connected to a ${targetIsDatatype ? 'Datatype' : 'Class/Individual'}.`
+              });
+          }
+      } 
+      // 2. Validate consistency of inferred usage
+      else {
+          const currentUsage = inferredUsage[label];
+          const newUsage = targetIsDatatype ? 'Data' : 'Object';
+          
+          if (!currentUsage) {
+              inferredUsage[label] = newUsage;
+          } else if (currentUsage !== newUsage && currentUsage !== 'Ambiguous') {
+              inferredUsage[label] = 'Ambiguous';
+              issues.push({
+                  id: `prop-ambiguous-${e.id}`,
+                  elementId: e.id,
+                  severity: 'error',
+                  title: 'Ambiguous Property Usage',
+                  message: `Property '${label}' is used as both ObjectProperty and DataProperty in the diagram (Punning violation).`
+              });
+          }
+      }
+  });
+
+  // --- 7. Individual Assertion Logic ---
   
   interface Fact { subject: string; propertyId: string; object: string; edgeId: string; }
   const facts: Fact[] = [];
@@ -284,9 +337,9 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
   edges.forEach(e => {
       const sourceNode = nodeMap.get(e.source);
       const targetNode = nodeMap.get(e.target);
-      const isIndivToIndiv = sourceNode?.data.type === ElementType.OWL_NAMED_INDIVIDUAL && targetNode?.data.type === ElementType.OWL_NAMED_INDIVIDUAL;
+      // Valid assertions are Indiv -> Indiv (ObjectProp) OR Indiv -> Literal/Data (DataProp)
       
-      if (isIndivToIndiv) {
+      if (sourceNode?.data.type === ElementType.OWL_NAMED_INDIVIDUAL) {
           let propId = labelToId[e.label as string];
           if (propId && propertyMeta[propId]) {
               facts.push({ subject: e.source, propertyId: propId, object: e.target, edgeId: e.id });
@@ -330,7 +383,8 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
               });
           }
       }
-
+      
+      // Domain/Range Check
       if (prop.domains.length > 0) {
           const subjectTypes = individualTypes[f.subject] || [];
           for (const typeId of subjectTypes) {
@@ -348,7 +402,9 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
           }
       }
 
-      if (prop.ranges.length > 0) {
+      // Range check only applicable if target is Individual (ObjectProperty)
+      // Data property range checks require checking value types (out of scope for graph check unless node holds type)
+      if (prop.type === ElementType.OWL_OBJECT_PROPERTY && prop.ranges.length > 0) {
           const objectTypes = individualTypes[f.object] || [];
           for (const typeId of objectTypes) {
               for (const rangeId of prop.ranges) {
@@ -398,7 +454,7 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
       }
   });
 
-  // --- 7. Structural Equivalence Check (OWL 2 Spec) ---
+  // --- 8. Structural Equivalence Check (OWL 2 Spec) ---
   const areStructurallyEquivalent = (n1: Node<UMLNodeData>, n2: Node<UMLNodeData>): boolean => {
       // 1. Same UML Class (e.g. both are OWL_CLASS)
       if (n1.data.type !== n2.data.type) return false;

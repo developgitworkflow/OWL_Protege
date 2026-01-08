@@ -20,10 +20,21 @@ export const generateFunctionalSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
     lines.push('');
     lines.push(`Ontology( <${baseIRI.replace('#', '')}>`);
     
-    // Declarations
+    // Helper to format IRIs
+    const fmt = (str: string) => {
+        if (!str) return `:${str}`;
+        if (str.startsWith('http')) return `<${str}>`;
+        if (str.includes(':')) return str;
+        return `:${str}`;
+    };
+
+    // 1. Explicit Declarations from Nodes
+    const declaredIRIs = new Set<string>();
+
     nodes.forEach(node => {
         const iri = node.data.iri || `:${node.data.label}`;
-        const fmtIRI = iri.startsWith('http') ? `<${iri}>` : iri.includes(':') ? iri : `:${iri}`;
+        const fmtIRI = fmt(iri);
+        declaredIRIs.add(fmtIRI);
         
         let typeStr = '';
         switch(node.data.type) {
@@ -44,13 +55,43 @@ export const generateFunctionalSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
              lines.push(`${indent(1)}AnnotationAssertion( rdfs:comment ${fmtIRI} "${node.data.description}" )`);
         }
     });
+
+    // 2. Infer Property Types from Edges
+    const inferredProps = new Map<string, 'ObjectProperty' | 'DataProperty'>();
+    const STANDARD_LABELS = new Set(['rdf:type', 'a', 'rdfs:subClassOf', 'subClassOf', 'owl:disjointWith', 'disjointWith']);
+
+    edges.forEach(edge => {
+        let label = edge.label as string || '';
+        if (STANDARD_LABELS.has(label)) return;
+
+        const pIRI = fmt(label);
+        if (declaredIRIs.has(pIRI)) return; // Already declared explicitly
+
+        const targetNode = nodes.find(n => n.id === edge.target);
+        if (targetNode) {
+            // If target is a Datatype, it's a DataProperty. Otherwise ObjectProperty.
+            if (targetNode.data.type === ElementType.OWL_DATATYPE) {
+                inferredProps.set(pIRI, 'DataProperty');
+            } else {
+                // If it was already seen as DataProperty, don't overwrite (inconsistency handled by validator)
+                if (inferredProps.get(pIRI) !== 'DataProperty') {
+                    inferredProps.set(pIRI, 'ObjectProperty');
+                }
+            }
+        }
+    });
+
+    // Generate Inferred Declarations
+    inferredProps.forEach((type, iri) => {
+        lines.push(`${indent(1)}Declaration( ${type}( ${iri} ) )`);
+    });
     
     lines.push('');
 
-    // Axioms from Methods (Restrictions, etc.)
+    // 3. Axioms from Methods (Restrictions, etc.)
     nodes.forEach(node => {
         const subjectIRI = node.data.iri || `:${node.data.label}`;
-        const s = subjectIRI.startsWith('http') ? `<${subjectIRI}>` : subjectIRI.includes(':') ? subjectIRI : `:${subjectIRI}`;
+        const s = fmt(subjectIRI);
         
         node.data.methods.forEach(method => {
             const op = method.name; 
@@ -90,17 +131,14 @@ export const generateFunctionalSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
         });
     });
 
-    // Edges
+    // 4. Edges -> Assertions
     edges.forEach(edge => {
         const sourceNode = nodes.find(n => n.id === edge.source);
         const targetNode = nodes.find(n => n.id === edge.target);
         
         if (sourceNode && targetNode) {
-            const sIRI = sourceNode.data.iri || `:${sourceNode.data.label}`;
-            const tIRI = targetNode.data.iri || `:${targetNode.data.label}`;
-            
-            const s = sIRI.startsWith('http') ? `<${sIRI}>` : sIRI.includes(':') ? sIRI : `:${sIRI}`;
-            const t = tIRI.startsWith('http') ? `<${tIRI}>` : tIRI.includes(':') ? tIRI : `:${tIRI}`;
+            const s = fmt(sourceNode.data.iri || sourceNode.data.label);
+            const t = fmt(targetNode.data.iri || targetNode.data.label);
             
             let prop: string;
             if (typeof edge.label === 'string') {
@@ -111,7 +149,7 @@ export const generateFunctionalSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
                 prop = 'owl:topObjectProperty';
             }
 
-            const p = prop.startsWith('http') ? `<${prop}>` : prop.includes(':') ? prop : `:${prop}`;
+            const p = fmt(prop);
             
             if (prop === 'rdf:type' || prop === 'a') {
                 lines.push(`${indent(1)}ClassAssertion( ${t} ${s} )`);
@@ -120,7 +158,24 @@ export const generateFunctionalSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
             } else if (prop === 'owl:disjointWith' || prop === 'disjointWith') {
                  lines.push(`${indent(1)}DisjointClasses( ${s} ${t} )`);
             } else {
-                lines.push(`${indent(1)}ObjectPropertyAssertion( ${p} ${s} ${t} )`);
+                // Determine if Object or Data Assertion
+                // Priority: Explicit Type -> Inferred from Target
+                let isDataProp = false;
+                
+                // Check if explicit node exists for property
+                const propNode = nodes.find(n => (n.data.iri === p || `:${n.data.label}` === p) && n.data.type === ElementType.OWL_DATA_PROPERTY);
+                if (propNode) {
+                    isDataProp = true;
+                } else if (targetNode.data.type === ElementType.OWL_DATATYPE) {
+                    // Inference
+                    isDataProp = true;
+                }
+
+                if (isDataProp) {
+                     lines.push(`${indent(1)}DataPropertyAssertion( ${p} ${s} ${t} )`);
+                } else {
+                     lines.push(`${indent(1)}ObjectPropertyAssertion( ${p} ${s} ${t} )`);
+                }
             }
         }
     });

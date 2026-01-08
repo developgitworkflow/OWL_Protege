@@ -121,6 +121,14 @@ const tokenize = (input: string): Token[] => {
 
 // --- 2. Parser ---
 
+// Standard Prefixes (Table 2)
+const STANDARD_PREFIXES: Record<string, string> = {
+    'rdf:': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+    'rdfs:': 'http://www.w3.org/2000/01/rdf-schema#',
+    'xsd:': 'http://www.w3.org/2001/XMLSchema#',
+    'owl:': 'http://www.w3.org/2002/07/owl#'
+};
+
 export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>[], edges: Edge[], metadata: ProjectData } => {
     let tokens: Token[];
     try {
@@ -136,20 +144,51 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
     const edges: Edge[] = [];
     const metadata: ProjectData = { name: 'Imported Ontology', defaultPrefix: 'ex', baseIri: 'http://example.org/ontology#' };
     
+    // Prefix Management
+    const prefixes: Record<string, string> = { ...STANDARD_PREFIXES };
+
     const iriToNodeId: Record<string, string> = {};
     const labelToNodeId: Record<string, string> = {};
     let nodeCounter = 0;
 
+    // Helper: Expand Abbreviated IRIs (Section 3.7)
+    const resolveIRI = (tokenValue: string): string => {
+        // Full IRI: <...>
+        if (tokenValue.startsWith('<')) {
+            return tokenValue.replace(/[<>]/g, '');
+        }
+        // PNAME: pn:rc
+        const colonIndex = tokenValue.indexOf(':');
+        if (colonIndex !== -1) {
+            const prefix = tokenValue.substring(0, colonIndex + 1); // e.g. "ex:" or ":"
+            const local = tokenValue.substring(colonIndex + 1);
+            if (prefixes[prefix]) {
+                return prefixes[prefix] + local;
+            }
+        }
+        // Return raw if no prefix found (though spec says strict)
+        return tokenValue;
+    };
+
     const getOrCreateNodeId = (iriOrLabel: string, type: ElementType, isIRI = false): string => {
-        const cleanKey = iriOrLabel.replace(/[<>]/g, '');
-        if (iriToNodeId[cleanKey]) return iriToNodeId[cleanKey];
-        if (labelToNodeId[cleanKey]) return labelToNodeId[cleanKey];
+        // Always store full IRI in data if available
+        const fullIRI = isIRI ? resolveIRI(iriOrLabel) : undefined;
+        // Use full IRI as key if possible to deduplicate
+        const key = fullIRI || iriOrLabel;
+        
+        if (iriToNodeId[key]) return iriToNodeId[key];
+        
+        // Label derivation for display
+        let label = iriOrLabel;
+        if (isIRI) {
+            if (label.startsWith('<')) label = label.replace(/[<>]/g, ''); // cleanup
+            if (label.includes('#')) label = label.split('#')[1];
+            else if (label.includes('/')) label = label.split('/').pop() || label;
+            else if (label.includes(':')) label = label.split(':')[1];
+        }
 
         const id = `node-${++nodeCounter}`;
-        let label = cleanKey;
-        if (isIRI && cleanKey.includes('#')) label = cleanKey.split('#')[1];
-        else if (cleanKey.includes(':')) label = cleanKey.split(':')[1];
-
+        
         const newNode: Node<UMLNodeData> = {
             id,
             type: 'umlNode',
@@ -157,16 +196,14 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
             data: {
                 label,
                 type,
-                iri: isIRI ? cleanKey : undefined,
+                iri: fullIRI,
                 attributes: [],
                 methods: []
             }
         };
         nodes.push(newNode);
         
-        if (isIRI) iriToNodeId[cleanKey] = id;
-        else labelToNodeId[cleanKey] = id;
-        
+        iriToNodeId[key] = id;
         return id;
     };
 
@@ -192,7 +229,7 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
         return null;
     };
 
-    // Consumes a balanced expression for Axiom targets
+    // Consumes a balanced expression
     const consumeBalanced = (): string => {
         let str = '';
         let balance = 0;
@@ -207,164 +244,174 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
         return str.trim();
     };
 
-    // --- Parsing Logic ---
+    // --- Parsing Logic: ontologyDocument := { prefixDeclaration } Ontology ---
 
-    while (current < tokens.length - 1) { // -1 for EOF
-        const t = peek();
-
-        if (t.type === 'KEYWORD') {
-            if (t.value === 'Ontology') {
-                consume();
-                expect('(');
-                const iri = parseIRI();
-                if (iri) metadata.baseIri = iri.replace(/[<>]/g, '');
-                // Skip version IRI if present
-                if (peek().type === 'FULL_IRI') consume();
-                
-                // Parse Headers (Import, Annotations, etc. inside Ontology(...))
-                // For simplicity, we loop until we hit Declarations or End
-                // But in functional syntax, Ontology wraps everything. 
-                // We just continue loop, expecting declarations inside.
-                continue;
-            }
-            else if (t.value === 'Declaration') {
-                consume();
-                expect('(');
-                const typeTok = consume();
-                expect('(');
-                const iri = parseIRI();
-                expect(')');
-                expect(')');
-
-                if (iri) {
-                    let type: ElementType | null = null;
-                    if (typeTok.value === 'Class') type = ElementType.OWL_CLASS;
-                    if (typeTok.value === 'NamedIndividual') type = ElementType.OWL_NAMED_INDIVIDUAL;
-                    if (typeTok.value === 'ObjectProperty') type = ElementType.OWL_OBJECT_PROPERTY;
-                    if (typeTok.value === 'DataProperty') type = ElementType.OWL_DATA_PROPERTY;
-                    if (typeTok.value === 'Datatype') type = ElementType.OWL_DATATYPE;
-
-                    if (type) getOrCreateNodeId(iri, type, true);
-                }
-            }
-            else if (t.value === 'Prefix') {
-                consume();
-                expect('(');
-                let pName = '';
-                if (peek().type === 'PNAME_NS') {
-                    pName = consume().value.replace(':', '');
-                }
-                expect('=');
-                const iri = parseIRI();
-                expect(')');
-                
-                if (iri) {
-                    const cleanIRI = iri.replace(/[<>]/g, '');
-                    if (pName === '') metadata.baseIri = cleanIRI;
-                    else if (!['xsd','owl','rdf','rdfs'].includes(pName)) metadata.defaultPrefix = pName;
-                }
-            }
-            else if (['SubClassOf', 'DisjointClasses', 'ObjectPropertyAssertion', 'ClassAssertion', 'DataPropertyAssertion'].includes(t.value)) {
-                const axiom = consume().value;
-                expect('(');
-                
-                if (axiom === 'SubClassOf') {
-                    const sub = parseIRI();
-                    if (sub) {
-                        const supIRI = parseIRI();
-                        if (supIRI) {
-                            // Simple SubClassOf(A B)
-                            const subId = getOrCreateNodeId(sub, ElementType.OWL_CLASS, true);
-                            const supId = getOrCreateNodeId(supIRI, ElementType.OWL_CLASS, true);
-                             edges.push({
-                                id: `e-${Math.random()}`,
-                                source: subId,
-                                target: supId,
-                                label: 'rdfs:subClassOf',
-                                type: 'smoothstep'
-                            });
-                        } else {
-                            // Complex: SubClassOf(A Expr)
-                            // We already consumed sub. Now consume complex expr.
-                            // Note: parseIRI() only consumes if it matches. If complex, it didn't match.
-                            // So we consume expression.
-                            // But parseIRI didn't consume anything if it returned null.
-                            // We need to parse complex expression properly (balanced parens)
-                            const expr = consumeBalanced(); // consumes starting from current
-                            const subId = getOrCreateNodeId(sub, ElementType.OWL_CLASS, true);
-                            const node = nodes.find(n => n.id === subId);
-                            if(node) {
-                                // Clean up trailing ')' from balanced consume if it took the closing axiom paren?
-                                // consumeBalanced consumes until balance 0. 
-                                // SubClassOf ( A ObjectUnionOf ( ... ) )
-                                // balance starts at 0.
-                                // Actually consumeBalanced assumes we passed the first '('. 
-                                // Here we are inside SubClassOf( sub ... )
-                                // If 'sup' was simple, we took it.
-                                // If not simple, we need to grab tokens until the closing ')' of SubClassOf.
-                                // This is hard with simple logic. 
-                                // Simplified approach: Just attach to node as text
-                                node.data.methods.push({
-                                     id: `m-${Math.random()}`,
-                                     name: 'SubClassOf',
-                                     returnType: expr.replace(/\)$/, ''), // Hacky cleanup
-                                     visibility: '+'
-                                });
-                            }
-                        }
-                    }
-                    // Clean up closing ')'
-                    if (peek().value === ')') consume();
-                }
-                else if (axiom === 'ClassAssertion') {
-                    const cls = parseIRI();
-                    const indiv = parseIRI();
-                    if (peek().value === ')') consume();
-                    
-                    if (cls && indiv) {
-                        const cId = getOrCreateNodeId(cls, ElementType.OWL_CLASS, true);
-                        const iId = getOrCreateNodeId(indiv, ElementType.OWL_NAMED_INDIVIDUAL, true);
-                        edges.push({ id: `e-${Math.random()}`, source: iId, target: cId, label: 'rdf:type', type: 'smoothstep' });
-                    }
-                }
-                else if (axiom === 'ObjectPropertyAssertion') {
-                    const prop = parseIRI();
-                    const sub = parseIRI();
-                    const obj = parseIRI();
-                    if (peek().value === ')') consume();
-                    
-                    if (prop && sub && obj) {
-                         const sId = getOrCreateNodeId(sub, ElementType.OWL_NAMED_INDIVIDUAL, true);
-                         const oId = getOrCreateNodeId(obj, ElementType.OWL_NAMED_INDIVIDUAL, true);
-                         edges.push({ id: `e-${Math.random()}`, source: sId, target: oId, label: prop.replace(/[<>]/g,''), type: 'smoothstep' });
-                    }
-                }
-                else {
-                    // Generic consume
-                    consumeBalanced();
-                }
-            }
-            else {
-                // Unknown keyword / Axiom we don't handle specifically
-                // Just consume it balanced to skip
-                if (peek().value === '(') {
-                    consumeBalanced();
-                } else {
-                    // Simple keyword?
-                }
-            }
-        } 
-        else if (t.type === 'DELIMITER' && t.value === ')') {
-            // Closing Ontology?
-            consume();
+    // 1. Prefix Declarations
+    while (peek().value === 'Prefix') {
+        consume(); // Prefix
+        expect('(');
+        let prefixName = ':'; // Default
+        if (peek().type === 'PNAME_NS') {
+            prefixName = consume().value;
         }
-        else {
-            // unexpected
-            consume();
+        expect('=');
+        const iriTok = consume();
+        if (iriTok.type !== 'FULL_IRI') throw new Error(`Expected Full IRI in prefix declaration, got ${iriTok.type}`);
+        expect(')');
+
+        prefixes[prefixName] = iriTok.value.replace(/[<>]/g, '');
+        
+        // Update metadata default prefix if empty prefix
+        if (prefixName === ':') {
+             metadata.baseIri = prefixes[prefixName];
+        } else if (prefixName !== 'owl:' && prefixName !== 'rdf:' && prefixName !== 'xsd:' && prefixName !== 'rdfs:') {
+             metadata.defaultPrefix = prefixName.replace(':', '');
         }
     }
 
-    // Grid Layout
+    // 2. Ontology
+    expect('Ontology');
+    expect('(');
+
+    // Optional Ontology IRI
+    let ontIRI: string | null = null;
+    if (peek().type === 'FULL_IRI' || peek().type === 'PNAME_LN' || peek().type === 'PNAME_NS') {
+        // Need to ensure it's not a keyword (like Import, Annotation)
+        if (!KEYWORDS.has(peek().value)) {
+            ontIRI = parseIRI();
+            if (ontIRI) metadata.baseIri = resolveIRI(ontIRI);
+
+            // Optional Version IRI
+            if (peek().type === 'FULL_IRI' || peek().type === 'PNAME_LN' || peek().type === 'PNAME_NS') {
+                if (!KEYWORDS.has(peek().value)) {
+                    parseIRI(); // consume Version IRI
+                }
+            }
+        }
+    }
+
+    // 3. Imports
+    while (peek().value === 'Import') {
+        consume();
+        expect('(');
+        parseIRI(); // consume imported IRI
+        expect(')');
+    }
+
+    // 4. Annotations (Ontology Annotations)
+    while (peek().value === 'Annotation') {
+        consume();
+        expect('(');
+        consumeBalanced(); // Skip ontology annotations for visualization simplicity
+    }
+
+    // 5. Axioms
+    while (peek().value !== ')' && peek().type !== 'EOF') {
+        const t = peek();
+        
+        if (t.value === 'Declaration') {
+            consume();
+            expect('(');
+            const typeTok = consume();
+            expect('(');
+            const iri = parseIRI();
+            expect(')');
+            expect(')');
+
+            if (iri) {
+                let type: ElementType | null = null;
+                if (typeTok.value === 'Class') type = ElementType.OWL_CLASS;
+                if (typeTok.value === 'NamedIndividual') type = ElementType.OWL_NAMED_INDIVIDUAL;
+                if (typeTok.value === 'ObjectProperty') type = ElementType.OWL_OBJECT_PROPERTY;
+                if (typeTok.value === 'DataProperty') type = ElementType.OWL_DATA_PROPERTY;
+                if (typeTok.value === 'Datatype') type = ElementType.OWL_DATATYPE;
+
+                if (type) getOrCreateNodeId(iri, type, true);
+            }
+        }
+        else if (['SubClassOf', 'DisjointClasses', 'ObjectPropertyAssertion', 'ClassAssertion', 'DataPropertyAssertion'].includes(t.value)) {
+            const axiom = consume().value;
+            expect('(');
+            
+            if (axiom === 'SubClassOf') {
+                const sub = parseIRI();
+                if (sub) {
+                    const supIRI = parseIRI();
+                    if (supIRI) {
+                        // Simple SubClassOf(A B)
+                        const subId = getOrCreateNodeId(sub, ElementType.OWL_CLASS, true);
+                        const supId = getOrCreateNodeId(supIRI, ElementType.OWL_CLASS, true);
+                            edges.push({
+                            id: `e-${Math.random()}`,
+                            source: subId,
+                            target: supId,
+                            label: 'rdfs:subClassOf',
+                            type: 'smoothstep'
+                        });
+                    } else {
+                        // Complex: SubClassOf(A Expr)
+                        const expr = consumeBalanced(); // consumes rest
+                        const subId = getOrCreateNodeId(sub, ElementType.OWL_CLASS, true);
+                        const node = nodes.find(n => n.id === subId);
+                        if(node) {
+                            node.data.methods.push({
+                                    id: `m-${Math.random()}`,
+                                    name: 'SubClassOf',
+                                    returnType: expr.replace(/\)$/, ''), 
+                                    visibility: '+'
+                            });
+                        }
+                    }
+                }
+                if (peek().value === ')') consume();
+            }
+            else if (axiom === 'ClassAssertion') {
+                const cls = parseIRI();
+                const indiv = parseIRI();
+                if (peek().value === ')') consume();
+                
+                if (cls && indiv) {
+                    const cId = getOrCreateNodeId(cls, ElementType.OWL_CLASS, true);
+                    const iId = getOrCreateNodeId(indiv, ElementType.OWL_NAMED_INDIVIDUAL, true);
+                    edges.push({ id: `e-${Math.random()}`, source: iId, target: cId, label: 'rdf:type', type: 'smoothstep' });
+                }
+            }
+            else if (axiom === 'ObjectPropertyAssertion') {
+                const prop = parseIRI();
+                const sub = parseIRI();
+                const obj = parseIRI();
+                if (peek().value === ')') consume();
+                
+                if (prop && sub && obj) {
+                        const sId = getOrCreateNodeId(sub, ElementType.OWL_NAMED_INDIVIDUAL, true);
+                        const oId = getOrCreateNodeId(obj, ElementType.OWL_NAMED_INDIVIDUAL, true);
+                        edges.push({ id: `e-${Math.random()}`, source: sId, target: oId, label: resolveIRI(prop), type: 'smoothstep' });
+                }
+            }
+            else {
+                consumeBalanced();
+            }
+        }
+        else {
+            // Unknown Axiom or Error
+            // To be robust, if it starts with '(', consume balanced.
+            if (peek().value === '(') {
+                 consumeBalanced();
+            } else {
+                // If it's just a keyword that we don't handle explicitly (e.g. TransitiveObjectProperty)
+                // It usually follows format Keyword( args ).
+                // So consume Keyword, then consume Balanced.
+                consume();
+                if (peek().value === '(') {
+                    consumeBalanced();
+                }
+            }
+        }
+    }
+
+    expect(')'); // Close Ontology
+
+    // Layout
     const cols = Math.ceil(Math.sqrt(nodes.length));
     nodes.forEach((n, idx) => {
         n.position = { x: (idx % cols) * 320 + 50, y: Math.floor(idx / cols) * 250 + 50 };

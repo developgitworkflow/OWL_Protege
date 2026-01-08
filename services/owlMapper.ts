@@ -77,7 +77,9 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
       return `( ${str.split(' ').map(s => fmt(s)).join(' ')} )`;
   };
 
-  // Iterate Nodes
+  // 1. Explicit Nodes
+  const explicitProperties = new Set<string>();
+
   nodes.forEach(node => {
       const s = getNodeIRI(node);
 
@@ -97,10 +99,12 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
       else if (node.data.type === ElementType.OWL_OBJECT_PROPERTY) {
           add(`${s} rdf:type owl:ObjectProperty .`);
           add(`${s} rdfs:label "${node.data.label}" .`);
+          explicitProperties.add(s);
       }
       else if (node.data.type === ElementType.OWL_DATA_PROPERTY) {
           add(`${s} rdf:type owl:DatatypeProperty .`);
           add(`${s} rdfs:label "${node.data.label}" .`);
+          explicitProperties.add(s);
       }
 
       // Annotations (Table 1: TANN)
@@ -232,6 +236,60 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
                 }
               }
           });
+      }
+  });
+
+  // 2. Infer Properties from Edges
+  const STANDARD_LABELS = new Set(['rdf:type', 'a', 'rdfs:subClassOf', 'subClassOf', 'owl:disjointWith', 'disjointWith']);
+  const inferredProperties = new Map<string, string>(); // IRI -> owl:ObjectProperty | owl:DatatypeProperty
+
+  edges.forEach(edge => {
+      let label = edge.label as string || '';
+      if (STANDARD_LABELS.has(label)) return;
+
+      const pIRI = fmt(label);
+      if (explicitProperties.has(pIRI)) return;
+
+      const targetNode = nodes.find(n => n.id === edge.target);
+      if (targetNode) {
+          if (targetNode.data.type === ElementType.OWL_DATATYPE) {
+              inferredProperties.set(pIRI, 'owl:DatatypeProperty');
+          } else {
+              // Only set to ObjectProp if not already set as DataProp
+              if (inferredProperties.get(pIRI) !== 'owl:DatatypeProperty') {
+                  inferredProperties.set(pIRI, 'owl:ObjectProperty');
+              }
+          }
+      }
+  });
+
+  // Emit Inferred Property Definitions
+  inferredProperties.forEach((type, iri) => {
+      add(`${iri} rdf:type ${type} .`);
+  });
+
+  // 3. Edges -> Triples
+  edges.forEach(edge => {
+      const sourceNode = nodes.find(n => n.id === edge.source);
+      const targetNode = nodes.find(n => n.id === edge.target);
+
+      if (sourceNode && targetNode) {
+          const s = getNodeIRI(sourceNode);
+          const t = getNodeIRI(targetNode);
+          
+          let prop = (typeof edge.label === 'string') ? edge.label : 'owl:topObjectProperty';
+          const p = fmt(prop);
+
+          // Handle standard mappings
+          if (prop === 'rdf:type' || prop === 'a') {
+              add(`${s} rdf:type ${t} .`);
+          } else if (prop === 'rdfs:subClassOf' || prop === 'subClassOf') {
+              add(`${s} rdfs:subClassOf ${t} .`);
+          } else if (prop === 'owl:disjointWith' || prop === 'disjointWith') {
+              add(`${s} owl:disjointWith ${t} .`);
+          } else {
+              add(`${s} ${p} ${t} .`);
+          }
       }
   });
 

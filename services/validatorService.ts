@@ -1,5 +1,5 @@
 import { Node, Edge } from 'reactflow';
-import { UMLNodeData, ElementType } from '../types';
+import { UMLNodeData, ElementType, Attribute, Method } from '../types';
 
 export type IssueSeverity = 'error' | 'warning' | 'info';
 
@@ -15,6 +15,36 @@ export interface ValidationResult {
   isValid: boolean;
   issues: ValidationIssue[];
 }
+
+// --- Helpers for Structural Equivalence ---
+
+// Check if two lists are equivalent (Ordered Association)
+const isListEquivalent = <T>(a: T[], b: T[], eq: (x: T, y: T) => boolean): boolean => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+        if (!eq(a[i], b[i])) return false;
+    }
+    return true;
+};
+
+// Check if two sets are equivalent (Unordered Association)
+const isSetEquivalent = <T>(a: T[], b: T[], eq: (x: T, y: T) => boolean): boolean => {
+    if (a.length !== b.length) return false;
+    const matchedIndices = new Set<number>();
+    
+    for (const itemA of a) {
+        let found = false;
+        for (let i = 0; i < b.length; i++) {
+            if (!matchedIndices.has(i) && eq(itemA, b[i])) {
+                matchedIndices.add(i);
+                found = true;
+                break;
+            }
+        }
+        if (!found) return false;
+    }
+    return true;
+};
 
 export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): ValidationResult => {
   const issues: ValidationIssue[] = [];
@@ -221,7 +251,7 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
           const domains: string[] = [];
           const ranges: string[] = [];
 
-          n.data.attributes.forEach(attr => characteristics.add(attr.name)); // Functional, etc stored in attributes for props
+          n.data.attributes.forEach(attr => characteristics.add(attr.name)); 
           n.data.methods.forEach(m => {
               const name = m.name.toLowerCase();
               const targetId = labelToId[m.returnType.trim()];
@@ -237,14 +267,12 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
       }
   });
 
-  // --- 6. Individual Assertion Validation (The HermiT Logic) ---
+  // --- 6. Individual Assertion Validation ---
   
-  // 6a. Build Facts List: Subject -> Predicate -> Object
   interface Fact { subject: string; propertyId: string; object: string; edgeId: string; }
   const facts: Fact[] = [];
   const individualTypes: Record<string, string[]> = {};
 
-  // Collect explicit types first
   edges.forEach(e => {
       const isTypeEdge = e.label === 'rdf:type' || e.label === 'a';
       if (isTypeEdge) {
@@ -259,19 +287,14 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
       const isIndivToIndiv = sourceNode?.data.type === ElementType.OWL_NAMED_INDIVIDUAL && targetNode?.data.type === ElementType.OWL_NAMED_INDIVIDUAL;
       
       if (isIndivToIndiv) {
-          // Try to match edge label to a property ID
           let propId = labelToId[e.label as string];
-          
-          // If edge label is just a string not in the map, we skip advanced checks 
-          // (or we could assume it's a property without metadata)
           if (propId && propertyMeta[propId]) {
               facts.push({ subject: e.source, propertyId: propId, object: e.target, edgeId: e.id });
           }
       }
   });
 
-  // 6b. Check Characteristics
-  const groupedBySubjectProp: Record<string, string[]> = {}; // "subj_propId" -> [objId]
+  const groupedBySubjectProp: Record<string, string[]> = {}; 
 
   facts.forEach(f => {
       const prop = propertyMeta[f.propertyId];
@@ -281,7 +304,6 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
       if (!groupedBySubjectProp[key]) groupedBySubjectProp[key] = [];
       groupedBySubjectProp[key].push(f.object);
 
-      // Irreflexive Check
       if (prop.characteristics.has('Irreflexive') && f.subject === f.object) {
           issues.push({
               id: `irreflexive-${f.edgeId}`,
@@ -292,9 +314,7 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
           });
       }
 
-      // Asymmetric Check
       if (prop.characteristics.has('Asymmetric')) {
-          // Check if inverse fact exists
           const inverseExists = facts.some(inv => 
               inv.propertyId === f.propertyId && 
               inv.subject === f.object && 
@@ -311,8 +331,6 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
           }
       }
 
-      // 6c. Domain & Range Consistency
-      // If Subject is Type A, and Property has Domain B. Are A and B disjoint?
       if (prop.domains.length > 0) {
           const subjectTypes = individualTypes[f.subject] || [];
           for (const typeId of subjectTypes) {
@@ -330,7 +348,6 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
           }
       }
 
-      // If Object is Type A, and Property has Range B. Are A and B disjoint?
       if (prop.ranges.length > 0) {
           const objectTypes = individualTypes[f.object] || [];
           for (const typeId of objectTypes) {
@@ -349,17 +366,15 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
       }
   });
 
-  // Functional Check (Cardinality <= 1)
   Object.entries(groupedBySubjectProp).forEach(([key, objects]) => {
       const [subjId, propId] = key.split('_');
       const prop = propertyMeta[propId];
-      // Filter distinct objects
       const distinctObjects = new Set(objects);
       
       if (prop && prop.characteristics.has('Functional') && distinctObjects.size > 1) {
           issues.push({
               id: `functional-${key}`,
-              elementId: subjId, // Blame the subject
+              elementId: subjId,
               severity: 'error',
               title: 'Cardinality Violation',
               message: `Property '${prop.label}' is Functional (max 1), but '${getLabel(subjId)}' has ${distinctObjects.size} distinct values.`
@@ -367,9 +382,7 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
       }
   });
 
-  // --- 7. Individual Type Disjointness (Existing Logic Refined) ---
   Object.entries(individualTypes).forEach(([indivId, types]) => {
-      // Check every pair of explicit types
       for (let i = 0; i < types.length; i++) {
           for (let j = i + 1; j < types.length; j++) {
               if (areClassesDisjoint(types[i], types[j])) {
@@ -384,6 +397,87 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
           }
       }
   });
+
+  // --- 7. Structural Equivalence Check (OWL 2 Spec) ---
+  const areStructurallyEquivalent = (n1: Node<UMLNodeData>, n2: Node<UMLNodeData>): boolean => {
+      // 1. Same UML Class (e.g. both are OWL_CLASS)
+      if (n1.data.type !== n2.data.type) return false;
+
+      // 2. Attribute Equivalence (Unordered Set)
+      const attrEq = (a: Attribute, b: Attribute) => 
+          a.name === b.name && 
+          a.type === b.type && 
+          a.visibility === b.visibility && 
+          !!a.isDerived === !!b.isDerived;
+
+      const attrs1 = n1.data.attributes || [];
+      const attrs2 = n2.data.attributes || [];
+      if (!isSetEquivalent(attrs1, attrs2, attrEq)) return false;
+
+      // 3. Axioms Equivalence (Mixed Set/List)
+      const methodEq = (m1: Method, m2: Method) => {
+          if (m1.name !== m2.name) return false;
+          if (!!m1.isOrdered !== !!m2.isOrdered) return false;
+          
+          // Tokens are atomic values
+          const tokens1 = m1.returnType.trim().split(/\s+/).filter(t => t);
+          const tokens2 = m2.returnType.trim().split(/\s+/).filter(t => t);
+          const atomicEq = (x: string, y: string) => x === y;
+
+          if (m1.isOrdered) {
+              return isListEquivalent(tokens1, tokens2, atomicEq);
+          } else {
+              return isSetEquivalent(tokens1, tokens2, atomicEq);
+          }
+      };
+
+      const methods1 = n1.data.methods || [];
+      const methods2 = n2.data.methods || [];
+      if (!isSetEquivalent(methods1, methods2, methodEq)) return false;
+
+      // 4. Edges Equivalence (Associations)
+      // We assume order of edges doesn't matter (Unordered Set)
+      const edges1 = edges.filter(e => e.source === n1.id);
+      const edges2 = edges.filter(e => e.source === n2.id);
+
+      const edgeEq = (e1: Edge, e2: Edge) => {
+          if (e1.label !== e2.label) return false;
+          // For structure, we compare the 'value' of the target.
+          // In this model, the value is the Label/IRI of the target node.
+          const t1 = nodeMap.get(e1.target);
+          const t2 = nodeMap.get(e2.target);
+          if (!t1 || !t2) return false; // Should not happen if graph is valid
+          return t1.data.label === t2.data.label; 
+      };
+
+      if (!isSetEquivalent(edges1, edges2, edgeEq)) return false;
+
+      return true;
+  };
+
+  // Run Structural Equivalence check on all pairs
+  const processed = new Set<string>();
+  for (let i = 0; i < nodes.length; i++) {
+      if (processed.has(nodes[i].id)) continue;
+      
+      const duplicates: string[] = [];
+      for (let j = i + 1; j < nodes.length; j++) {
+          if (areStructurallyEquivalent(nodes[i], nodes[j])) {
+              duplicates.push(nodes[j].id);
+              processed.add(nodes[j].id);
+          }
+      }
+
+      if (duplicates.length > 0) {
+          issues.push({
+              id: `struct-equiv-${nodes[i].id}`,
+              elementId: nodes[i].id,
+              severity: 'warning',
+              title: 'Structural Equivalence Detected',
+              message: `This entity is structurally equivalent to ${duplicates.length} other entit${duplicates.length > 1 ? 'ies' : 'y'} (${duplicates.map(id => getLabel(id)).join(', ')}). This may indicate redundant definitions.`
+          });
+      }
+  }
 
   return {
     isValid: issues.filter(i => i.severity === 'error').length === 0,

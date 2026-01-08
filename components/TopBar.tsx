@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -8,8 +8,9 @@ interface TopBarProps {
     onNewProject: () => void;
     onOpenSettings: () => void;
     onValidate: () => void;
-    currentView: 'design' | 'code';
-    onViewChange: (view: 'design' | 'code') => void;
+    onOpenDLQuery: () => void;
+    currentView: 'design' | 'code' | 'graph';
+    onViewChange: (view: 'design' | 'code' | 'graph') => void;
 }
 
 const TopBar: React.FC<TopBarProps> = ({ 
@@ -19,6 +20,7 @@ const TopBar: React.FC<TopBarProps> = ({
     onNewProject, 
     onOpenSettings, 
     onValidate,
+    onOpenDLQuery,
     currentView,
     onViewChange
 }) => {
@@ -37,18 +39,27 @@ const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       <div className="flex items-center gap-4">
-         <div className="hidden md:flex gap-1 bg-slate-800 p-1 rounded-lg">
+         <div className="hidden md:flex gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700/50">
             <button 
                 onClick={() => onViewChange('design')}
-                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all ${currentView === 'design' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'design' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
             >
+                <Layers size={12} />
                 Design
             </button>
             <button 
                 onClick={() => onViewChange('code')}
-                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all ${currentView === 'code' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'code' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
             >
+                <Network size={12} />
                 Code
+            </button>
+            <button 
+                onClick={() => onViewChange('graph')}
+                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'graph' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
+            >
+                <Network size={12} />
+                Graph
             </button>
          </div>
 
@@ -69,6 +80,15 @@ const TopBar: React.FC<TopBarProps> = ({
          >
             <ShieldCheck size={16} />
             <span className="hidden sm:inline">Validate</span>
+         </button>
+
+         <button 
+            onClick={onOpenDLQuery}
+            className="flex items-center gap-2 text-sm font-medium text-purple-400 hover:text-purple-300 transition-colors"
+            title="DL Query"
+         >
+            <Search size={16} />
+            <span className="hidden sm:inline">DL Query</span>
          </button>
 
          {/* Export Dropdown */}

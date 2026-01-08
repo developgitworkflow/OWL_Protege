@@ -17,27 +17,6 @@ interface Token {
 // Delimiters defined in OWL 2 Specification
 const DELIMITERS = new Set(['(', ')', '<', '>', '=', '@', '^']);
 
-// Known Keywords for strict lexical checking (Subset of OWL 2 Functional Syntax)
-const KEYWORDS = new Set([
-  'Ontology', 'Import', 'Declaration', 'Class', 'ObjectProperty', 'DataProperty', 
-  'AnnotationProperty', 'NamedIndividual', 'Datatype', 'SubClassOf', 'EquivalentClasses', 
-  'DisjointClasses', 'DisjointUnion', 'SubObjectPropertyOf', 'EquivalentObjectProperties', 
-  'DisjointObjectProperties', 'InverseObjectProperties', 'ObjectPropertyDomain', 
-  'ObjectPropertyRange', 'FunctionalObjectProperty', 'InverseFunctionalObjectProperty', 
-  'ReflexiveObjectProperty', 'IrreflexiveObjectProperty', 'SymmetricObjectProperty', 
-  'AsymmetricObjectProperty', 'TransitiveObjectProperty', 'SubDataPropertyOf', 
-  'EquivalentDataProperties', 'DisjointDataProperties', 'DataPropertyDomain', 
-  'DataPropertyRange', 'FunctionalDataProperty', 'DatatypeDefinition', 'HasKey', 
-  'SameIndividual', 'DifferentIndividuals', 'ClassAssertion', 'ObjectPropertyAssertion', 
-  'DataPropertyAssertion', 'NegativeObjectPropertyAssertion', 'NegativeDataPropertyAssertion', 
-  'AnnotationAssertion', 'Prefix', 'Annotation', 'ObjectSomeValuesFrom', 'ObjectAllValuesFrom', 
-  'ObjectUnionOf', 'ObjectIntersectionOf', 'ObjectComplementOf', 'ObjectOneOf', 'ObjectHasValue', 
-  'ObjectHasSelf', 'ObjectMinCardinality', 'ObjectMaxCardinality', 'ObjectExactCardinality', 
-  'DataSomeValuesFrom', 'DataAllValuesFrom', 'DataUnionOf', 'DataIntersectionOf', 
-  'DataComplementOf', 'DataOneOf', 'DataHasValue', 'DataMinCardinality', 'DataMaxCardinality', 
-  'DataExactCardinality', 'DataProperty'
-]);
-
 // Regex Definitions (Order matters for greedy matching!)
 const TERMINALS: { type: TokenType, regex: RegExp }[] = [
     { type: 'COMMENT', regex: /^#[^\x0A\x0D]*/ },
@@ -52,7 +31,7 @@ const TERMINALS: { type: TokenType, regex: RegExp }[] = [
     { type: 'DECIMAL', regex: /^[+-]?[0-9]*\.[0-9]+/ },
     { type: 'INTEGER', regex: /^[+-]?[0-9]+/ },
     { type: 'DELIMITER', regex: /^[()<>@=^]/ },
-    { type: 'KEYWORD', regex: /^[a-zA-Z][a-zA-Z0-9_-]*/ },
+    { type: 'KEYWORD', regex: /^[a-zA-Z][a-zA-Z0-9_-]*/ }, // Matches any identifier
     { type: 'WHITESPACE', regex: /^[\x20\x09\x0A\x0D]+/ }
 ];
 
@@ -75,36 +54,22 @@ const tokenize = (input: string): Token[] => {
         }
 
         if (!bestMatch) {
+            // Skip unknown char if safe, or throw. For now throw to find issues.
             throw new Error(`Syntax Error: Unexpected character '${input[pos]}' at position ${pos}`);
         }
 
-        // 2. Validate Keywords
-        if (bestMatch.type === 'KEYWORD') {
-             if (!KEYWORDS.has(bestMatch.value)) {
-                 throw new Error(`Syntax Error: Unknown keyword or identifier '${bestMatch.value}' at position ${pos}. Bare identifiers are not allowed unless they are keywords.`);
-             }
-        }
-
-        // 3. Step 6: Boundary Check
+        // 2. Boundary Check (Simplified)
         if (bestMatch.type !== 'WHITESPACE' && bestMatch.type !== 'COMMENT') {
             const lastChar = bestMatch.value[bestMatch.value.length - 1];
             const nextChar = (pos + bestMatch.value.length < input.length) ? input[pos + bestMatch.value.length] : '';
-
             const isLastDelim = DELIMITERS.has(lastChar);
-            const isNextDelim = DELIMITERS.has(nextChar) || nextChar === ''; 
+            const isNextDelim = DELIMITERS.has(nextChar) || nextChar === '' || /[\s#]/.test(nextChar);
 
-            if (!isLastDelim && !isNextDelim) {
-                const rest = input.substring(pos + bestMatch.value.length);
-                const wsMatch = rest.match(/^[\x20\x09\x0A\x0D]+/);
-                const commentMatch = rest.match(/^#[^\x0A\x0D]*/);
-                
-                if (!wsMatch && !commentMatch) {
-                    throw new Error(`Syntax Error: Missing delimiter or whitespace after '${bestMatch.value}' at position ${pos}`);
-                }
-            }
+            // Allow keywords/identifiers to be followed by anything that breaks a token
+            // The regex matching ensures we consumed the full identifier.
         }
 
-        // 4. Emit Token
+        // 3. Emit Token
         if (bestMatch.type !== 'WHITESPACE' && bestMatch.type !== 'COMMENT') {
             tokens.push({ type: bestMatch.type, value: bestMatch.value, pos });
         }
@@ -118,7 +83,7 @@ const tokenize = (input: string): Token[] => {
 
 // --- 2. Parser ---
 
-// Standard Prefixes (Table 2)
+// Standard Prefixes
 const STANDARD_PREFIXES: Record<string, string> = {
     'rdf:': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
     'rdfs:': 'http://www.w3.org/2000/01/rdf-schema#',
@@ -131,8 +96,7 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
     try {
         tokens = tokenize(input);
     } catch (e) {
-        console.error(e);
-        // Better error handling in UI
+        console.error("Tokenization failed", e);
         throw e;
     }
 
@@ -141,38 +105,28 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
     const edges: Edge[] = [];
     const metadata: ProjectData = { name: 'Imported Ontology', defaultPrefix: 'ex', baseIri: 'http://example.org/ontology#' };
     
-    // Prefix Management
     const prefixes: Record<string, string> = { ...STANDARD_PREFIXES };
     const declaredPrefixes = new Set<string>();
-
     const iriToNodeId: Record<string, string> = {};
     let nodeCounter = 0;
 
-    // Helper: Expand Abbreviated IRIs (Section 3.7)
+    // Helper: Expand Abbreviated IRIs
     const resolveIRI = (tokenValue: string): string => {
-        // Full IRI: <...>
-        if (tokenValue.startsWith('<')) {
-            return tokenValue.replace(/[<>]/g, '');
-        }
-        // PNAME: pn:rc
+        if (tokenValue.startsWith('<')) return tokenValue.replace(/[<>]/g, '');
         const colonIndex = tokenValue.indexOf(':');
         if (colonIndex !== -1) {
-            const prefix = tokenValue.substring(0, colonIndex + 1); // e.g. "ex:" or ":"
+            const prefix = tokenValue.substring(0, colonIndex + 1);
             const local = tokenValue.substring(colonIndex + 1);
-            if (prefixes[prefix]) {
-                return prefixes[prefix] + local;
-            } else {
-                throw new Error(`Syntax Error: Undefined prefix '${prefix}' in abbreviated IRI '${tokenValue}'.`);
-            }
+            if (prefixes[prefix]) return prefixes[prefix] + local;
+            // Best effort fallback
+            return tokenValue;
         }
-        // Strict adherence: if it's not Full IRI and not PNAME, it's invalid unless it's a Keyword (handled by tokenizer)
         return tokenValue;
     };
 
     const getOrCreateNodeId = (iriOrLabel: string, type: ElementType, isIRI = false): string => {
         const fullIRI = isIRI ? resolveIRI(iriOrLabel) : undefined;
         const key = fullIRI || iriOrLabel;
-        
         if (iriToNodeId[key]) return iriToNodeId[key];
         
         let label = iriOrLabel;
@@ -184,21 +138,13 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
         }
 
         const id = `node-${++nodeCounter}`;
-        
         const newNode: Node<UMLNodeData> = {
             id,
             type: 'umlNode',
             position: { x: Math.random() * 800, y: Math.random() * 600 },
-            data: {
-                label,
-                type,
-                iri: fullIRI,
-                attributes: [],
-                methods: []
-            }
+            data: { label, type, iri: fullIRI, attributes: [], methods: [] }
         };
         nodes.push(newNode);
-        
         iriToNodeId[key] = id;
         return id;
     };
@@ -218,7 +164,7 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
 
     const parseIRI = (): string | null => {
         const t = peek();
-        if (t.type === 'FULL_IRI' || t.type === 'PNAME_LN' || t.type === 'PNAME_NS') {
+        if (t.type === 'FULL_IRI' || t.type === 'PNAME_LN' || t.type === 'PNAME_NS' || t.type === 'KEYWORD') {
             return consume().value;
         }
         return null;
@@ -227,92 +173,57 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
     const consumeBalanced = (): string => {
         let str = '';
         let balance = 0;
-        
         do {
             const t = consume();
             str += t.value + ' ';
             if (t.value === '(') balance++;
             if (t.value === ')') balance--;
         } while (balance > 0 && current < tokens.length);
-        
         return str.trim();
     };
 
-    // --- Parsing Logic: ontologyDocument := { prefixDeclaration } Ontology ---
-
+    // --- Parser Loop ---
+    
     // 1. Prefix Declarations
     while (peek().value === 'Prefix') {
-        consume(); // Prefix
+        consume(); 
         expect('(');
-        let prefixName = ':'; // Default
-        if (peek().type === 'PNAME_NS') {
+        let prefixName = ':'; 
+        // Prefix name can be PNAME_NS (foo:) or just KEYWORD (foo) if parser is loose
+        if (peek().type === 'PNAME_NS' || peek().type === 'KEYWORD') {
             prefixName = consume().value;
+            // Normalize "foo" to "foo:" if needed, though usually it appears as PNAME_NS
         }
         expect('=');
         const iriTok = consume();
-        if (iriTok.type !== 'FULL_IRI') throw new Error(`Expected Full IRI in prefix declaration, got ${iriTok.type}`);
         expect(')');
 
-        // Strict Check: Table 2 (Section 3.7)
-        if (STANDARD_PREFIXES[prefixName]) {
-             // Spec: "it must not declare a prefix name listed in Table 2"
-             // However, parser might treat redeclaring the exact same thing as okay?
-             // Strictly: "must not declare".
-             throw new Error(`Syntax Error: Cannot redeclare standard prefix '${prefixName}' (Table 2).`);
-        }
-        
-        // Strict Check: Duplicates
-        if (declaredPrefixes.has(prefixName)) {
-             throw new Error(`Syntax Error: Duplicate declaration for prefix '${prefixName}'.`);
-        }
-
-        prefixes[prefixName] = iriTok.value.replace(/[<>]/g, '');
-        declaredPrefixes.add(prefixName);
-        
-        if (prefixName === ':') {
-             metadata.baseIri = prefixes[prefixName];
-        } else {
-             metadata.defaultPrefix = prefixName.replace(':', '');
+        if (prefixName.endsWith(':')) {
+            prefixes[prefixName] = iriTok.value.replace(/[<>]/g, '');
+            declaredPrefixes.add(prefixName);
+            if (prefixName === ':') metadata.baseIri = prefixes[prefixName];
+            else metadata.defaultPrefix = prefixName.replace(':', '');
         }
     }
 
-    // 2. Ontology
-    expect('Ontology');
-    expect('(');
-
-    // Optional Ontology IRI
-    let ontIRI: string | null = null;
-    if (peek().type === 'FULL_IRI' || peek().type === 'PNAME_LN' || peek().type === 'PNAME_NS') {
-        // Lookahead to ensure it's not a keyword like 'Import' or 'Annotation' which can start the body
-        if (!KEYWORDS.has(peek().value)) {
-            ontIRI = parseIRI();
-            if (ontIRI) metadata.baseIri = resolveIRI(ontIRI);
-
-            // Optional Version IRI
-            if (peek().type === 'FULL_IRI' || peek().type === 'PNAME_LN' || peek().type === 'PNAME_NS') {
-                if (!KEYWORDS.has(peek().value)) {
-                    parseIRI(); // consume Version IRI
-                }
-            }
+    // 2. Ontology Header
+    if (match('Ontology')) {
+        expect('(');
+        if (peek().value !== ')' && peek().value !== 'Import' && peek().value !== 'Annotation') {
+             const iri = parseIRI();
+             if (iri) metadata.baseIri = resolveIRI(iri);
+             if (peek().value !== ')' && peek().value !== 'Import') parseIRI(); // Version IRI
         }
     }
 
-    // 3. Imports
-    while (peek().value === 'Import') {
+    // 3. Imports & Annotations
+    while (peek().value === 'Import' || peek().value === 'Annotation') {
         consume();
         expect('(');
-        parseIRI(); 
-        expect(')');
+        consumeBalanced();
     }
 
-    // 4. Annotations
-    while (peek().value === 'Annotation') {
-        consume();
-        expect('(');
-        consumeBalanced(); 
-    }
-
-    // 5. Axioms
+    // 4. Axioms
     while (peek().value !== ')' && peek().type !== 'EOF') {
         const t = peek();
         
@@ -322,9 +233,8 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
             const typeTok = consume();
             expect('(');
             const iri = parseIRI();
-            expect(')');
-            expect(')');
-
+            consumeBalanced(); // Consume remaining parens
+            
             if (iri) {
                 let type: ElementType | null = null;
                 if (typeTok.value === 'Class') type = ElementType.OWL_CLASS;
@@ -332,85 +242,61 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
                 if (typeTok.value === 'ObjectProperty') type = ElementType.OWL_OBJECT_PROPERTY;
                 if (typeTok.value === 'DataProperty') type = ElementType.OWL_DATA_PROPERTY;
                 if (typeTok.value === 'Datatype') type = ElementType.OWL_DATATYPE;
-
                 if (type) getOrCreateNodeId(iri, type, true);
             }
         }
-        else if (['SubClassOf', 'DisjointClasses', 'ObjectPropertyAssertion', 'ClassAssertion', 'DataPropertyAssertion'].includes(t.value)) {
-            const axiom = consume().value;
-            expect('(');
-            
-            if (axiom === 'SubClassOf') {
-                const sub = parseIRI();
-                if (sub) {
-                    const supIRI = parseIRI();
-                    if (supIRI) {
-                        const subId = getOrCreateNodeId(sub, ElementType.OWL_CLASS, true);
-                        const supId = getOrCreateNodeId(supIRI, ElementType.OWL_CLASS, true);
-                            edges.push({
-                            id: `e-${Math.random()}`,
-                            source: subId,
-                            target: supId,
-                            label: 'rdfs:subClassOf',
-                            type: 'smoothstep'
-                        });
-                    } else {
-                        const expr = consumeBalanced();
-                        const subId = getOrCreateNodeId(sub, ElementType.OWL_CLASS, true);
-                        const node = nodes.find(n => n.id === subId);
-                        if(node) {
-                            node.data.methods.push({
-                                    id: `m-${Math.random()}`,
-                                    name: 'SubClassOf',
-                                    returnType: expr.replace(/\)$/, ''), 
-                                    visibility: '+'
-                            });
-                        }
-                    }
-                }
-                if (peek().value === ')') consume();
-            }
-            else if (axiom === 'ClassAssertion') {
-                const cls = parseIRI();
-                const indiv = parseIRI();
-                if (peek().value === ')') consume();
-                
-                if (cls && indiv) {
-                    const cId = getOrCreateNodeId(cls, ElementType.OWL_CLASS, true);
-                    const iId = getOrCreateNodeId(indiv, ElementType.OWL_NAMED_INDIVIDUAL, true);
-                    edges.push({ id: `e-${Math.random()}`, source: iId, target: cId, label: 'rdf:type', type: 'smoothstep' });
-                }
-            }
-            else if (axiom === 'ObjectPropertyAssertion') {
-                const prop = parseIRI();
-                const sub = parseIRI();
-                const obj = parseIRI();
-                if (peek().value === ')') consume();
-                
-                if (prop && sub && obj) {
-                        const sId = getOrCreateNodeId(sub, ElementType.OWL_NAMED_INDIVIDUAL, true);
-                        const oId = getOrCreateNodeId(obj, ElementType.OWL_NAMED_INDIVIDUAL, true);
-                        edges.push({ id: `e-${Math.random()}`, source: sId, target: oId, label: resolveIRI(prop), type: 'smoothstep' });
-                }
-            }
-            else {
+        else if (t.value === 'SubClassOf') {
+            consume(); expect('(');
+            const sub = parseIRI();
+            const supIRI = parseIRI();
+            if (sub && supIRI) {
+                const subId = getOrCreateNodeId(sub, ElementType.OWL_CLASS, true);
+                const supId = getOrCreateNodeId(supIRI, ElementType.OWL_CLASS, true);
+                edges.push({ id: `e-${Math.random()}`, source: subId, target: supId, label: 'rdfs:subClassOf', type: 'smoothstep' });
+            } else if (sub) {
+                 const expr = consumeBalanced();
+                 const subId = getOrCreateNodeId(sub, ElementType.OWL_CLASS, true);
+                 const node = nodes.find(n => n.id === subId);
+                 if(node) node.data.methods.push({ id: `m-${Math.random()}`, name: 'SubClassOf', returnType: expr.replace(/\)$/, ''), visibility: '+' });
+            } else {
                 consumeBalanced();
             }
+            if (peek().value === ')') consume();
+        }
+        else if (t.value === 'ClassAssertion') {
+             consume(); expect('(');
+             const cls = parseIRI();
+             const indiv = parseIRI();
+             if (peek().value === ')') consume();
+             if (cls && indiv) {
+                 const cId = getOrCreateNodeId(cls, ElementType.OWL_CLASS, true);
+                 const iId = getOrCreateNodeId(indiv, ElementType.OWL_NAMED_INDIVIDUAL, true);
+                 edges.push({ id: `e-${Math.random()}`, source: iId, target: cId, label: 'rdf:type', type: 'smoothstep' });
+             }
+        }
+        else if (t.value === 'ObjectPropertyAssertion') {
+             consume(); expect('(');
+             const prop = parseIRI();
+             const sub = parseIRI();
+             const obj = parseIRI();
+             if (peek().value === ')') consume();
+             if (prop && sub && obj) {
+                 const sId = getOrCreateNodeId(sub, ElementType.OWL_NAMED_INDIVIDUAL, true);
+                 const oId = getOrCreateNodeId(obj, ElementType.OWL_NAMED_INDIVIDUAL, true);
+                 edges.push({ id: `e-${Math.random()}`, source: sId, target: oId, label: resolveIRI(prop), type: 'smoothstep' });
+             }
         }
         else {
-            if (peek().value === '(') {
-                 consumeBalanced();
-            } else {
+            // Skip unknown axiom
+            if (peek().value === '(') consumeBalanced();
+            else {
                 consume();
-                if (peek().value === '(') {
-                    consumeBalanced();
-                }
+                if (peek().value === '(') consumeBalanced();
             }
         }
     }
 
-    expect(')'); 
-
+    // Grid Layout
     const cols = Math.ceil(Math.sqrt(nodes.length));
     nodes.forEach((n, idx) => {
         n.position = { x: (idx % cols) * 320 + 50, y: Math.floor(idx / cols) * 250 + 50 };

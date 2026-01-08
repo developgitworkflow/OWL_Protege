@@ -20,7 +20,9 @@ import AIAssistant from './components/AIAssistant';
 import CreateProjectModal from './components/CreateProjectModal';
 import SettingsModal from './components/SettingsModal';
 import ValidationModal from './components/ValidationModal';
+import DLQueryModal from './components/DLQueryModal';
 import CodeViewer from './components/CodeViewer';
+import GraphVisualization from './components/GraphVisualization';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
 import { generateTurtle } from './services/owlMapper';
@@ -30,7 +32,6 @@ import { parseFunctionalSyntax } from './services/functionalSyntaxParser';
 import { parseManchesterSyntax } from './services/manchesterSyntaxParser';
 import { parseTurtle } from './services/rdfParser';
 
-// Must be defined outside component to avoid re-creation
 const nodeTypes = {
   umlNode: UMLNode,
 };
@@ -39,14 +40,12 @@ const Flow = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  
-  // UI State
-  const [viewMode, setViewMode] = useState<'design' | 'code'>('design');
+  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph'>('design');
 
-  // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isValidationModalOpen, setIsValidationModalOpen] = useState(false);
+  const [isDLQueryModalOpen, setIsDLQueryModalOpen] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
 
   const [projectMetadata, setProjectMetadata] = useState<ProjectData>({ 
@@ -64,22 +63,15 @@ const Flow = () => {
     event.dataTransfer.dropEffect = 'move';
   }, []);
 
-  const onDrop = useCallback(
-    (event: React.DragEvent) => {
+  const onDrop = useCallback((event: React.DragEvent) => {
       event.preventDefault();
-
       const type = event.dataTransfer.getData('application/reactflow');
       const elementType = event.dataTransfer.getData('application/elementType');
+      if (typeof type === 'undefined' || !type) return;
 
-      if (typeof type === 'undefined' || !type) {
-        return;
-      }
-
-      // Get drop position relative to window (simplified)
-      // In a real app, use reactFlowInstance.project()
       const position = {
-        x: event.clientX - 300, // Approximate offset for sidebar
-        y: event.clientY - 100, // Approximate offset for header
+        x: event.clientX - 300, 
+        y: event.clientY - 100, 
       };
 
       const newNode: Node = {
@@ -95,9 +87,7 @@ const Flow = () => {
       };
 
       setNodes((nds) => nds.concat(newNode));
-    },
-    [setNodes]
-  );
+    }, [setNodes]);
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
@@ -108,14 +98,7 @@ const Flow = () => {
   }, []);
 
   const updateNodeData = useCallback((id: string, newData: UMLNodeData) => {
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.id === id) {
-          return { ...node, data: newData };
-        }
-        return node;
-      })
-    );
+    setNodes((nds) => nds.map((node) => node.id === id ? { ...node, data: newData } : node));
   }, [setNodes]);
 
   const deleteNode = useCallback((id: string) => {
@@ -175,6 +158,12 @@ const Flow = () => {
 
   const handleLoadContent = async (content: string, fileName: string) => {
       try {
+          // Check for RDF/XML which is not supported
+          if (content.trim().startsWith('<') && (content.includes('<rdf:RDF') || content.includes('<owl:Ontology'))) {
+              alert("RDF/XML format is not currently supported. Please convert to Turtle (.ttl) or Functional Syntax (.ofn) before importing.");
+              return;
+          }
+
           // 1. Try JSON Project Format
           try {
               const flow = JSON.parse(content);
@@ -206,21 +195,27 @@ const Flow = () => {
           }
 
           // 3. Try OWL Functional Syntax
+          // Even if extension is .owl, we try functional syntax logic
           if (content.includes('Ontology') || content.includes('Declaration') || fileName.endsWith('.ofn') || fileName.endsWith('.owl')) {
-              const result = parseFunctionalSyntax(content);
-              if (result.nodes.length > 0) {
-                  const normalizedNodes = normalizeOntology(result.nodes);
-                  setNodes(normalizedNodes);
-                  setEdges(result.edges);
-                  setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
-                  return;
+              try {
+                const result = parseFunctionalSyntax(content);
+                if (result.nodes.length > 0) {
+                    const normalizedNodes = normalizeOntology(result.nodes);
+                    setNodes(normalizedNodes);
+                    setEdges(result.edges);
+                    setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
+                    return;
+                }
+              } catch (fnErr) {
+                 console.warn("Functional Syntax Parse failed", fnErr);
+                 throw fnErr;
               }
           }
 
           throw new Error("Unknown format or parsing failed.");
       } catch (err) {
           console.error("Failed to load file", err);
-          alert("Invalid file format. Supported: JSON (Project), Turtle (.ttl), or OWL Functional Syntax.");
+          alert(`Failed to load file: ${(err as Error).message}`);
       }
   };
 
@@ -252,7 +247,6 @@ const Flow = () => {
       };
       reader.readAsText(data.file);
     } else {
-      // Start fresh
       setNodes([]);
       setEdges([]);
       setSelectedNodeId(null);
@@ -279,13 +273,12 @@ const Flow = () => {
         onNewProject={() => setIsCreateModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onValidate={handleValidate}
+        onOpenDLQuery={() => setIsDLQueryModalOpen(true)}
         currentView={viewMode}
         onViewChange={setViewMode}
       />
       
-      {/* Main Layout Swapper */}
       <div className="flex flex-1 overflow-hidden">
-        
         {viewMode === 'design' && (
             <>
                 <Sidebar />
@@ -315,9 +308,6 @@ const Flow = () => {
                         <Panel position="top-right" className="bg-slate-800/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 border border-slate-700/50">
                             {projectMetadata.name} • {projectMetadata.defaultPrefix || 'ex'}
                         </Panel>
-                        <Panel position="bottom-left" className="bg-slate-800/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 ml-12 border border-slate-700/50">
-                            Double-click canvas to deselect • Drag from sidebar to add
-                        </Panel>
                     </ReactFlow>
                 </div>
                 {selectedNodeId && (
@@ -341,6 +331,14 @@ const Flow = () => {
             </div>
         )}
 
+        {viewMode === 'graph' && (
+            <div className="flex-1 h-full">
+                <GraphVisualization 
+                    nodes={nodes} 
+                    edges={edges} 
+                />
+            </div>
+        )}
       </div>
 
       {viewMode === 'design' && (
@@ -371,6 +369,13 @@ const Flow = () => {
         isOpen={isValidationModalOpen}
         onClose={() => setIsValidationModalOpen(false)}
         result={validationResult}
+      />
+
+      <DLQueryModal 
+        isOpen={isDLQueryModalOpen}
+        onClose={() => setIsDLQueryModalOpen(false)}
+        nodes={nodes}
+        edges={edges}
       />
     </div>
   );

@@ -3,7 +3,7 @@ import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ProjectData } from '../types';
 import { generateFunctionalSyntax } from '../services/functionalSyntaxGenerator';
 import { generateManchesterSyntax } from '../services/manchesterSyntaxGenerator';
-import { Copy, FileCode, AlignLeft, Edit3, Play, AlertCircle } from 'lucide-react';
+import { Copy, FileCode, AlignLeft, Edit3, Play, AlertCircle, BookOpen } from 'lucide-react';
 
 interface CodeViewerProps {
     nodes: Node<UMLNodeData>[];
@@ -11,6 +11,56 @@ interface CodeViewerProps {
     metadata: ProjectData;
     onImportCode?: (code: string, syntax: 'functional' | 'manchester') => void;
 }
+
+const EXAMPLE_MANCHESTER = `Prefix: : <http://example.org/university#>
+Prefix: owl: <http://www.w3.org/2002/07/owl#>
+Prefix: rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+Prefix: rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+Prefix: xsd: <http://www.w3.org/2001/XMLSchema#>
+
+Ontology: <http://example.org/university>
+
+# --- Properties ---
+
+ObjectProperty: teaches
+    Domain: Professor
+    Range: Course
+    InverseOf: isTaughtBy
+
+ObjectProperty: isTaughtBy
+    Characteristics: Functional
+
+# --- Classes ---
+
+Class: Person
+    Annotations: rdfs:comment "A general human being in the university system."
+
+Class: Professor
+    SubClassOf: Person,
+        teaches some Course,
+        teaches min 1 Course
+    DisjointWith: Student
+
+Class: Student
+    SubClassOf: Person,
+        enrolledIn some Course
+
+Class: Course
+    Annotations: rdfs:label "University Course"
+
+# --- Complex Defined Class ---
+
+Class: OverworkedProfessor
+    EquivalentTo: Professor and (teaches min 4 Course)
+    
+# --- Individuals ---
+
+Individual: Alan_Turing
+    Types: Professor
+    Facts: teaches Artificial_Intelligence_101
+
+Individual: Artificial_Intelligence_101
+    Types: Course`;
 
 const FUNCTIONAL_KEYWORDS = new Set([
   'Ontology', 'Import', 'Declaration', 'Class', 'ObjectProperty', 'DataProperty', 
@@ -157,6 +207,13 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ nodes, edges, metadata, onImpor
         }
     };
 
+    const handleLoadExample = () => {
+        setSyntax('manchester');
+        setEditContent(EXAMPLE_MANCHESTER);
+        setIsEditing(true);
+        setError(null);
+    };
+
     return (
         <div className="h-full flex flex-col bg-slate-900 text-slate-200 font-mono text-sm relative">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900">
@@ -189,6 +246,17 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ nodes, edges, metadata, onImpor
                 </div>
                 
                 <div className="flex items-center gap-2">
+                     <button 
+                        onClick={handleLoadExample}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs transition-colors text-purple-400 hover:text-purple-300"
+                        title="Load University Ontology Example"
+                    >
+                        <BookOpen size={14} />
+                        Example
+                    </button>
+
+                    <div className="w-px h-6 bg-slate-800 mx-1" />
+
                     {isEditing ? (
                         <>
                             <button 

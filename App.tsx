@@ -24,6 +24,8 @@ import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
 import { generateTurtle } from './services/owlMapper';
 import { validateOntology, ValidationResult } from './services/validatorService';
+import { normalizeOntology } from './services/normalizationService';
+import { parseFunctionalSyntax } from './services/functionalSyntaxParser';
 
 // Must be defined outside component to avoid re-creation
 const nodeTypes = {
@@ -117,7 +119,8 @@ const Flow = () => {
   }, [setNodes, setEdges]);
 
   const onDiagramGenerated = useCallback((newNodes: Node[], newEdges: Edge[]) => {
-      setNodes(newNodes);
+      const normalizedNodes = normalizeOntology(newNodes);
+      setNodes(normalizedNodes);
       setEdges(newEdges.map(e => ({ ...e, style: { stroke: '#94a3b8' }, labelStyle: { fill: '#cbd5e1' } })));
   }, [setNodes, setEdges]);
 
@@ -141,27 +144,51 @@ const Flow = () => {
       link.click();
   };
 
+  const handleLoadContent = (content: string, fileName: string) => {
+      try {
+          // 1. Try JSON Project Format
+          try {
+              const flow = JSON.parse(content);
+              if (flow.nodes && flow.edges) {
+                  const normalizedNodes = normalizeOntology(flow.nodes);
+                  setNodes(normalizedNodes);
+                  setEdges(flow.edges);
+                  if (flow.metadata) setProjectMetadata(flow.metadata);
+                  return;
+              }
+          } catch (e) {
+              // Not valid JSON, continue to parser
+          }
+
+          // 2. Try OWL Functional Syntax
+          if (content.includes('Ontology') || content.includes('Declaration') || fileName.endsWith('.ofn') || fileName.endsWith('.owl')) {
+              const result = parseFunctionalSyntax(content);
+              if (result.nodes.length > 0) {
+                  const normalizedNodes = normalizeOntology(result.nodes);
+                  setNodes(normalizedNodes);
+                  setEdges(result.edges);
+                  setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
+                  return;
+              }
+          }
+
+          throw new Error("Unknown format");
+      } catch (err) {
+          console.error("Failed to load file", err);
+          alert("Invalid file format. Supported: JSON (Project) or OWL Functional Syntax.");
+      }
+  };
+
   const handleLoad = (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (file) {
           const reader = new FileReader();
           reader.onload = (e) => {
-              try {
-                  const content = e.target?.result as string;
-                  const flow = JSON.parse(content);
-                  if (flow.nodes && flow.edges) {
-                      setNodes(flow.nodes);
-                      setEdges(flow.edges);
-                      if (flow.metadata) setProjectMetadata(flow.metadata);
-                  }
-              } catch (err) {
-                  console.error("Failed to load file", err);
-                  alert("Invalid file format");
-              }
+              const content = e.target?.result as string;
+              handleLoadContent(content, file.name);
           };
           reader.readAsText(file);
       }
-      // Reset input value so same file can be loaded again if needed
       event.target.value = '';
   };
 
@@ -175,17 +202,8 @@ const Flow = () => {
     if (data.file) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        try {
           const content = e.target?.result as string;
-          const flow = JSON.parse(content);
-          if (flow.nodes && flow.edges) {
-            setNodes(flow.nodes);
-            setEdges(flow.edges);
-          }
-        } catch (err) {
-          console.error("Failed to load existing source", err);
-          alert("Invalid source file format");
-        }
+          handleLoadContent(content, data.file?.name || '');
       };
       reader.readAsText(data.file);
     } else {

@@ -135,11 +135,55 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
   };
 
   const updateMethod = (id: string, field: string, value: any) => {
-    const newMethods = localData.methods.map(m => m.id === id ? { ...m, [field]: value } : m);
+    let finalValue = value;
+
+    // Normalization logic on update (flattening for sets)
+    if (field === 'returnType') {
+        const method = localData.methods.find(m => m.id === id);
+        if (method && !method.isOrdered) {
+             const name = method.name.toLowerCase();
+             const setAxioms = [
+                'unionof', 'intersectionof', 'oneof', 'disjointunionof', 
+                'equivalentto', 'equivalentclass', 'equivalentproperty',
+                'disjointwith', 'sameas', 'differentfrom', 'haskey'
+            ];
+            if (setAxioms.some(ax => name.includes(ax))) {
+                 const tokens = String(value).split(/\s+/).filter(t => t.trim().length > 0);
+                 const unique = Array.from(new Set(tokens));
+                 // NOTE: We only flatten if the user is inserting a separator (space) to allow typing
+                 if (value.endsWith(' ')) {
+                    finalValue = unique.join(' ') + ' ';
+                 }
+            }
+        }
+    }
+
+    const newMethods = localData.methods.map(m => m.id === id ? { ...m, [field]: finalValue } : m);
     const newData = { ...localData, methods: newMethods };
     setLocalData(newData);
     onUpdateNode(selectedNode.id, newData);
   };
+
+  const handleBlurMethod = (id: string) => {
+      // Hard normalization on blur
+      const method = localData.methods.find(m => m.id === id);
+      if (method && !method.isOrdered && method.returnType) {
+          const name = method.name.toLowerCase();
+          const setAxioms = [
+            'unionof', 'intersectionof', 'oneof', 'disjointunionof', 
+            'equivalentto', 'equivalentclass', 'equivalentproperty',
+            'disjointwith', 'sameas', 'differentfrom', 'haskey'
+          ];
+          if (setAxioms.some(ax => name.includes(ax))) {
+                const tokens = method.returnType.split(/\s+/).filter(t => t.trim().length > 0);
+                const unique = Array.from(new Set(tokens));
+                const normalized = unique.join(' ');
+                if (normalized !== method.returnType.trim()) {
+                    updateMethod(id, 'returnType', normalized);
+                }
+          }
+      }
+  }
 
   const removeMethod = (id: string) => {
       const newMethods = localData.methods.filter(m => m.id !== id);
@@ -307,6 +351,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                                     className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                                     value={method.returnType}
                                     onChange={(e) => updateMethod(method.id, 'returnType', e.target.value)}
+                                    onBlur={() => handleBlurMethod(method.id)}
                                     onFocus={() => setActiveAxiomTarget(method.id)}
                                     placeholder="Thing"
                                 />

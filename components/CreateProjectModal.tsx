@@ -99,7 +99,8 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-        if (e.dataTransfer.files[0].name.endsWith('.json')) {
+        const fname = e.dataTransfer.files[0].name.toLowerCase();
+        if (fname.endsWith('.json') || fname.endsWith('.ofn') || fname.endsWith('.owl')) {
             setFile(e.dataTransfer.files[0]);
         }
     }
@@ -217,7 +218,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                     type="file" 
                     ref={fileInputRef}
                     onChange={handleFileChange}
-                    accept=".json" 
+                    accept=".json,.ofn,.owl" 
                     className="hidden" 
                 />
                 
@@ -240,7 +241,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                             <div className="text-sm text-slate-400">
                                 <span className="font-semibold text-blue-500 hover:underline">Click to upload</span> or drag and drop
                             </div>
-                            <p className="text-xs text-slate-500">JSON files only</p>
+                            <p className="text-xs text-slate-500">JSON, OWL, or OFN</p>
                         </>
                     )}
                 </div>

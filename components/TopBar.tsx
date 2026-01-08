@@ -8,9 +8,20 @@ interface TopBarProps {
     onNewProject: () => void;
     onOpenSettings: () => void;
     onValidate: () => void;
+    currentView: 'design' | 'code';
+    onViewChange: (view: 'design' | 'code') => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ onSaveJSON, onSaveTurtle, onLoad, onNewProject, onOpenSettings, onValidate }) => {
+const TopBar: React.FC<TopBarProps> = ({ 
+    onSaveJSON, 
+    onSaveTurtle, 
+    onLoad, 
+    onNewProject, 
+    onOpenSettings, 
+    onValidate,
+    currentView,
+    onViewChange
+}) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   return (
@@ -27,8 +38,18 @@ const TopBar: React.FC<TopBarProps> = ({ onSaveJSON, onSaveTurtle, onLoad, onNew
 
       <div className="flex items-center gap-4">
          <div className="hidden md:flex gap-1 bg-slate-800 p-1 rounded-lg">
-            <button className="px-3 py-1.5 text-xs font-medium bg-slate-700 rounded shadow-sm text-white">Design</button>
-            <button className="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-white transition-colors">Code</button>
+            <button 
+                onClick={() => onViewChange('design')}
+                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all ${currentView === 'design' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
+            >
+                Design
+            </button>
+            <button 
+                onClick={() => onViewChange('code')}
+                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all ${currentView === 'code' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
+            >
+                Code
+            </button>
          </div>
 
          <div className="h-6 w-px bg-slate-700 mx-2"></div>

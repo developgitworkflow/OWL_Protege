@@ -20,6 +20,7 @@ import AIAssistant from './components/AIAssistant';
 import CreateProjectModal from './components/CreateProjectModal';
 import SettingsModal from './components/SettingsModal';
 import ValidationModal from './components/ValidationModal';
+import CodeViewer from './components/CodeViewer';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
 import { generateTurtle } from './services/owlMapper';
@@ -37,6 +38,9 @@ const Flow = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   
+  // UI State
+  const [viewMode, setViewMode] = useState<'design' | 'code'>('design');
+
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -234,57 +238,72 @@ const Flow = () => {
         onNewProject={() => setIsCreateModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onValidate={handleValidate}
+        currentView={viewMode}
+        onViewChange={setViewMode}
       />
       
+      {/* Main Layout Swapper */}
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
         
-        <div className="flex-1 h-full relative" onDrop={onDrop} onDragOver={onDragOver}>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            nodeTypes={nodeTypes}
-            onNodeClick={onNodeClick}
-            onPaneClick={onPaneClick}
-            fitView
-            className="bg-slate-950"
-          >
-            <Background color="#334155" gap={16} size={1} />
-            <Controls className="!bg-slate-800 !border-slate-700 !shadow-sm !rounded-md [&>button]:!fill-slate-400 [&>button:hover]:!bg-slate-700" />
-            <MiniMap 
-                nodeColor={(n) => {
-                    if (n.type === 'umlNode') return '#6366f1';
-                    return '#334155';
-                }}
-                className="!bg-slate-800 !border-slate-700 !shadow-sm !rounded-md"
-                maskColor="rgba(15, 23, 42, 0.6)"
-            />
-            <Panel position="top-right" className="bg-slate-800/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 border border-slate-700/50">
-                {projectMetadata.name} • {projectMetadata.defaultPrefix || 'ex'}
-            </Panel>
-            <Panel position="bottom-left" className="bg-slate-800/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 ml-12 border border-slate-700/50">
-                Double-click canvas to deselect • Drag from sidebar to add
-            </Panel>
-          </ReactFlow>
-        </div>
-
-        {selectedNodeId && (
-            <PropertiesPanel 
-                selectedNode={selectedNode} 
-                onUpdateNode={updateNodeData} 
-                onDeleteNode={deleteNode}
-            />
+        {viewMode === 'design' && (
+            <>
+                <Sidebar />
+                <div className="flex-1 h-full relative" onDrop={onDrop} onDragOver={onDragOver}>
+                    <ReactFlow
+                        nodes={nodes}
+                        edges={edges}
+                        onNodesChange={onNodesChange}
+                        onEdgesChange={onEdgesChange}
+                        onConnect={onConnect}
+                        nodeTypes={nodeTypes}
+                        onNodeClick={onNodeClick}
+                        onPaneClick={onPaneClick}
+                        fitView
+                        className="bg-slate-950"
+                    >
+                        <Background color="#334155" gap={16} size={1} />
+                        <Controls className="!bg-slate-800 !border-slate-700 !shadow-sm !rounded-md [&>button]:!fill-slate-400 [&>button:hover]:!bg-slate-700" />
+                        <MiniMap 
+                            nodeColor={(n) => {
+                                if (n.type === 'umlNode') return '#6366f1';
+                                return '#334155';
+                            }}
+                            className="!bg-slate-800 !border-slate-700 !shadow-sm !rounded-md"
+                            maskColor="rgba(15, 23, 42, 0.6)"
+                        />
+                        <Panel position="top-right" className="bg-slate-800/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 border border-slate-700/50">
+                            {projectMetadata.name} • {projectMetadata.defaultPrefix || 'ex'}
+                        </Panel>
+                        <Panel position="bottom-left" className="bg-slate-800/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 ml-12 border border-slate-700/50">
+                            Double-click canvas to deselect • Drag from sidebar to add
+                        </Panel>
+                    </ReactFlow>
+                </div>
+                {selectedNodeId && (
+                    <PropertiesPanel 
+                        selectedNode={selectedNode} 
+                        onUpdateNode={updateNodeData} 
+                        onDeleteNode={deleteNode}
+                    />
+                )}
+            </>
         )}
+
+        {viewMode === 'code' && (
+            <div className="flex-1 h-full">
+                <CodeViewer nodes={nodes} edges={edges} metadata={projectMetadata} />
+            </div>
+        )}
+
       </div>
 
-      <AIAssistant 
-        onDiagramGenerated={onDiagramGenerated} 
-        currentNodes={nodes}
-        currentEdges={edges}
-      />
+      {viewMode === 'design' && (
+        <AIAssistant 
+            onDiagramGenerated={onDiagramGenerated} 
+            currentNodes={nodes}
+            currentEdges={edges}
+        />
+      )}
 
       <CreateProjectModal 
         isOpen={isCreateModalOpen}

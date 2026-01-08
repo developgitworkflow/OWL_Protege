@@ -9,6 +9,9 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
   const lines: string[] = [];
   const add = (s: string) => lines.push(s);
 
+  const userPrefix = metadata.defaultPrefix || 'ex';
+  const userIRI = metadata.baseIri || 'http://example.org/ontology#';
+
   // Standard Prefixes (Table 1 Context)
   const prefixes: Record<string, string> = {
     rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
@@ -16,14 +19,14 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
     owl: 'http://www.w3.org/2002/07/owl#',
     xsd: 'http://www.w3.org/2001/XMLSchema#',
     skos: 'http://www.w3.org/2004/02/skos/core#',
-    ex: 'http://example.org/ontology#'
+    [userPrefix]: userIRI
   };
 
   Object.entries(prefixes).forEach(([p, uri]) => add(`@prefix ${p}: <${uri}> .`));
   add('');
 
   // Ontology Header (Table 1: Ontology(...))
-  const ontologyId = `ex:${metadata.name.replace(/\s+/g, '_')}`;
+  const ontologyId = `${userPrefix}:${metadata.name.replace(/\s+/g, '_')}`;
   add(`${ontologyId} rdf:type owl:Ontology .`);
   if (metadata.description) {
       add(`${ontologyId} skos:definition "${metadata.description}"@en .`);
@@ -31,8 +34,8 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
   add('');
 
   // Helper to format Resource (U)
-  const fmt = (str: string | undefined, defaultPrefix = 'ex') => {
-      if (!str) return 'ex:Unknown';
+  const fmt = (str: string | undefined, defaultPrefix = userPrefix) => {
+      if (!str) return `${userPrefix}:Unknown`;
       if (str.startsWith('http')) return `<${str}>`;
       if (str.includes(':')) return str; // already prefixed
       // Primitive check for XSD types to avoid 'ex:xsd:string'
@@ -216,7 +219,7 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
       const s = getNodeIRI(src);
       const o = getNodeIRI(tgt);
       // Ensure label is a string before formatting
-      const p = (typeof edge.label === 'string') ? fmt(edge.label) : 'ex:relatedTo';
+      const p = (typeof edge.label === 'string') ? fmt(edge.label) : `${userPrefix}:relatedTo`;
 
       if (p === 'rdfs:subClassOf' || p.endsWith('subClassOf')) {
           add(`${s} rdfs:subClassOf ${o} .`);

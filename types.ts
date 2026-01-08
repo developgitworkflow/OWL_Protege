@@ -51,5 +51,7 @@ export interface ProjectData {
   name: string;
   language?: string;
   description?: string;
+  baseIri?: string;
+  defaultPrefix?: string;
   file?: File;
 }

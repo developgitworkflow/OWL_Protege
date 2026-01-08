@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { Download, Upload, Share2, Layers, FilePlus, ChevronDown } from 'lucide-react';
+import { Download, Upload, Share2, Layers, FilePlus, ChevronDown, Settings } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
     onSaveTurtle: () => void;
     onLoad: (event: React.ChangeEvent<HTMLInputElement>) => void;
     onNewProject: () => void;
+    onOpenSettings: () => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ onSaveJSON, onSaveTurtle, onLoad, onNewProject }) => {
+const TopBar: React.FC<TopBarProps> = ({ onSaveJSON, onSaveTurtle, onLoad, onNewProject, onOpenSettings }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   return (
@@ -77,6 +78,14 @@ const TopBar: React.FC<TopBarProps> = ({ onSaveJSON, onSaveTurtle, onLoad, onNew
             <span className="hidden sm:inline">Import</span>
             <input type="file" className="hidden" accept=".json" onChange={onLoad} />
          </label>
+
+         <button 
+            onClick={onOpenSettings}
+            className="text-slate-300 hover:text-white p-2 rounded-full hover:bg-slate-800 transition-colors"
+            title="Settings"
+         >
+            <Settings size={20} />
+         </button>
 
          <button className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-bold shadow-lg transition-all transform hover:scale-105">
             Share

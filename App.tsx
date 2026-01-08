@@ -18,6 +18,7 @@ import TopBar from './components/TopBar';
 import UMLNode from './components/UMLNode';
 import AIAssistant from './components/AIAssistant';
 import CreateProjectModal from './components/CreateProjectModal';
+import SettingsModal from './components/SettingsModal';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
 import { generateTurtle } from './services/owlMapper';
@@ -32,7 +33,12 @@ const Flow = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [projectMetadata, setProjectMetadata] = useState<ProjectData>({ name: 'Untitled Project' });
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [projectMetadata, setProjectMetadata] = useState<ProjectData>({ 
+      name: 'Untitled Project',
+      baseIri: 'http://example.org/ontology#',
+      defaultPrefix: 'ex'
+  });
 
   const onConnect = useCallback((params: Connection) => {
       setEdges((eds) => addEdge({ ...params, type: 'smoothstep', label: 'use', style: { stroke: '#94a3b8' }, labelStyle: { fill: '#cbd5e1' } }, eds));
@@ -148,10 +154,16 @@ const Flow = () => {
           };
           reader.readAsText(file);
       }
+      // Reset input value so same file can be loaded again if needed
+      event.target.value = '';
   };
 
   const handleCreateProject = (data: ProjectData) => {
-    setProjectMetadata(data);
+    setProjectMetadata({
+        ...data,
+        baseIri: data.baseIri || 'http://example.org/ontology#',
+        defaultPrefix: data.defaultPrefix || 'ex'
+    });
     
     if (data.file) {
       const reader = new FileReader();
@@ -189,6 +201,7 @@ const Flow = () => {
         onSaveTurtle={handleSaveTurtle}
         onLoad={handleLoad} 
         onNewProject={() => setIsCreateModalOpen(true)}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
       />
       
       <div className="flex flex-1 overflow-hidden">
@@ -218,7 +231,7 @@ const Flow = () => {
                 maskColor="rgba(15, 23, 42, 0.6)"
             />
             <Panel position="top-right" className="bg-slate-800/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 border border-slate-700/50">
-                {projectMetadata.name} • {projectMetadata.language ? `Lang: ${projectMetadata.language}` : 'No Language'}
+                {projectMetadata.name} • {projectMetadata.defaultPrefix || 'ex'}
             </Panel>
             <Panel position="bottom-left" className="bg-slate-800/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 ml-12 border border-slate-700/50">
                 Double-click canvas to deselect • Drag from sidebar to add
@@ -245,6 +258,16 @@ const Flow = () => {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateProject}
+      />
+
+      <SettingsModal 
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        projectData={projectMetadata}
+        onUpdateProjectData={setProjectMetadata}
+        onExportJSON={handleSaveJSON}
+        onExportTurtle={handleSaveTurtle}
+        onImportJSON={handleLoad}
       />
     </div>
   );

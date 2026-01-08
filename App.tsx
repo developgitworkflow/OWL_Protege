@@ -28,6 +28,7 @@ import { validateOntology, ValidationResult } from './services/validatorService'
 import { normalizeOntology } from './services/normalizationService';
 import { parseFunctionalSyntax } from './services/functionalSyntaxParser';
 import { parseManchesterSyntax } from './services/manchesterSyntaxParser';
+import { parseTurtle } from './services/rdfParser';
 
 // Must be defined outside component to avoid re-creation
 const nodeTypes = {
@@ -172,7 +173,7 @@ const Flow = () => {
       }
   };
 
-  const handleLoadContent = (content: string, fileName: string) => {
+  const handleLoadContent = async (content: string, fileName: string) => {
       try {
           // 1. Try JSON Project Format
           try {
@@ -185,10 +186,26 @@ const Flow = () => {
                   return;
               }
           } catch (e) {
-              // Not valid JSON, continue to parser
+              // Not valid JSON, continue
           }
 
-          // 2. Try OWL Functional Syntax
+          // 2. Try Turtle/RDF (Async)
+          if (fileName.endsWith('.ttl') || fileName.endsWith('.rdf') || fileName.endsWith('.nt')) {
+              try {
+                  const result = await parseTurtle(content);
+                  if (result.nodes.length > 0) {
+                      const normalizedNodes = normalizeOntology(result.nodes);
+                      setNodes(normalizedNodes);
+                      setEdges(result.edges);
+                      setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
+                      return;
+                  }
+              } catch (rdfErr) {
+                  console.warn("RDF Parse failed, trying other formats...", rdfErr);
+              }
+          }
+
+          // 3. Try OWL Functional Syntax
           if (content.includes('Ontology') || content.includes('Declaration') || fileName.endsWith('.ofn') || fileName.endsWith('.owl')) {
               const result = parseFunctionalSyntax(content);
               if (result.nodes.length > 0) {
@@ -200,10 +217,10 @@ const Flow = () => {
               }
           }
 
-          throw new Error("Unknown format");
+          throw new Error("Unknown format or parsing failed.");
       } catch (err) {
           console.error("Failed to load file", err);
-          alert("Invalid file format. Supported: JSON (Project) or OWL Functional Syntax.");
+          alert("Invalid file format. Supported: JSON (Project), Turtle (.ttl), or OWL Functional Syntax.");
       }
   };
 

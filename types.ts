@@ -13,12 +13,20 @@ export enum ElementType {
   OWL_DATA_PROPERTY = 'owl_data_property'
 }
 
+export interface Annotation {
+  id: string;
+  property: string; // e.g. rdfs:comment, rdfs:label, owl:versionInfo
+  value: string;    // e.g. "My Ontology", <http://...>, 1.0
+  language?: string; // e.g. en
+}
+
 export interface Attribute {
   id: string;
   name: string;
   type: string;
   visibility: '+' | '-' | '#' | '~';
   isDerived?: boolean; // Support for derived properties (/)
+  annotations?: Annotation[]; // Annotations on the property/characteristic
 }
 
 export interface Method {
@@ -27,13 +35,7 @@ export interface Method {
   returnType: string;
   visibility: '+' | '-' | '#' | '~';
   isOrdered?: boolean; // Support for ordered lists { ordered }
-}
-
-export interface Annotation {
-  id: string;
-  property: string; // e.g. rdfs:comment, rdfs:label, owl:versionInfo
-  value: string;    // e.g. "My Ontology", <http://...>, 1.0
-  language?: string; // e.g. en
+  annotations?: Annotation[]; // Annotations on the axiom
 }
 
 export interface UMLNodeData {
@@ -42,9 +44,9 @@ export interface UMLNodeData {
   iri?: string;            // Unique Resource Identifier
   attributes: Attribute[]; // Mapped to Data Properties or Property Characteristics
   methods: Method[];       // Mapped to Axioms/Restrictions
-  annotations?: Annotation[]; // New field for OWL Annotations
+  annotations?: Annotation[]; // OWL Annotations on the entity
   stereotype?: string;     // Used for <<Stereotypes>>
-  description?: string;    // Deprecated in favor of annotations, but kept for UI convenience (mapped to rdfs:comment)
+  description?: string;    // Deprecated in favor of annotations
 }
 
 export type UMLNode = Node<UMLNodeData>;
@@ -66,4 +68,5 @@ export interface ProjectData {
   baseIri?: string;
   defaultPrefix?: string;
   file?: File;
+  annotations?: Annotation[]; // Annotations on the Ontology itself
 }

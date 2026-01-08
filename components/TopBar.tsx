@@ -107,7 +107,7 @@ const TopBar: React.FC<TopBarProps> = ({
          <label className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition-colors cursor-pointer">
             <Upload size={16} />
             <span className="hidden sm:inline">Import</span>
-            <input type="file" className="hidden" accept=".json" onChange={onLoad} />
+            <input type="file" className="hidden" accept=".json,.ttl,.rdf,.nt,.owl,.ofn" onChange={onLoad} />
          </label>
 
          <button 

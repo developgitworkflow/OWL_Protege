@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { X, Settings, Download, Upload, Save, Globe } from 'lucide-react';
 import { ProjectData } from '../types';
+import AnnotationManager from './AnnotationManager';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -26,7 +27,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleChange = (field: keyof ProjectData, value: string) => {
+  const handleChange = (field: keyof ProjectData, value: any) => {
     onUpdateProjectData({ ...projectData, [field]: value });
   };
 
@@ -119,10 +120,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 <div>
                                     <label className="block text-sm font-medium text-slate-400 mb-1">Description</label>
                                     <textarea 
-                                        rows={3}
+                                        rows={2}
                                         value={projectData.description || ''}
                                         onChange={(e) => handleChange('description', e.target.value)}
                                         className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500 resize-none"
+                                    />
+                                </div>
+                                
+                                <div className="pt-2 border-t border-slate-800">
+                                    <AnnotationManager 
+                                        annotations={projectData.annotations} 
+                                        onUpdate={(anns) => handleChange('annotations', anns)}
+                                        title="Ontology Annotations"
                                     />
                                 </div>
                             </div>

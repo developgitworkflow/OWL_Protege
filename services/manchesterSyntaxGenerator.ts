@@ -76,9 +76,22 @@ export const generateManchesterSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
     if (defaultPrefix !== ':') lines.push(`Prefix: ${defaultPrefix}: <${baseIRI}>`);
     lines.push('');
     lines.push(`Ontology: <${baseIRI.replace('#', '')}>`);
-    if (metadata.description) {
-        lines.push(`${indent}Annotations: rdfs:comment "${metadata.description}"`);
+    
+    // Ontology Annotations
+    if (metadata.description || (metadata.annotations && metadata.annotations.length > 0)) {
+        lines.push(`${indent}Annotations:`);
+        const ontAnns = [];
+        if (metadata.description) ontAnns.push(`rdfs:comment "${metadata.description}"`);
+        if (metadata.annotations) {
+            metadata.annotations.forEach(a => {
+                let val = a.value;
+                if (a.language) val = `${val.replace(/@\w+$/, '')}@${a.language}`;
+                ontAnns.push(`${a.property} ${val}`);
+            });
+        }
+        lines.push(`${indent}    ${ontAnns.join(', ')}`);
     }
+    
     lines.push('');
 
     // --- 1. Object Properties ---

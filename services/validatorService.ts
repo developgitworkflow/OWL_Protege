@@ -19,114 +19,110 @@ export interface ValidationResult {
 export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): ValidationResult => {
   const issues: ValidationIssue[] = [];
 
-  // 1. Build Lookup Maps
+  // --- 1. Build Index Maps ---
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
-  const adjacency: Record<string, string[]> = {}; // For subclass hierarchy
   const labelToId: Record<string, string> = {};
-
+  
   nodes.forEach(n => {
-      adjacency[n.id] = [];
       labelToId[n.data.label] = n.id;
-      // Handle prefix if present in label for lookup
+      // Handle prefix lookup (e.g., "ex:Person" -> "Person")
       if (n.data.label.includes(':')) {
           const parts = n.data.label.split(':');
-          labelToId[parts[1]] = n.id;
+          if (parts.length > 1) labelToId[parts[1]] = n.id;
+      }
+      // Handle IRI lookup
+      if (n.data.iri) {
+          labelToId[n.data.iri] = n.id;
       }
   });
 
-  // 2. Structural & Syntax Checks
+  const getLabel = (id: string) => nodeMap.get(id)?.data.label || id;
+
+  // --- 2. Syntax & Structure Checks ---
   nodes.forEach(node => {
-    // Check IRI syntax
     if (node.data.iri && /\s/.test(node.data.iri)) {
       issues.push({
         id: `iri-space-${node.id}`,
         elementId: node.id,
         severity: 'error',
         title: 'Invalid IRI Syntax',
-        message: `IRI for '${node.data.label}' contains spaces. IRIs must be valid URIs.`
+        message: `IRI '${node.data.iri}' contains spaces.`
       });
     }
 
-    // Check Attributes (Data Properties)
-    node.data.attributes.forEach(attr => {
-        if (!attr.type) {
-             issues.push({
-                id: `attr-missing-type-${attr.id}`,
-                elementId: node.id,
-                severity: 'warning',
-                title: 'Missing Datatype',
-                message: `Data property '${attr.name}' in '${node.data.label}' has no type specified.`
-            });
-        }
-        if (/\s/.test(attr.name)) {
-             issues.push({
-                id: `attr-name-space-${attr.id}`,
-                elementId: node.id,
-                severity: 'warning',
-                title: 'Not a valid QName',
-                message: `Property '${attr.name}' contains spaces. Consider using camelCase.`
-             });
-        }
-    });
-
-    // Check Axioms syntax
     node.data.methods.forEach(m => {
         if (!m.returnType || m.returnType.trim() === '') {
              issues.push({
                 id: `axiom-empty-${m.id}`,
                 elementId: node.id,
-                severity: 'error',
+                severity: 'warning',
                 title: 'Incomplete Axiom',
-                message: `Axiom '${m.name}' has no target defined.`
+                message: `Axiom '${m.name}' has no target.`
              });
         }
     });
   });
 
-  // 3. Logical Checks: Hierarchy Construction
-  
-  // Add edge-based subclass relations
+  // --- 3. Build Class Hierarchy & Disjointness Matrix ---
+  const adjacency: Record<string, string[]> = {}; 
+  const disjointPairs: [string, string][] = [];
+
+  // Init adjacency
+  nodes.forEach(n => adjacency[n.id] = []);
+
+  // Populate from Edges
   edges.forEach(e => {
     const label = typeof e.label === 'string' ? e.label : '';
     if (label === 'rdfs:subClassOf' || label === 'subClassOf') {
-        if (adjacency[e.source]) adjacency[e.source].push(e.target);
+        adjacency[e.source].push(e.target);
+    }
+    if (label === 'owl:disjointWith' || label.includes('disjoint')) {
+        disjointPairs.push([e.source, e.target]);
     }
   });
 
-  // Add axiom-based subclass relations (heuristic: matches name label)
+  // Populate from Axioms
   nodes.forEach(n => {
       n.data.methods.forEach(m => {
-          if (m.name.toLowerCase() === 'subclassof') {
-              const targetLabel = m.returnType.trim();
-              const targetId = labelToId[targetLabel];
-              if (targetId && targetId !== n.id) {
-                  adjacency[n.id].push(targetId);
-              }
+          const name = m.name.toLowerCase().replace(/[^a-z]/g, '');
+          const targetId = labelToId[m.returnType.trim()]; // Simple resolution
+          
+          if (targetId) {
+              if (name === 'subclassof') adjacency[n.id].push(targetId);
+              if (name === 'disjointwith') disjointPairs.push([n.id, targetId]);
+          }
+
+          // DisjointUnionOf / AllDisjointClasses
+          if (name === 'disjointunionof' || name === 'alldisjointclasses') {
+              const targets = m.returnType.replace(/[()]/g, '').trim().split(/\s+/);
+              const ids = targets.map(t => labelToId[t]).filter(id => !!id);
+              for (let i = 0; i < ids.length; i++) {
+                   for (let j = i + 1; j < ids.length; j++) {
+                       disjointPairs.push([ids[i], ids[j]]);
+                   }
+               }
           }
       });
   });
 
-  // 4. Cycle Detection (DFS)
+  // Cycle Detection (DFS)
   const visited = new Set<string>();
   const recursionStack = new Set<string>();
 
   function isCyclic(nodeId: string, path: string[]): boolean {
     visited.add(nodeId);
     recursionStack.add(nodeId);
-
     const children = adjacency[nodeId] || [];
     for (const childId of children) {
         if (!visited.has(childId)) {
             if (isCyclic(childId, [...path, childId])) return true;
         } else if (recursionStack.has(childId)) {
-            // Cycle found
-            const node = nodeMap.get(nodeId);
             issues.push({
                 id: `cycle-${nodeId}`,
                 elementId: nodeId,
                 severity: 'error',
                 title: 'Cyclic Inheritance',
-                message: `Circular dependency detected: ${path.map(id => nodeMap.get(id)?.data.label).join(' -> ')} -> ${nodeMap.get(childId)?.data.label}. A class cannot be a subclass of itself.`
+                message: `Circular dependency: ${path.map(id => getLabel(id)).join(' -> ')} -> ${getLabel(childId)}.`
             });
             return true;
         }
@@ -141,50 +137,8 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
       }
   });
 
-  // 5. Unsatisfiability (Disjointness)
-  const disjointPairs: [string, string][] = [];
-  
-  // Collect disjoints from edges
-  edges.forEach(e => {
-      const label = typeof e.label === 'string' ? e.label : '';
-      if (label === 'owl:disjointWith' || label.toLowerCase().includes('disjoint')) {
-          disjointPairs.push([e.source, e.target]);
-      }
-  });
-
-  // Collect disjoints from Axioms
-  nodes.forEach(n => {
-      n.data.methods.forEach(m => {
-           const axiomName = m.name.toLowerCase().replace(/[^a-z]/g, '');
-           
-           // Direct DisjointWith
-           if (axiomName === 'disjointwith') {
-               const targetId = labelToId[m.returnType.trim()];
-               if (targetId) {
-                   disjointPairs.push([n.id, targetId]);
-               }
-           }
-           
-           // DisjointUnionOf (A B C) -> Implies Pairwise Disjointness between A, B, C
-           // Also implies n is equivalent to Union(A, B, C), but for consistency we care about disjointness
-           else if (axiomName === 'disjointunionof' || axiomName === 'alldisjointclasses') {
-               // Heuristic parser: Remove parens, split by space
-               const targets = m.returnType.replace(/[()]/g, '').trim().split(/\s+/);
-               const ids = targets.map(t => labelToId[t]).filter(id => !!id);
-               
-               // Pairwise disjointness
-               for (let i = 0; i < ids.length; i++) {
-                   for (let j = i + 1; j < ids.length; j++) {
-                       disjointPairs.push([ids[i], ids[j]]);
-                   }
-               }
-           }
-      });
-  });
-
-  // Compute all ancestors for each node (Transitive Closure of SubClassOf)
+  // Transitive Closure for Ancestors
   const ancestors: Record<string, Set<string>> = {};
-  
   const getAncestors = (id: string): Set<string> => {
       if (ancestors[id]) return ancestors[id];
       const set = new Set<string>();
@@ -196,84 +150,238 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
       }
       ancestors[id] = set;
       return set;
-  }
-
+  };
   nodes.forEach(n => getAncestors(n.id));
 
-  // Check if any node inherits from two disjoint classes
+  // Helper: Check logical disjointness between two classes
+  const areClassesDisjoint = (clsA: string, clsB: string): boolean => {
+      if (clsA === clsB) return false; // Self is not disjoint from self (unless unsatisfiable)
+      const ancA = getAncestors(clsA);
+      const ancB = getAncestors(clsB);
+      
+      for (const [x, y] of disjointPairs) {
+          // Check if clsA IS x or SubClassOf x, AND clsB IS y or SubClassOf y (or vice versa)
+          const aIsX = clsA === x || ancA.has(x);
+          const bIsY = clsB === y || ancB.has(y);
+          if (aIsX && bIsY) return true;
+
+          const aIsY = clsA === y || ancA.has(y);
+          const bIsX = clsB === x || ancB.has(x);
+          if (aIsY && bIsX) return true;
+      }
+      return false;
+  };
+
+  // --- 4. Class Unsatisfiability Check ---
   nodes.forEach(n => {
       if (n.data.type === ElementType.OWL_CLASS) {
-          const myAncestors = ancestors[n.id] || new Set();
-          
-          for (const [a, b] of disjointPairs) {
-              // A node is conflicting if it IS 'a' OR inherits 'a', AND IS 'b' OR inherits 'b'
-              const isA = n.id === a || myAncestors.has(a);
-              const isB = n.id === b || myAncestors.has(b);
-              
-              if (isA && isB) {
-                  const labelA = nodeMap.get(a)?.data.label;
-                  const labelB = nodeMap.get(b)?.data.label;
+          const myAncestors = Array.from(getAncestors(n.id));
+          // Check self against ancestors for disjointness (e.g. A sub B, A disjoint B)
+          for (const anc of myAncestors) {
+             if (areClassesDisjoint(n.id, anc)) {
                   issues.push({
-                      id: `unsat-${n.id}-${a}-${b}`,
+                      id: `unsat-self-${n.id}`,
                       elementId: n.id,
                       severity: 'error',
                       title: 'Unsatisfiable Class',
-                      message: `Class '${n.data.label}' is logically impossible (Nothing) because it inherits from disjoint classes '${labelA}' and '${labelB}'.`
+                      message: `Class '${n.data.label}' is inconsistent because it inherits from disjoint class '${getLabel(anc)}'.`
                   });
+             }
+          }
+          // Check ancestors against each other
+          for (let i=0; i<myAncestors.length; i++) {
+              for (let j=i+1; j<myAncestors.length; j++) {
+                  if (areClassesDisjoint(myAncestors[i], myAncestors[j])) {
+                      issues.push({
+                          id: `unsat-anc-${n.id}-${i}`,
+                          elementId: n.id,
+                          severity: 'error',
+                          title: 'Unsatisfiable Class',
+                          message: `Class '${n.data.label}' cannot inherit from both '${getLabel(myAncestors[i])}' and '${getLabel(myAncestors[j])}'.`
+                      });
+                  }
               }
           }
       }
   });
 
-  // 6. Individual Consistency
-  // Check if an individual is typed with an unsatisfiable class or two disjoint classes
+  // --- 5. Property Metadata Collection (Domain, Range, Characteristics) ---
+  interface PropMeta {
+      id: string;
+      label: string;
+      characteristics: Set<string>;
+      domains: string[];
+      ranges: string[];
+  }
+  const propertyMeta: Record<string, PropMeta> = {};
+
   nodes.forEach(n => {
-      if (n.data.type === ElementType.OWL_NAMED_INDIVIDUAL) {
-          // Find type edges
-          const typeEdges = edges.filter(e => e.source === n.id && (e.label === 'rdf:type' || e.label === 'a'));
-          const explicitTypes = typeEdges.map(e => e.target);
+      if (n.data.type === ElementType.OWL_OBJECT_PROPERTY || n.data.type === ElementType.OWL_DATA_PROPERTY) {
+          const characteristics = new Set<string>();
+          const domains: string[] = [];
+          const ranges: string[] = [];
+
+          n.data.attributes.forEach(attr => characteristics.add(attr.name)); // Functional, etc stored in attributes for props
+          n.data.methods.forEach(m => {
+              const name = m.name.toLowerCase();
+              const targetId = labelToId[m.returnType.trim()];
+              if (targetId) {
+                  if (name === 'domain') domains.push(targetId);
+                  if (name === 'range') ranges.push(targetId);
+              }
+          });
+
+          propertyMeta[n.id] = { id: n.id, label: n.data.label, characteristics, domains, ranges };
+          // Map label to ID for edge lookup
+          labelToId[n.data.label] = n.id;
+      }
+  });
+
+  // --- 6. Individual Assertion Validation (The HermiT Logic) ---
+  
+  // 6a. Build Facts List: Subject -> Predicate -> Object
+  interface Fact { subject: string; propertyId: string; object: string; edgeId: string; }
+  const facts: Fact[] = [];
+  const individualTypes: Record<string, string[]> = {};
+
+  // Collect explicit types first
+  edges.forEach(e => {
+      const isTypeEdge = e.label === 'rdf:type' || e.label === 'a';
+      if (isTypeEdge) {
+          if (!individualTypes[e.source]) individualTypes[e.source] = [];
+          individualTypes[e.source].push(e.target);
+      }
+  });
+
+  edges.forEach(e => {
+      const sourceNode = nodeMap.get(e.source);
+      const targetNode = nodeMap.get(e.target);
+      const isIndivToIndiv = sourceNode?.data.type === ElementType.OWL_NAMED_INDIVIDUAL && targetNode?.data.type === ElementType.OWL_NAMED_INDIVIDUAL;
+      
+      if (isIndivToIndiv) {
+          // Try to match edge label to a property ID
+          let propId = labelToId[e.label as string];
           
-          // Check if explicit types are disjoint
-           for (const [a, b] of disjointPairs) {
-              if (explicitTypes.includes(a) && explicitTypes.includes(b)) {
-                   const labelA = nodeMap.get(a)?.data.label;
-                   const labelB = nodeMap.get(b)?.data.label;
+          // If edge label is just a string not in the map, we skip advanced checks 
+          // (or we could assume it's a property without metadata)
+          if (propId && propertyMeta[propId]) {
+              facts.push({ subject: e.source, propertyId: propId, object: e.target, edgeId: e.id });
+          }
+      }
+  });
+
+  // 6b. Check Characteristics
+  const groupedBySubjectProp: Record<string, string[]> = {}; // "subj_propId" -> [objId]
+
+  facts.forEach(f => {
+      const prop = propertyMeta[f.propertyId];
+      if (!prop) return;
+
+      const key = `${f.subject}_${f.propertyId}`;
+      if (!groupedBySubjectProp[key]) groupedBySubjectProp[key] = [];
+      groupedBySubjectProp[key].push(f.object);
+
+      // Irreflexive Check
+      if (prop.characteristics.has('Irreflexive') && f.subject === f.object) {
+          issues.push({
+              id: `irreflexive-${f.edgeId}`,
+              elementId: f.edgeId,
+              severity: 'error',
+              title: 'Irreflexive Violation',
+              message: `Property '${prop.label}' is Irreflexive, but connects '${getLabel(f.subject)}' to itself.`
+          });
+      }
+
+      // Asymmetric Check
+      if (prop.characteristics.has('Asymmetric')) {
+          // Check if inverse fact exists
+          const inverseExists = facts.some(inv => 
+              inv.propertyId === f.propertyId && 
+              inv.subject === f.object && 
+              inv.object === f.subject
+          );
+          if (inverseExists) {
+               issues.push({
+                  id: `asymmetric-${f.edgeId}`,
+                  elementId: f.edgeId,
+                  severity: 'error',
+                  title: 'Asymmetry Violation',
+                  message: `Property '${prop.label}' is Asymmetric, but is used bidirectionally between '${getLabel(f.subject)}' and '${getLabel(f.object)}'.`
+              });
+          }
+      }
+
+      // 6c. Domain & Range Consistency
+      // If Subject is Type A, and Property has Domain B. Are A and B disjoint?
+      if (prop.domains.length > 0) {
+          const subjectTypes = individualTypes[f.subject] || [];
+          for (const typeId of subjectTypes) {
+              for (const domainId of prop.domains) {
+                  if (areClassesDisjoint(typeId, domainId)) {
+                       issues.push({
+                          id: `domain-clash-${f.edgeId}`,
+                          elementId: f.edgeId,
+                          severity: 'error',
+                          title: 'Domain Violation',
+                          message: `Individual '${getLabel(f.subject)}' is type '${getLabel(typeId)}', which is disjoint from the domain '${getLabel(domainId)}' of property '${prop.label}'.`
+                      });
+                  }
+              }
+          }
+      }
+
+      // If Object is Type A, and Property has Range B. Are A and B disjoint?
+      if (prop.ranges.length > 0) {
+          const objectTypes = individualTypes[f.object] || [];
+          for (const typeId of objectTypes) {
+              for (const rangeId of prop.ranges) {
+                  if (areClassesDisjoint(typeId, rangeId)) {
+                       issues.push({
+                          id: `range-clash-${f.edgeId}`,
+                          elementId: f.edgeId,
+                          severity: 'error',
+                          title: 'Range Violation',
+                          message: `Target '${getLabel(f.object)}' is type '${getLabel(typeId)}', which is disjoint from the range '${getLabel(rangeId)}' of property '${prop.label}'.`
+                      });
+                  }
+              }
+          }
+      }
+  });
+
+  // Functional Check (Cardinality <= 1)
+  Object.entries(groupedBySubjectProp).forEach(([key, objects]) => {
+      const [subjId, propId] = key.split('_');
+      const prop = propertyMeta[propId];
+      // Filter distinct objects
+      const distinctObjects = new Set(objects);
+      
+      if (prop && prop.characteristics.has('Functional') && distinctObjects.size > 1) {
+          issues.push({
+              id: `functional-${key}`,
+              elementId: subjId, // Blame the subject
+              severity: 'error',
+              title: 'Cardinality Violation',
+              message: `Property '${prop.label}' is Functional (max 1), but '${getLabel(subjId)}' has ${distinctObjects.size} distinct values.`
+          });
+      }
+  });
+
+  // --- 7. Individual Type Disjointness (Existing Logic Refined) ---
+  Object.entries(individualTypes).forEach(([indivId, types]) => {
+      // Check every pair of explicit types
+      for (let i = 0; i < types.length; i++) {
+          for (let j = i + 1; j < types.length; j++) {
+              if (areClassesDisjoint(types[i], types[j])) {
                    issues.push({
-                      id: `indiv-unsat-${n.id}`,
-                      elementId: n.id,
+                      id: `indiv-disjoint-${indivId}-${i}-${j}`,
+                      elementId: indivId,
                       severity: 'error',
                       title: 'Inconsistent Individual',
-                      message: `Individual '${n.data.label}' cannot belong to both '${labelA}' and '${labelB}' as they are disjoint.`
+                      message: `Individual '${getLabel(indivId)}' belongs to disjoint classes '${getLabel(types[i])}' and '${getLabel(types[j])}'.`
                   });
               }
-           }
-           
-           // Check if any type is an unsatisfiable class (inherits from disjoints)
-           // We do this by checking if any 'explicitType' is 'unsat' (based on the previous check loop, but strictly we need to re-verify)
-           // A simpler way: Check if an individual's inferred types contain disjoints.
-           
-           const individualAncestors = new Set<string>();
-           explicitTypes.forEach(t => {
-               individualAncestors.add(t);
-               getAncestors(t).forEach(a => individualAncestors.add(a));
-           });
-
-           for (const [a, b] of disjointPairs) {
-               if (individualAncestors.has(a) && individualAncestors.has(b)) {
-                   const labelA = nodeMap.get(a)?.data.label;
-                   const labelB = nodeMap.get(b)?.data.label;
-                   // Avoid duplicate reporting if handled by explicit types
-                   if (!explicitTypes.includes(a) || !explicitTypes.includes(b)) {
-                       issues.push({
-                           id: `indiv-inferred-unsat-${n.id}-${a}-${b}`,
-                           elementId: n.id,
-                           severity: 'error',
-                           title: 'Inconsistent Individual (Inferred)',
-                           message: `Individual '${n.data.label}' is inconsistent because its types imply membership in disjoint classes '${labelA}' and '${labelB}'.`
-                       });
-                   }
-               }
-           }
+          }
       }
   });
 

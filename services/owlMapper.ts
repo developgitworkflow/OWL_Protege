@@ -62,10 +62,7 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
       if (str.includes(':')) return str; // already prefixed
       
       // Table 3.2: OWL 2 RDF-Based Vocabulary Check
-      // If the string is a reserved OWL term (e.g. "Thing", "Nothing"), prefix it with owl:
       if (OWL_VOCABULARY.has(str)) return `owl:${str}`;
-
-      // Primitive check for XSD types to avoid 'ex:xsd:string'
       if (str.startsWith('xsd:')) return str;
       return `${defaultPrefix}:${str.replace(/\s+/g, '_')}`;
   };
@@ -84,19 +81,26 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
   nodes.forEach(node => {
       const s = getNodeIRI(node);
 
-      // Declaration(Class(C)) -> T(C) rdf:type owl:Class
+      // --- DECLARATIONS ---
       if (node.data.type === ElementType.OWL_CLASS) {
           add(`${s} rdf:type owl:Class .`);
           add(`${s} skos:prefLabel "${node.data.label}"@en .`);
       }
-      // Declaration(NamedIndividual(a)) -> T(a) rdf:type owl:NamedIndividual
       else if (node.data.type === ElementType.OWL_NAMED_INDIVIDUAL) {
           add(`${s} rdf:type owl:NamedIndividual .`);
           add(`${s} skos:prefLabel "${node.data.label}"@en .`);
       }
-      // Declaration(Datatype(DT)) -> T(DT) rdf:type rdfs:Datatype
       else if (node.data.type === ElementType.OWL_DATATYPE) {
           add(`${s} rdf:type rdfs:Datatype .`);
+      }
+      // NEW: Property Entities
+      else if (node.data.type === ElementType.OWL_OBJECT_PROPERTY) {
+          add(`${s} rdf:type owl:ObjectProperty .`);
+          add(`${s} rdfs:label "${node.data.label}" .`);
+      }
+      else if (node.data.type === ElementType.OWL_DATA_PROPERTY) {
+          add(`${s} rdf:type owl:DatatypeProperty .`);
+          add(`${s} rdfs:label "${node.data.label}" .`);
       }
 
       // Annotations (Table 1: TANN)
@@ -104,22 +108,33 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
           add(`${s} skos:definition "${node.data.description}"@en .`);
       }
 
-      // Data Properties (Attributes) -> Declaration(DataProperty(DP))
+      // Attributes (Mixed Semantics based on Type)
       if (node.data.attributes) {
           node.data.attributes.forEach(attr => {
-              const dp = fmt(attr.name);
-              add(`${dp} rdf:type owl:DatatypeProperty .`); // Declaration
-              add(`${dp} rdfs:label "${attr.name}" .`);
-              
+              // If it's a CLASS, these are Data Properties
               if (node.data.type === ElementType.OWL_CLASS) {
-                  // DataPropertyDomain(DPE CE) -> T(DPE) rdfs:domain T(CE)
+                  const dp = fmt(attr.name);
+                  add(`${dp} rdf:type owl:DatatypeProperty .`);
+                  add(`${dp} rdfs:label "${attr.name}" .`);
                   add(`${dp} rdfs:domain ${s} .`);
-              }
-              
-              if (attr.type) {
-                  // DataPropertyRange(DPE DR) -> T(DPE) rdfs:range T(DR)
-                  // Use 'xsd' prefix for standard types
-                  add(`${dp} rdfs:range ${fmt(attr.type, 'xsd')} .`);
+                  if (attr.type) add(`${dp} rdfs:range ${fmt(attr.type, 'xsd')} .`);
+              } 
+              // If it's a PROPERTY, these are Characteristics (Flags)
+              else if (node.data.type === ElementType.OWL_OBJECT_PROPERTY || node.data.type === ElementType.OWL_DATA_PROPERTY) {
+                  // e.g. Functional, Transitive
+                  const characteristic = `owl:${attr.name}Property`; // Very heuristic mapping
+                  // Special cases map
+                  const map: Record<string, string> = {
+                      'Functional': 'owl:FunctionalProperty',
+                      'InverseFunctional': 'owl:InverseFunctionalProperty',
+                      'Transitive': 'owl:TransitiveProperty',
+                      'Symmetric': 'owl:SymmetricProperty',
+                      'Asymmetric': 'owl:AsymmetricProperty',
+                      'Reflexive': 'owl:ReflexiveProperty',
+                      'Irreflexive': 'owl:IrreflexiveProperty'
+                  };
+                  const type = map[attr.name] || characteristic;
+                  add(`${s} rdf:type ${type} .`);
               }
           });
       }
@@ -130,147 +145,93 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
               const { name, returnType } = method;
               const n = name.toLowerCase().replace(/\s+/g, '');
               const v = returnType;
+              const isProp = node.data.type === ElementType.OWL_OBJECT_PROPERTY || node.data.type === ElementType.OWL_DATA_PROPERTY;
 
-              // --- Class Axioms & Boolean Connectives ---
-              
-              // SubClassOf(CE1 CE2)
-              if (n === 'subclassof') {
-                   add(`${s} rdfs:subClassOf ${fmt(v)} .`);
-              } 
-              // DisjointClasses(CE1 CE2)
-              else if (n === 'disjointwith') {
-                   add(`${s} owl:disjointWith ${fmt(v)} .`);
-              } 
-              // EquivalentClasses(CE1...CEn)
-              else if (n === 'equivalentto' || n === 'equivalentclass') {
-                   add(`${s} owl:equivalentClass ${fmt(v)} .`);
-              } 
-              // ObjectUnionOf(CE1 ... CEn)
-              else if (n === 'unionof') {
-                   add(`${s} owl:unionOf ${formatList(v)} .`);
-              } 
-              // ObjectIntersectionOf(CE1 ... CEn)
-              else if (n === 'intersectionof') {
-                   add(`${s} owl:intersectionOf ${formatList(v)} .`);
-              } 
-              // ObjectOneOf(a1 ... an) or DataOneOf
-              else if (n === 'oneof') {
-                   add(`${s} owl:oneOf ${formatList(v)} .`);
-              } 
-              // ObjectComplementOf(CE)
-              else if (n === 'complementof') {
-                   add(`${s} owl:complementOf ${fmt(v)} .`);
-              }
-              // DisjointUnion(C CE1 ... CEn)
-              else if (n === 'disjointunionof') {
-                   add(`${s} owl:disjointUnionOf ${formatList(v)} .`);
-              }
-              // HasKey(C (p1 ... pn))
-              else if (n === 'haskey') {
-                   add(`${s} owl:hasKey ${formatList(v)} .`);
-              }
-              
-              // --- Individual Axioms ---
-              else if (n === 'sameas' || n === 'sameindividual') {
-                   add(`${s} owl:sameAs ${fmt(v)} .`);
-              }
-              else if (n === 'differentfrom' || n === 'differentindividuals') {
-                   add(`${s} owl:differentFrom ${fmt(v)} .`);
-              }
-
-              // --- Property Restrictions (Table 1: ObjectSomeValuesFrom, etc.) ---
-              else {
-                  // Implicit Restriction via implicit grammar: "Property Quantifier Target"
-                  // e.g. name="hasPart", returnType="some Wheel"
-                  
-                  const parts = v.split(' ');
-                  if (parts.length >= 1) {
-                      const quantifier = parts[0].toLowerCase();
-                      const targetStr = parts.slice(1).join(' '); // Can be empty for some quantifiers
-                      
-                      const bn = nextBn();
-                      // T(C) rdfs:subClassOf _:x (The node is a subclass of the restriction)
-                      add(`${s} rdfs:subClassOf ${bn} .`);
-                      add(`${bn} rdf:type owl:Restriction .`);
-                      add(`${bn} owl:onProperty ${fmt(name)} .`);
-
-                      // ObjectSomeValuesFrom / DataSomeValuesFrom
-                      if (quantifier === 'some') {
-                          add(`${bn} owl:someValuesFrom ${fmt(targetStr)} .`);
-                      }
-                      // ObjectAllValuesFrom / DataAllValuesFrom
-                      else if (quantifier === 'only' || quantifier === 'all') {
-                          add(`${bn} owl:allValuesFrom ${fmt(targetStr)} .`);
-                      }
-                      // ObjectHasValue / DataHasValue
-                      else if (quantifier === 'value' || quantifier === 'hasvalue') {
-                          // Check if target is string/number literal or IRI
-                          const target = targetStr.startsWith('"') || !isNaN(Number(targetStr)) ? targetStr : fmt(targetStr);
-                          add(`${bn} owl:hasValue ${target} .`);
-                      }
-                      // ObjectHasSelf
-                      else if (quantifier === 'self') {
-                          add(`${bn} owl:hasSelf "true"^^xsd:boolean .`);
-                      }
-                      // Cardinality (Min, Max, Exact)
-                      else if (['min', 'max', 'exactly', 'cardinality'].includes(quantifier)) {
-                         // Syntax: "min <n> [Class]"
-                         const [num, ...rest] = targetStr.split(' ');
-                         const cls = rest.join(' ');
-                         
-                         // Determine Property URI (Qualified vs Unqualified)
-                         let pred = '';
-                         let isQualified = cls.length > 0;
-
-                         if (quantifier === 'min') pred = isQualified ? 'owl:minQualifiedCardinality' : 'owl:minCardinality';
-                         else if (quantifier === 'max') pred = isQualified ? 'owl:maxQualifiedCardinality' : 'owl:maxCardinality';
-                         else pred = isQualified ? 'owl:qualifiedCardinality' : 'owl:cardinality';
-
-                         add(`${bn} ${pred} "${num}"^^xsd:nonNegativeInteger .`);
-                         
-                         if (isQualified) {
-                             // Check if it's a data range or class expression. 
-                             // Simplify: use onClass (or onDataRange if xsd).
-                             const onProp = cls.startsWith('xsd:') ? 'owl:onDataRange' : 'owl:onClass';
-                             add(`${bn} ${onProp} ${fmt(cls)} .`);
-                         }
-                      }
+              // --- PROPERTY AXIOMS ---
+              if (isProp) {
+                  if (n === 'subpropertyof') {
+                      add(`${s} rdfs:subPropertyOf ${fmt(v)} .`);
+                  } else if (n === 'inverseof') {
+                      add(`${s} owl:inverseOf ${fmt(v)} .`);
+                  } else if (n === 'domain') {
+                      add(`${s} rdfs:domain ${fmt(v)} .`);
+                  } else if (n === 'range') {
+                      add(`${s} rdfs:range ${fmt(v)} .`);
+                  } else if (n === 'propertychainaxiom') {
+                      // List semantics
+                      add(`${s} owl:propertyChainAxiom ${formatList(v)} .`);
                   }
               }
+              
+              // --- CLASS AXIOMS ---
+              else {
+                // SubClassOf(CE1 CE2)
+                if (n === 'subclassof') {
+                     add(`${s} rdfs:subClassOf ${fmt(v)} .`);
+                } 
+                else if (n === 'disjointwith') {
+                     add(`${s} owl:disjointWith ${fmt(v)} .`);
+                } 
+                else if (n === 'equivalentto' || n === 'equivalentclass') {
+                     add(`${s} owl:equivalentClass ${fmt(v)} .`);
+                } 
+                else if (n === 'unionof') {
+                     add(`${s} owl:unionOf ${formatList(v)} .`);
+                } 
+                else if (n === 'intersectionof') {
+                     add(`${s} owl:intersectionOf ${formatList(v)} .`);
+                } 
+                else if (n === 'oneof') {
+                     add(`${s} owl:oneOf ${formatList(v)} .`);
+                } 
+                else if (n === 'complementof') {
+                     add(`${s} owl:complementOf ${fmt(v)} .`);
+                }
+                else if (n === 'disjointunionof') {
+                     add(`${s} owl:disjointUnionOf ${formatList(v)} .`);
+                }
+                else if (n === 'haskey') {
+                     add(`${s} owl:hasKey ${formatList(v)} .`);
+                }
+                else if (n === 'sameas' || n === 'sameindividual') {
+                     add(`${s} owl:sameAs ${fmt(v)} .`);
+                }
+                else if (n === 'differentfrom' || n === 'differentindividuals') {
+                     add(`${s} owl:differentFrom ${fmt(v)} .`);
+                }
+                else {
+                    // Implicit Restrictions
+                    const parts = v.split(' ');
+                    if (parts.length >= 1) {
+                        const quantifier = parts[0].toLowerCase();
+                        const targetStr = parts.slice(1).join(' '); 
+                        const bn = nextBn();
+                        add(`${s} rdfs:subClassOf ${bn} .`);
+                        add(`${bn} rdf:type owl:Restriction .`);
+                        add(`${bn} owl:onProperty ${fmt(name)} .`);
+
+                        if (quantifier === 'some') add(`${bn} owl:someValuesFrom ${fmt(targetStr)} .`);
+                        else if (quantifier === 'only' || quantifier === 'all') add(`${bn} owl:allValuesFrom ${fmt(targetStr)} .`);
+                        else if (quantifier === 'value' || quantifier === 'hasvalue') add(`${bn} owl:hasValue ${targetStr.startsWith('"') ? targetStr : fmt(targetStr)} .`);
+                        else if (quantifier === 'self') add(`${bn} owl:hasSelf "true"^^xsd:boolean .`);
+                        else if (['min', 'max', 'exactly', 'cardinality'].includes(quantifier)) {
+                           const [num, ...rest] = targetStr.split(' ');
+                           const cls = rest.join(' ');
+                           let pred = '';
+                           let isQualified = cls.length > 0;
+                           if (quantifier === 'min') pred = isQualified ? 'owl:minQualifiedCardinality' : 'owl:minCardinality';
+                           else if (quantifier === 'max') pred = isQualified ? 'owl:maxQualifiedCardinality' : 'owl:maxCardinality';
+                           else pred = isQualified ? 'owl:qualifiedCardinality' : 'owl:cardinality';
+                           add(`${bn} ${pred} "${num}"^^xsd:nonNegativeInteger .`);
+                           if (isQualified) {
+                               const onProp = cls.startsWith('xsd:') ? 'owl:onDataRange' : 'owl:onClass';
+                               add(`${bn} ${onProp} ${fmt(cls)} .`);
+                           }
+                        }
+                    }
+                }
+              }
           });
-      }
-  });
-
-  // Iterate Edges -> Object Properties
-  edges.forEach(edge => {
-      const src = nodes.find(n => n.id === edge.source);
-      const tgt = nodes.find(n => n.id === edge.target);
-      if (!src || !tgt) return;
-
-      const s = getNodeIRI(src);
-      const o = getNodeIRI(tgt);
-      // Ensure label is a string before formatting
-      const p = (typeof edge.label === 'string') ? fmt(edge.label) : `${userPrefix}:relatedTo`;
-
-      if (p === 'rdfs:subClassOf' || p.endsWith('subClassOf')) {
-          add(`${s} rdfs:subClassOf ${o} .`);
-      } else if (p === 'owl:disjointWith' || p.endsWith('disjointWith')) {
-          add(`${s} owl:disjointWith ${o} .`);
-      } else if (p === 'rdf:type' || p === 'a') {
-          add(`${s} rdf:type ${o} .`);
-      } else if (p === 'owl:inverseOf' || p.endsWith('inverseOf')) {
-           // InverseObjectProperties( OPE1 OPE2 )
-           add(`${s} owl:inverseOf ${o} .`);
-      } else {
-          // ObjectProperty Assertion or Declaration inferred
-          if (src.data.type === ElementType.OWL_CLASS && tgt.data.type === ElementType.OWL_CLASS) {
-             add(`${p} rdf:type owl:ObjectProperty .`);
-             add(`${p} rdfs:domain ${s} .`);
-             add(`${p} rdfs:range ${o} .`);
-          } else {
-             // ObjectPropertyAssertion( OP a1 a2 )
-             add(`${s} ${p} ${o} .`);
-          }
       }
   });
 

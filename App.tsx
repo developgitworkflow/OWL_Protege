@@ -19,9 +19,11 @@ import UMLNode from './components/UMLNode';
 import AIAssistant from './components/AIAssistant';
 import CreateProjectModal from './components/CreateProjectModal';
 import SettingsModal from './components/SettingsModal';
+import ValidationModal from './components/ValidationModal';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
 import { generateTurtle } from './services/owlMapper';
+import { validateOntology, ValidationResult } from './services/validatorService';
 
 // Must be defined outside component to avoid re-creation
 const nodeTypes = {
@@ -32,8 +34,13 @@ const Flow = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  
+  // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isValidationModalOpen, setIsValidationModalOpen] = useState(false);
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
+
   const [projectMetadata, setProjectMetadata] = useState<ProjectData>({ 
       name: 'Untitled Project',
       baseIri: 'http://example.org/ontology#',
@@ -190,6 +197,12 @@ const Flow = () => {
     setIsCreateModalOpen(false);
   };
 
+  const handleValidate = () => {
+      const result = validateOntology(nodes, edges);
+      setValidationResult(result);
+      setIsValidationModalOpen(true);
+  };
+
   const selectedNode = useMemo(() => {
       return nodes.find(n => n.id === selectedNodeId) || null;
   }, [nodes, selectedNodeId]);
@@ -202,6 +215,7 @@ const Flow = () => {
         onLoad={handleLoad} 
         onNewProject={() => setIsCreateModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onValidate={handleValidate}
       />
       
       <div className="flex flex-1 overflow-hidden">
@@ -268,6 +282,12 @@ const Flow = () => {
         onExportJSON={handleSaveJSON}
         onExportTurtle={handleSaveTurtle}
         onImportJSON={handleLoad}
+      />
+
+      <ValidationModal 
+        isOpen={isValidationModalOpen}
+        onClose={() => setIsValidationModalOpen(false)}
+        result={validationResult}
       />
     </div>
   );

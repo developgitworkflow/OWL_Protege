@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, User, FileType } from 'lucide-react';
+import { Database, User, FileType, ArrowRightLeft, Tag } from 'lucide-react';
 import { ElementType } from '../types';
 
 const Sidebar = () => {
@@ -19,7 +19,7 @@ const Sidebar = () => {
         
         {/* OWL Section */}
         <div>
-          <h3 className="text-xs font-semibold text-slate-500 mb-3 uppercase">OWL 2 Elements</h3>
+          <h3 className="text-xs font-semibold text-slate-500 mb-3 uppercase">OWL 2 Entities</h3>
           <div className="space-y-2">
             <div 
               className="flex items-center p-3 bg-slate-800 border border-slate-700 rounded cursor-grab hover:bg-slate-700 transition-colors shadow-sm group"
@@ -28,6 +28,24 @@ const Sidebar = () => {
             >
               <Database className="w-5 h-5 text-purple-400 mr-3 group-hover:text-purple-300" />
               <div className="text-sm font-medium text-slate-300 group-hover:text-white">OWL Class</div>
+            </div>
+
+            <div 
+              className="flex items-center p-3 bg-slate-800 border border-slate-700 rounded cursor-grab hover:bg-slate-700 transition-colors shadow-sm group"
+              onDragStart={(event) => onDragStart(event, 'umlNode', ElementType.OWL_OBJECT_PROPERTY)}
+              draggable
+            >
+              <ArrowRightLeft className="w-5 h-5 text-blue-400 mr-3 group-hover:text-blue-300" />
+              <div className="text-sm font-medium text-slate-300 group-hover:text-white">Object Property</div>
+            </div>
+
+            <div 
+              className="flex items-center p-3 bg-slate-800 border border-slate-700 rounded cursor-grab hover:bg-slate-700 transition-colors shadow-sm group"
+              onDragStart={(event) => onDragStart(event, 'umlNode', ElementType.OWL_DATA_PROPERTY)}
+              draggable
+            >
+              <Tag className="w-5 h-5 text-green-400 mr-3 group-hover:text-green-300" />
+              <div className="text-sm font-medium text-slate-300 group-hover:text-white">Data Property</div>
             </div>
 
             <div 
@@ -52,7 +70,9 @@ const Sidebar = () => {
 
          <div className="pt-4 border-t border-slate-800">
             <p className="text-xs text-slate-500 leading-relaxed">
-                Drag elements onto the canvas. Use the handles to connect them with relations (Object Properties).
+                Drag elements onto the canvas. 
+                <br/><br/>
+                Use <strong>Properties</strong> as first-class nodes to define complex property hierarchies (SubPropertyOf) or chains.
             </p>
          </div>
 

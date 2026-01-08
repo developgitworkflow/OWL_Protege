@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Node } from 'reactflow';
-import { UMLNodeData } from '../types';
-import { Trash2, Plus, X, Tag, ChevronDown, Box, ArrowRight, MousePointerClick } from 'lucide-react';
+import { UMLNodeData, ElementType } from '../types';
+import { Trash2, Plus, X, Tag, ChevronDown, Box, ArrowRight, MousePointerClick, ListOrdered, Hash } from 'lucide-react';
 
 interface PropertiesPanelProps {
   selectedNode: Node<UMLNodeData> | null;
@@ -17,10 +17,20 @@ const XSD_TYPES = [
   'xsd:language', 'rdf:PlainLiteral', 'rdf:XMLLiteral'
 ];
 
-const AXIOM_TYPES = [
+const CLASS_AXIOMS = [
   'SubClassOf', 'DisjointWith', 'EquivalentTo', 'UnionOf', 
   'IntersectionOf', 'OneOf', 'ComplementOf', 'DisjointUnionOf', 'HasKey',
   'SameAs', 'DifferentFrom'
+];
+
+const PROPERTY_AXIOMS = [
+  'SubPropertyOf', 'EquivalentTo', 'DisjointWith', 'InverseOf', 
+  'PropertyChainAxiom', 'Domain', 'Range'
+];
+
+const CHARACTERISTICS = [
+    'Functional', 'InverseFunctional', 'Transitive', 'Symmetric', 
+    'Asymmetric', 'Reflexive', 'Irreflexive'
 ];
 
 const QUANTIFIERS = ['some', 'only', 'min', 'max', 'exactly', 'value', 'self'];
@@ -28,7 +38,6 @@ const QUANTIFIERS = ['some', 'only', 'min', 'max', 'exactly', 'value', 'self'];
 const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdateNode, onDeleteNode }) => {
   const [localData, setLocalData] = useState<UMLNodeData | null>(null);
   
-  // Track focus for autocomplete
   const [activeAttrType, setActiveAttrType] = useState<string | null>(null);
   const [activeAxiomName, setActiveAxiomName] = useState<string | null>(null);
   const [activeAxiomTarget, setActiveAxiomTarget] = useState<string | null>(null);
@@ -46,7 +55,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
     }
   }, [selectedNode]);
 
-  // Click outside listener to close autocomplete
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (panelRef.current && !panelRef.current.contains(event.target as unknown as HTMLElement)) {
@@ -66,10 +74,13 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
             <Box className="w-10 h-10 text-slate-500" />
         </div>
         <h3 className="text-slate-200 font-semibold text-lg mb-2">No Selection</h3>
-        <p className="text-slate-500 text-sm max-w-[200px]">Select a class, individual, or datatype from the canvas to edit its properties.</p>
+        <p className="text-slate-500 text-sm max-w-[200px]">Select a class, individual, property or datatype from the canvas to edit its properties.</p>
       </div>
     );
   }
+
+  const isPropertyNode = localData.type === ElementType.OWL_OBJECT_PROPERTY || localData.type === ElementType.OWL_DATA_PROPERTY;
+  const isClassNode = localData.type === ElementType.OWL_CLASS;
 
   const handleChange = (field: keyof UMLNodeData, value: any) => {
     const newData = { ...localData, [field]: value };
@@ -77,15 +88,24 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
     onUpdateNode(selectedNode.id, newData);
   };
 
-  // --- Data Attributes Logic ---
+  // --- Attributes (Data Props or Characteristics) ---
   const addAttribute = () => {
-    const newAttr = { id: `attr-${Date.now()}`, name: 'newProperty', type: 'xsd:string', visibility: '+' as const };
+    const defaultName = isPropertyNode ? 'Functional' : 'newProperty';
+    const defaultType = isPropertyNode ? '' : 'xsd:string'; // Properties use this list for characteristics which are flags
+    
+    const newAttr = { 
+        id: `attr-${Date.now()}`, 
+        name: defaultName, 
+        type: defaultType, 
+        visibility: '+' as const,
+        isDerived: false 
+    };
     const newData = { ...localData, attributes: [...(localData.attributes || []), newAttr] };
     setLocalData(newData);
     onUpdateNode(selectedNode.id, newData);
   };
 
-  const updateAttribute = (id: string, field: string, value: string) => {
+  const updateAttribute = (id: string, field: string, value: any) => {
     const newAttrs = localData.attributes.map(a => a.id === id ? { ...a, [field]: value } : a);
     const newData = { ...localData, attributes: newAttrs };
     setLocalData(newData);
@@ -99,15 +119,22 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
       onUpdateNode(selectedNode.id, newData);
   };
 
-  // --- Axioms / Methods Logic ---
+  // --- Axioms ---
   const addMethod = () => {
-    const newMethod = { id: `method-${Date.now()}`, name: 'SubClassOf', returnType: 'Thing', visibility: '+' as const };
+    const defaultName = isPropertyNode ? 'SubPropertyOf' : 'SubClassOf';
+    const newMethod = { 
+        id: `method-${Date.now()}`, 
+        name: defaultName, 
+        returnType: 'Target', 
+        visibility: '+' as const,
+        isOrdered: false 
+    };
     const newData = { ...localData, methods: [...(localData.methods || []), newMethod] };
     setLocalData(newData);
     onUpdateNode(selectedNode.id, newData);
   };
 
-  const updateMethod = (id: string, field: string, value: string) => {
+  const updateMethod = (id: string, field: string, value: any) => {
     const newMethods = localData.methods.map(m => m.id === id ? { ...m, [field]: value } : m);
     const newData = { ...localData, methods: newMethods };
     setLocalData(newData);
@@ -124,12 +151,9 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
   const appendToMethodTarget = (methodId: string, textToAppend: string) => {
       const method = localData.methods.find(m => m.id === methodId);
       if (method) {
-          const current = method.returnType;
-          // Heuristic: replace "Thing" default or append
-          const newValue = current === 'Thing' ? `${textToAppend} ` : `${current.trim()} ${textToAppend} `;
+          const current = method.returnType === 'Target' ? '' : method.returnType;
+          const newValue = `${current.trim()} ${textToAppend} `;
           updateMethod(methodId, 'returnType', newValue);
-          
-          // Focus fix hack: find the input and focus it
           setTimeout(() => {
              const input = document.getElementById(`axiom-target-${methodId}`);
              input?.focus();
@@ -137,8 +161,8 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
       }
   };
 
-  // Helper to strip "owl_" prefix for display
   const displayType = localData.type.replace('owl_', '').replace(/_/g, ' ');
+  const relevantAxioms = isPropertyNode ? PROPERTY_AXIOMS : CLASS_AXIOMS;
 
   return (
     <div ref={panelRef} className="w-96 bg-slate-900 border-l border-slate-800 h-full overflow-y-auto flex flex-col font-sans text-sm text-slate-200">
@@ -165,27 +189,23 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                 Identity
             </h3>
-            <div className="space-y-3">
-                <div className="space-y-1">
-                     <label className="text-xs text-slate-500">IRI (Unique Identifier)</label>
-                     <input
-                        type="text"
-                        className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
-                        value={localData.iri || `http://example.org/${selectedNode.id}`}
-                        onChange={(e) => handleChange('iri', e.target.value)}
-                    />
-                </div>
+            <div className="space-y-1">
+                 <label className="text-xs text-slate-500">IRI (Unique Identifier)</label>
+                 <input
+                    type="text"
+                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
+                    value={localData.iri || `http://example.org/${selectedNode.id}`}
+                    onChange={(e) => handleChange('iri', e.target.value)}
+                />
             </div>
         </div>
 
-        {/* Annotations Section */}
+        {/* Annotations */}
         <div className="space-y-3">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                 Annotations
             </h3>
-            
             <div className="bg-slate-950/50 rounded-lg border border-slate-800 overflow-hidden">
-                {/* skos:prefLabel */}
                 <div className="flex items-center gap-3 p-2 border-b border-slate-800/50">
                     <div className="flex items-center gap-1.5 w-24 shrink-0 text-slate-500 text-xs font-mono">
                         <Tag size={10} />
@@ -200,8 +220,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                         <span className="text-[10px] text-slate-600 font-mono px-1.5 py-0.5 bg-slate-900 rounded border border-slate-800">en</span>
                     </div>
                 </div>
-
-                {/* skos:definition */}
                 <div className="flex items-start gap-3 p-2">
                     <div className="flex items-center gap-1.5 w-24 shrink-0 text-slate-500 text-xs font-mono pt-1">
                         <Tag size={10} />
@@ -221,11 +239,11 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
             </div>
         </div>
 
-        {/* Axioms & Restrictions (Methods) - REPLACES PARENTS/RELATIONSHIPS */}
+        {/* Axioms (Methods) */}
         <div className="space-y-3">
             <div className="flex justify-between items-end">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Axioms & Restrictions
+                    {isPropertyNode ? 'Property Axioms' : 'Class Axioms'}
                 </h3>
                 <button 
                     onClick={addMethod} 
@@ -236,22 +254,15 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
             </div>
 
             <div className="space-y-2">
-                {localData.methods?.length === 0 && (
-                    <div className="p-4 border-2 border-dashed border-slate-800 rounded-lg text-center">
-                        <p className="text-slate-600 text-xs">No axioms defined.</p>
-                        <button onClick={addMethod} className="text-blue-500 text-xs mt-1 hover:underline">Add SubClassOf</button>
-                    </div>
-                )}
-
                 {localData.methods?.map((method, index) => (
                     <div key={method.id} className="bg-slate-950 border border-slate-800 rounded-lg p-3 group hover:border-slate-700 transition-colors">
                         <div className="flex items-start gap-2 mb-2">
-                            {/* Autocomplete for Axiom Type / Property */}
+                            {/* Autocomplete for Axiom Name */}
                             <div className="relative flex-1 min-w-[120px]">
-                                <label className="text-[10px] text-slate-500 mb-0.5 block">Property / Axiom</label>
+                                <label className="text-[10px] text-slate-500 mb-0.5 block">Type</label>
                                 <div className="relative">
                                     <input 
-                                        className={`w-full bg-slate-900 border ${AXIOM_TYPES.includes(method.name) ? 'text-purple-400 border-purple-500/30' : 'text-blue-400 border-slate-700'} rounded px-2 py-1.5 text-xs font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50`}
+                                        className={`w-full bg-slate-900 border ${relevantAxioms.includes(method.name) ? 'text-purple-400 border-purple-500/30' : 'text-blue-400 border-slate-700'} rounded px-2 py-1.5 text-xs font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50`}
                                         value={method.name}
                                         onChange={(e) => updateMethod(method.id, 'name', e.target.value)}
                                         onFocus={() => setActiveAxiomName(method.id)}
@@ -259,19 +270,15 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                                     />
                                     {activeAxiomName === method.id && (
                                         <div className="absolute top-full left-0 mt-1 w-full bg-slate-800 border border-slate-700 rounded shadow-xl z-50 max-h-40 overflow-y-auto">
-                                            {/* Standard Axioms */}
-                                            <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase">Class Axioms</div>
-                                            {AXIOM_TYPES.filter(t => t.toLowerCase().includes(method.name.toLowerCase())).map(type => (
+                                            {relevantAxioms.map(type => (
                                                 <div 
                                                     key={type}
-                                                    className="px-3 py-1.5 text-xs text-purple-300 hover:bg-slate-700 cursor-pointer flex justify-between"
+                                                    className="px-3 py-1.5 text-xs text-purple-300 hover:bg-slate-700 cursor-pointer"
                                                     onMouseDown={(e) => { e.preventDefault(); updateMethod(method.id, 'name', type); setActiveAxiomName(null); }}
                                                 >
                                                     {type}
                                                 </div>
                                             ))}
-                                            <div className="border-t border-slate-700 my-1"></div>
-                                            <div className="px-2 py-1 text-[10px] text-slate-500 italic">Or type a property name...</div>
                                         </div>
                                     )}
                                 </div>
@@ -281,7 +288,20 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
 
                             {/* Target Input */}
                             <div className="relative flex-[2]">
-                                <label className="text-[10px] text-slate-500 mb-0.5 block">Target / Expression</label>
+                                <div className="flex justify-between mb-0.5">
+                                    <label className="text-[10px] text-slate-500 block">Target / Expression</label>
+                                    {/* List / Set Toggle for specific axioms */}
+                                    {['PropertyChainAxiom', 'HasKey', 'DisjointUnionOf'].some(a => method.name.includes(a)) && (
+                                        <button 
+                                            onClick={() => updateMethod(method.id, 'isOrdered', !method.isOrdered)}
+                                            className={`flex items-center gap-1 text-[9px] px-1 rounded ${method.isOrdered ? 'bg-blue-900/50 text-blue-300 border border-blue-800' : 'bg-slate-800 text-slate-500'}`}
+                                            title="Toggle Ordered List Semantics { ordered, nonunique }"
+                                        >
+                                            <ListOrdered size={10} />
+                                            {method.isOrdered ? 'Ordered' : 'Set'}
+                                        </button>
+                                    )}
+                                </div>
                                 <input
                                     id={`axiom-target-${method.id}`}
                                     className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
@@ -299,8 +319,8 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                             </div>
                         </div>
 
-                        {/* Helper Chips for Quantifiers */}
-                        {activeAxiomTarget === method.id && !AXIOM_TYPES.includes(method.name) && (
+                        {/* Helper Chips for Quantifiers (Only for Classes) */}
+                        {isClassNode && activeAxiomTarget === method.id && (
                             <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-slate-800/50 animate-in fade-in slide-in-from-top-1 duration-200">
                                 {QUANTIFIERS.map(q => (
                                     <button
@@ -318,11 +338,11 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
             </div>
         </div>
 
-        {/* Data Properties (Attributes) */}
+        {/* Section 2: Attributes OR Characteristics */}
         <div className="space-y-3 border-t border-slate-800 pt-5">
           <div className="flex justify-between items-end">
              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                 Data Properties
+                 {isPropertyNode ? 'Characteristics' : 'Data Properties'}
              </h3>
              <button 
                 onClick={addAttribute} 
@@ -336,47 +356,71 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
             {localData.attributes?.map((attr) => (
               <div key={attr.id} className="flex gap-2 items-start bg-slate-950 p-2.5 rounded-lg border border-slate-800 group hover:border-slate-700 transition-all">
                 <div className="flex-1 flex flex-col gap-2">
-                    {/* Name Input */}
-                    <input 
-                        className="bg-transparent text-sm text-slate-200 outline-none placeholder-slate-600 font-medium w-full"
-                        value={attr.name}
-                        onChange={(e) => updateAttribute(attr.id, 'name', e.target.value)}
-                        placeholder="hasAge"
-                    />
-                    
-                    {/* Type Input with Autocomplete */}
                     <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-500 uppercase tracking-wide">Range</span>
-                        <div className="relative flex-1">
+                        {/* Derived Toggle (/) */}
+                        <button
+                            onClick={() => updateAttribute(attr.id, 'isDerived', !attr.isDerived)}
+                            className={`p-1 rounded text-[10px] font-mono border ${attr.isDerived ? 'bg-blue-900/30 border-blue-500/50 text-blue-300' : 'bg-slate-900 border-slate-700 text-slate-600'}`}
+                            title="Derived Property (/)"
+                        >
+                            /
+                        </button>
+                        
+                        {isPropertyNode ? (
+                            // For Properties, "Name" is actually a selection of Characteristics
+                            <div className="flex-1 relative">
+                                <select
+                                    className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none"
+                                    value={attr.name}
+                                    onChange={(e) => updateAttribute(attr.id, 'name', e.target.value)}
+                                >
+                                    {CHARACTERISTICS.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                        ) : (
+                            // For Classes, standard input
                             <input 
-                                className="bg-slate-900/50 border border-slate-800 focus:border-blue-500/50 rounded px-2 py-1 text-xs text-blue-300 outline-none placeholder-slate-600 w-full font-mono transition-colors"
-                                value={attr.type}
-                                onChange={(e) => updateAttribute(attr.id, 'type', e.target.value)}
-                                onFocus={() => setActiveAttrType(attr.id)}
-                                placeholder="xsd:string"
-                                autoComplete="off"
+                                className="bg-transparent text-sm text-slate-200 outline-none placeholder-slate-600 font-medium w-full"
+                                value={attr.name}
+                                onChange={(e) => updateAttribute(attr.id, 'name', e.target.value)}
+                                placeholder="hasAge"
                             />
-                            
-                            {/* Type Dropdown */}
-                            {activeAttrType === attr.id && (
-                                <div className="absolute top-full left-0 mt-1 w-full bg-slate-800 border border-slate-700 rounded shadow-xl z-50 max-h-32 overflow-y-auto">
-                                    {XSD_TYPES.filter(t => t.toLowerCase().includes(attr.type.toLowerCase())).map(type => (
-                                        <div 
-                                            key={type}
-                                            className="px-3 py-1.5 text-xs text-slate-300 hover:bg-blue-600 hover:text-white cursor-pointer font-mono"
-                                            onMouseDown={(e) => {
-                                                e.preventDefault();
-                                                updateAttribute(attr.id, 'type', type);
-                                                setActiveAttrType(null);
-                                            }}
-                                        >
-                                            {type}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                        )}
                     </div>
+                    
+                    {/* Type Input (Only for Classes) */}
+                    {!isPropertyNode && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-slate-500 uppercase tracking-wide">Range</span>
+                            <div className="relative flex-1">
+                                <input 
+                                    className="bg-slate-900/50 border border-slate-800 focus:border-blue-500/50 rounded px-2 py-1 text-xs text-blue-300 outline-none placeholder-slate-600 w-full font-mono transition-colors"
+                                    value={attr.type}
+                                    onChange={(e) => updateAttribute(attr.id, 'type', e.target.value)}
+                                    onFocus={() => setActiveAttrType(attr.id)}
+                                    placeholder="xsd:string"
+                                    autoComplete="off"
+                                />
+                                {activeAttrType === attr.id && (
+                                    <div className="absolute top-full left-0 mt-1 w-full bg-slate-800 border border-slate-700 rounded shadow-xl z-50 max-h-32 overflow-y-auto">
+                                        {XSD_TYPES.filter(t => t.toLowerCase().includes(attr.type.toLowerCase())).map(type => (
+                                            <div 
+                                                key={type}
+                                                className="px-3 py-1.5 text-xs text-slate-300 hover:bg-blue-600 hover:text-white cursor-pointer font-mono"
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    updateAttribute(attr.id, 'type', type);
+                                                    setActiveAttrType(null);
+                                                }}
+                                            >
+                                                {type}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
                 <button 
                     onClick={() => removeAttribute(attr.id)} 
@@ -386,9 +430,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                 </button>
               </div>
             ))}
-             {(!localData.attributes || localData.attributes.length === 0) && (
-                <div className="text-xs text-slate-600 italic px-2">No data properties defined.</div>
-            )}
           </div>
         </div>
 

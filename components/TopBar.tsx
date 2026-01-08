@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Upload, Share2, Layers, FilePlus, ChevronDown, Settings } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -7,9 +7,10 @@ interface TopBarProps {
     onLoad: (event: React.ChangeEvent<HTMLInputElement>) => void;
     onNewProject: () => void;
     onOpenSettings: () => void;
+    onValidate: () => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ onSaveJSON, onSaveTurtle, onLoad, onNewProject, onOpenSettings }) => {
+const TopBar: React.FC<TopBarProps> = ({ onSaveJSON, onSaveTurtle, onLoad, onNewProject, onOpenSettings, onValidate }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   return (
@@ -38,6 +39,15 @@ const TopBar: React.FC<TopBarProps> = ({ onSaveJSON, onSaveTurtle, onLoad, onNew
          >
             <FilePlus size={16} />
             <span className="hidden sm:inline">New</span>
+         </button>
+
+         <button 
+            onClick={onValidate}
+            className="flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+            title="Validate Ontology"
+         >
+            <ShieldCheck size={16} />
+            <span className="hidden sm:inline">Validate</span>
          </button>
 
          {/* Export Dropdown */}

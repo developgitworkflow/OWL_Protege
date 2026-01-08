@@ -73,15 +73,19 @@ export const parseManchesterSyntax = (input: string): { nodes: Node<UMLNodeData>
     };
 
     const addEdge = (source: string, target: string, label: string) => {
-        edges.push({
-            id: `e-${Math.random().toString(36).substr(2, 9)}`,
-            source,
-            target,
-            label,
-            type: 'smoothstep',
-            style: { stroke: '#94a3b8' }, 
-            labelStyle: { fill: '#cbd5e1' }
-        });
+        // Prevent duplicate edges with same source, target, and label
+        const exists = edges.some(e => e.source === source && e.target === target && e.label === label);
+        if (!exists) {
+            edges.push({
+                id: `e-${Math.random().toString(36).substr(2, 9)}`,
+                source,
+                target,
+                label,
+                type: 'smoothstep',
+                style: { stroke: '#94a3b8' }, 
+                labelStyle: { fill: '#cbd5e1' }
+            });
+        }
     };
 
     // --- Parsing Logic ---
@@ -191,23 +195,79 @@ const processLineContent = (
     getOrCreateNodeId: (l: string, t: ElementType) => string
 ) => {
     // Handling comma-separated lists for some sections
-    // Note: This is naive splitting. Complex axioms with commas (e.g. "max 1, min 2") might break.
-    // For robust parsing, we'd need a token stream. This is a heuristic view builder.
+    // Simple logic: split by comma if not inside parenthesis (basic check)
+    // For now naive split is used.
     const parts = content.split(',').map(s => s.trim()).filter(s => s);
 
     const node = nodes.find(n => n.id === entityId);
     if (!node) return;
 
     parts.forEach(part => {
-        // --- 1. Edges (Simple References) ---
+        // --- 1. Property Axioms (First-class Edges) ---
+        const isProperty = entityType === ElementType.OWL_OBJECT_PROPERTY || entityType === ElementType.OWL_DATA_PROPERTY;
         const isSimpleRef = part.match(/^[a-zA-Z0-9_:-]+$/) || (part.startsWith('<') && part.endsWith('>'));
 
-        if (section === 'SubClassOf' && entityType === ElementType.OWL_CLASS && isSimpleRef) {
-            const targetId = getOrCreateNodeId(part, ElementType.OWL_CLASS);
-            addEdge(entityId, targetId, 'subClassOf');
-            return;
+        if (isProperty && isSimpleRef) {
+            if (section === 'Domain') {
+                const targetId = getOrCreateNodeId(part, ElementType.OWL_CLASS);
+                addEdge(entityId, targetId, 'rdfs:domain');
+            } else if (section === 'Range') {
+                 // Range of ObjectProperty is Class, Range of DataProperty is Datatype
+                 const targetType = entityType === ElementType.OWL_DATA_PROPERTY ? ElementType.OWL_DATATYPE : ElementType.OWL_CLASS;
+                 const targetId = getOrCreateNodeId(part, targetType);
+                 addEdge(entityId, targetId, 'rdfs:range');
+            } else if (section === 'SubPropertyOf') {
+                 const targetId = getOrCreateNodeId(part, entityType); // Inherit same type
+                 addEdge(entityId, targetId, 'rdfs:subPropertyOf');
+            } else if (section === 'InverseOf' && entityType === ElementType.OWL_OBJECT_PROPERTY) {
+                 const targetId = getOrCreateNodeId(part, ElementType.OWL_OBJECT_PROPERTY);
+                 addEdge(entityId, targetId, 'owl:inverseOf');
+            }
         }
 
+        // --- 2. Class Relationships (Restrictions & Hierarchy) ---
+        if (entityType === ElementType.OWL_CLASS && section === 'SubClassOf') {
+            // A. Simple Inheritance
+            if (isSimpleRef) {
+                const targetId = getOrCreateNodeId(part, ElementType.OWL_CLASS);
+                addEdge(entityId, targetId, 'subClassOf');
+                return; // Treated as edge, no need to add to methods? Actually, typically we do both or just edge. Let's do both for data completeness, but edge handles visual.
+            }
+
+            // B. Restrictions (some, only, min, max, value)
+            // Regex matchers
+            const restrictionRegex = /^([a-zA-Z0-9_:-]+)\s+(some|only)\s+([a-zA-Z0-9_:-]+)$/;
+            const cardinalityRegex = /^([a-zA-Z0-9_:-]+)\s+(min|max|exactly)\s+(\d+)\s+([a-zA-Z0-9_:-]+)$/;
+            const valueRegex = /^([a-zA-Z0-9_:-]+)\s+(value)\s+([a-zA-Z0-9_:-]+)$/;
+
+            let match = part.match(restrictionRegex);
+            if (match) {
+                const prop = match[1];
+                const target = match[3];
+                // Heuristic: If we are restricting on a property, we assume it exists as a relationship.
+                // We'll create an edge labeled with the property name.
+                const targetId = getOrCreateNodeId(target, ElementType.OWL_CLASS);
+                addEdge(entityId, targetId, prop);
+            }
+            
+            match = part.match(cardinalityRegex);
+            if (match) {
+                const prop = match[1];
+                const target = match[4];
+                const targetId = getOrCreateNodeId(target, ElementType.OWL_CLASS);
+                addEdge(entityId, targetId, prop);
+            }
+
+            match = part.match(valueRegex);
+            if (match) {
+                const prop = match[1];
+                const targetIndiv = match[3];
+                const targetId = getOrCreateNodeId(targetIndiv, ElementType.OWL_NAMED_INDIVIDUAL);
+                addEdge(entityId, targetId, prop);
+            }
+        }
+
+        // --- 3. Individual Assertions ---
         if (section === 'Types' && entityType === ElementType.OWL_NAMED_INDIVIDUAL && isSimpleRef) {
             const targetId = getOrCreateNodeId(part, ElementType.OWL_CLASS);
             addEdge(entityId, targetId, 'rdf:type');
@@ -227,7 +287,7 @@ const processLineContent = (
             }
         }
 
-        // --- 2. Characteristics / Attributes ---
+        // --- 4. Characteristics / Attributes ---
         if (section === 'Characteristics') {
             node.data.attributes.push({
                 id: `attr-${Math.random()}`,
@@ -238,8 +298,8 @@ const processLineContent = (
             return;
         }
 
-        // --- 3. Axioms (Methods) ---
-        // Store everything else as text axioms
+        // --- 5. Axioms (Methods) ---
+        // Store everything as text axioms for the node details panel
         
         // Annotations handling
         if (section === 'Annotations') {

@@ -29,14 +29,22 @@ export interface Method {
   isOrdered?: boolean; // Support for ordered lists { ordered }
 }
 
+export interface Annotation {
+  id: string;
+  property: string; // e.g. rdfs:comment, rdfs:label, owl:versionInfo
+  value: string;    // e.g. "My Ontology", <http://...>, 1.0
+  language?: string; // e.g. en
+}
+
 export interface UMLNodeData {
   label: string;
   type: ElementType;
   iri?: string;            // Unique Resource Identifier
   attributes: Attribute[]; // Mapped to Data Properties or Property Characteristics
   methods: Method[];       // Mapped to Axioms/Restrictions
+  annotations?: Annotation[]; // New field for OWL Annotations
   stereotype?: string;     // Used for <<Stereotypes>>
-  description?: string;
+  description?: string;    // Deprecated in favor of annotations, but kept for UI convenience (mapped to rdfs:comment)
 }
 
 export type UMLNode = Node<UMLNodeData>;

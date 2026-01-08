@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Node } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { Trash2, Plus, X, Tag, ChevronDown, Box, ArrowRight, MousePointerClick, ListOrdered, Hash } from 'lucide-react';
+import { Trash2, Plus, X, Tag, ChevronDown, Box, ArrowRight, MousePointerClick, ListOrdered, Hash, Quote } from 'lucide-react';
 
 interface PropertiesPanelProps {
   selectedNode: Node<UMLNodeData> | null;
@@ -15,6 +15,13 @@ const XSD_TYPES = [
   'xsd:long', 'xsd:short', 'xsd:byte', 'xsd:nonNegativeInteger',
   'xsd:base64Binary', 'xsd:anyURI', 'xsd:normalizedString', 'xsd:token',
   'xsd:language', 'rdf:PlainLiteral', 'rdf:XMLLiteral'
+];
+
+const ANNOTATION_PROPS = [
+    'rdfs:label', 'rdfs:comment', 'rdfs:seeAlso', 'rdfs:isDefinedBy', 
+    'owl:versionInfo', 'owl:backwardCompatibleWith', 'owl:incompatibleWith', 
+    'owl:deprecated', 'skos:prefLabel', 'skos:altLabel', 'skos:definition', 
+    'skos:note', 'dc:title', 'dc:description', 'dc:creator', 'dc:date'
 ];
 
 const CLASS_AXIOMS = [
@@ -41,6 +48,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
   const [activeAttrType, setActiveAttrType] = useState<string | null>(null);
   const [activeAxiomName, setActiveAxiomName] = useState<string | null>(null);
   const [activeAxiomTarget, setActiveAxiomTarget] = useState<string | null>(null);
+  const [activeAnnProp, setActiveAnnProp] = useState<string | null>(null);
 
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -52,6 +60,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
       setActiveAttrType(null);
       setActiveAxiomName(null);
       setActiveAxiomTarget(null);
+      setActiveAnnProp(null);
     }
   }, [selectedNode]);
 
@@ -61,6 +70,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
         setActiveAttrType(null);
         setActiveAxiomName(null);
         setActiveAxiomTarget(null);
+        setActiveAnnProp(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -88,10 +98,37 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
     onUpdateNode(selectedNode.id, newData);
   };
 
+  // --- Annotations ---
+  const addAnnotation = () => {
+    const newAnn = {
+        id: `ann-${Date.now()}`,
+        property: 'rdfs:comment',
+        value: '"New Annotation"',
+        language: 'en'
+    };
+    const newData = { ...localData, annotations: [...(localData.annotations || []), newAnn] };
+    setLocalData(newData);
+    onUpdateNode(selectedNode.id, newData);
+  };
+
+  const updateAnnotation = (id: string, field: string, value: any) => {
+    const newAnns = (localData.annotations || []).map(a => a.id === id ? { ...a, [field]: value } : a);
+    const newData = { ...localData, annotations: newAnns };
+    setLocalData(newData);
+    onUpdateNode(selectedNode.id, newData);
+  };
+
+  const removeAnnotation = (id: string) => {
+    const newAnns = (localData.annotations || []).filter(a => a.id !== id);
+    const newData = { ...localData, annotations: newAnns };
+    setLocalData(newData);
+    onUpdateNode(selectedNode.id, newData);
+  }
+
   // --- Attributes (Data Props or Characteristics) ---
   const addAttribute = () => {
     const defaultName = isPropertyNode ? 'Functional' : 'newProperty';
-    const defaultType = isPropertyNode ? '' : 'xsd:string'; // Properties use this list for characteristics which are flags
+    const defaultType = isPropertyNode ? '' : 'xsd:string'; 
     
     const newAttr = { 
         id: `attr-${Date.now()}`, 
@@ -136,8 +173,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
 
   const updateMethod = (id: string, field: string, value: any) => {
     let finalValue = value;
-
-    // Normalization logic on update (flattening for sets)
     if (field === 'returnType') {
         const method = localData.methods.find(m => m.id === id);
         if (method && !method.isOrdered) {
@@ -148,11 +183,10 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                 'disjointwith', 'sameas', 'differentfrom', 'haskey'
             ];
             if (setAxioms.some(ax => name.includes(ax))) {
-                 const tokens = String(value).split(/\s+/).filter(t => t.trim().length > 0);
-                 const unique = Array.from(new Set(tokens));
-                 // NOTE: We only flatten if the user is inserting a separator (space) to allow typing
                  if (value.endsWith(' ')) {
-                    finalValue = unique.join(' ') + ' ';
+                     // preserve trailing space
+                 } else {
+                     // simple dedup might interfere with typing if not careful
                  }
             }
         }
@@ -165,7 +199,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
   };
 
   const handleBlurMethod = (id: string) => {
-      // Hard normalization on blur
       const method = localData.methods.find(m => m.id === id);
       if (method && !method.isOrdered && method.returnType) {
           const name = method.name.toLowerCase();
@@ -242,49 +275,94 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                     onChange={(e) => handleChange('iri', e.target.value)}
                 />
             </div>
+             <div className="space-y-1">
+                 <label className="text-xs text-slate-500">Label (Display Name)</label>
+                 <input
+                    type="text"
+                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
+                    value={localData.label}
+                    onChange={(e) => handleChange('label', e.target.value)}
+                />
+            </div>
         </div>
 
         {/* Annotations */}
         <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                Annotations
-            </h3>
-            <div className="bg-slate-950/50 rounded-lg border border-slate-800 overflow-hidden">
-                <div className="flex items-center gap-3 p-2 border-b border-slate-800/50">
-                    <div className="flex items-center gap-1.5 w-24 shrink-0 text-slate-500 text-xs font-mono">
-                        <Tag size={10} />
-                        <span>prefLabel</span>
+             <div className="flex justify-between items-end">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                    <Quote size={12} /> Annotations
+                </h3>
+                <button 
+                    onClick={addAnnotation} 
+                    className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs font-medium hover:bg-blue-500/10 px-2 py-1 rounded transition-colors"
+                >
+                    <Plus size={14} /> Add
+                </button>
+            </div>
+            
+            <div className="space-y-2">
+                {(localData.annotations && localData.annotations.length > 0) ? (
+                    localData.annotations.map(ann => (
+                        <div key={ann.id} className="bg-slate-950 border border-slate-800 rounded p-2 group hover:border-slate-700 transition-colors">
+                            <div className="flex items-start gap-2">
+                                <div className="w-24 shrink-0 relative">
+                                    <input 
+                                        className="w-full bg-slate-900 border border-slate-700 text-[10px] text-slate-400 font-mono rounded px-1 py-1 focus:outline-none focus:border-blue-500"
+                                        value={ann.property}
+                                        onChange={(e) => updateAnnotation(ann.id, 'property', e.target.value)}
+                                        onFocus={() => setActiveAnnProp(ann.id)}
+                                        placeholder="rdfs:comment"
+                                    />
+                                    {activeAnnProp === ann.id && (
+                                        <div className="absolute top-full left-0 mt-1 w-32 bg-slate-800 border border-slate-700 rounded shadow-xl z-50 max-h-32 overflow-y-auto">
+                                            {ANNOTATION_PROPS.filter(p => p.toLowerCase().includes(ann.property.toLowerCase())).map(p => (
+                                                <div 
+                                                    key={p}
+                                                    className="px-2 py-1 text-[10px] text-slate-300 hover:bg-blue-600 hover:text-white cursor-pointer font-mono"
+                                                    onMouseDown={(e) => { e.preventDefault(); updateAnnotation(ann.id, 'property', p); setActiveAnnProp(null); }}
+                                                >
+                                                    {p}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex-1">
+                                    <textarea 
+                                        rows={2}
+                                        className="w-full bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded px-1 py-1 focus:outline-none focus:border-blue-500 resize-none"
+                                        value={ann.value}
+                                        onChange={(e) => updateAnnotation(ann.id, 'value', e.target.value)}
+                                        placeholder='"Value"'
+                                    />
+                                </div>
+                                <div className="w-10 shrink-0">
+                                     <input 
+                                        className="w-full bg-slate-900 border border-slate-700 text-[10px] text-slate-400 font-mono rounded px-1 py-1 focus:outline-none focus:border-blue-500 text-center"
+                                        value={ann.language || ''}
+                                        onChange={(e) => updateAnnotation(ann.id, 'language', e.target.value)}
+                                        placeholder="en"
+                                    />
+                                </div>
+                                <button 
+                                    onClick={() => removeAnnotation(ann.id)}
+                                    className="text-slate-600 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                ) : (
+                     <div className="text-center py-4 border border-dashed border-slate-800 rounded text-slate-600 text-xs">
+                        No annotations.
                     </div>
-                    <div className="flex-1 flex items-center gap-2">
-                        <input 
-                            className="flex-1 bg-transparent text-slate-200 outline-none placeholder-slate-600 text-sm"
-                            value={localData.label}
-                            onChange={(e) => handleChange('label', e.target.value)}
-                        />
-                        <span className="text-[10px] text-slate-600 font-mono px-1.5 py-0.5 bg-slate-900 rounded border border-slate-800">en</span>
-                    </div>
-                </div>
-                <div className="flex items-start gap-3 p-2">
-                    <div className="flex items-center gap-1.5 w-24 shrink-0 text-slate-500 text-xs font-mono pt-1">
-                        <Tag size={10} />
-                        <span>definition</span>
-                    </div>
-                    <div className="flex-1 flex gap-2">
-                        <textarea 
-                            rows={2}
-                            className="flex-1 bg-transparent text-slate-200 outline-none placeholder-slate-600 text-sm resize-none"
-                            placeholder="Add a description..."
-                            value={localData.description || ''}
-                            onChange={(e) => handleChange('description', e.target.value)}
-                        />
-                        <span className="text-[10px] text-slate-600 font-mono px-1.5 py-0.5 bg-slate-900 rounded border border-slate-800 h-fit mt-1">en</span>
-                    </div>
-                </div>
+                )}
             </div>
         </div>
 
         {/* Axioms (Methods) */}
-        <div className="space-y-3">
+        <div className="space-y-3 pt-4 border-t border-slate-800">
             <div className="flex justify-between items-end">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                     {isPropertyNode ? 'Property Axioms' : 'Class Axioms'}

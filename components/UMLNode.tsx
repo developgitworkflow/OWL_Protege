@@ -38,6 +38,10 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
   // Format IRI for display (e.g. show only the fragment if long)
   const displayIRI = data.iri ? (data.iri.includes('#') ? `:${data.iri.split('#')[1]}` : data.iri) : `:${data.label}`;
 
+  // Merge legacy description with annotations for display if needed, 
+  // but strictly prefer annotations if available.
+  const hasAnnotations = (data.annotations && data.annotations.length > 0) || data.description;
+
   return (
     <div className={`w-64 bg-slate-800 rounded-md shadow-lg border ${borderColor} text-xs font-sans overflow-hidden transition-all duration-200`}>
       <Handle type="target" position={Position.Top} className="!bg-slate-400 !w-3 !h-2 !rounded-sm" />
@@ -51,6 +55,26 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
         {data.stereotype && <span className="text-[10px] opacity-75 font-mono text-current">{data.stereotype}</span>}
         <span className="text-[9px] opacity-60 font-mono text-current mt-0.5 truncate max-w-full" title={data.iri}>{displayIRI}</span>
       </div>
+
+      {/* Annotations Section */}
+      {hasAnnotations && (
+        <div className="px-3 py-1.5 border-b border-slate-700 bg-slate-900/30">
+            {data.annotations && data.annotations.length > 0 ? (
+                data.annotations.map(ann => (
+                     <div key={ann.id} className="flex gap-1 text-[10px] items-start mb-0.5 last:mb-0">
+                        <span className="text-slate-500 font-mono shrink-0">{ann.property}:</span>
+                        <span className="text-slate-300 italic truncate">{ann.value}</span>
+                        {ann.language && <span className="text-slate-600 text-[8px] bg-slate-800 px-1 rounded">{ann.language}</span>}
+                     </div>
+                ))
+            ) : (
+                // Legacy Fallback
+                <div className="text-[10px] text-slate-400 italic">
+                    {data.description}
+                </div>
+            )}
+        </div>
+      )}
 
       {/* Section 1: Attributes / Characteristics */}
       <div className="px-3 py-2 border-b border-slate-700 min-h-[20px]">

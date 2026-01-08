@@ -24,15 +24,8 @@ export const generateManchesterSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
     };
 
     // --- Helper: Expression Conversion (Functional -> Manchester Heuristics) ---
-    // This attempts to convert internal representations to Manchester if they look like Functional syntax,
-    // otherwise preserves them if they look like simple class names.
     const toManchesterExpr = (expr: string): string => {
         let s = expr.trim();
-        
-        // Handle common quantifiers if written in "min 1 prop" style or similar
-        // Or if written in functional style "ObjectSomeValuesFrom(prop filler)"
-        
-        // Simple replacements for common keywords if not already in correct format
         s = s.replace(/ObjectIntersectionOf/g, 'and')
              .replace(/ObjectUnionOf/g, 'or')
              .replace(/ObjectComplementOf/g, 'not')
@@ -44,6 +37,34 @@ export const generateManchesterSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
         if (s.includes('{') && !s.includes('}')) s += '}'; // close brace if we opened one
 
         return s;
+    };
+
+    const renderAnnotations = (node: Node<UMLNodeData>) => {
+        // Fallback: if description exists but not in annotations, add it as rdfs:comment
+        const annotations = [...(node.data.annotations || [])];
+        if (node.data.description && !annotations.some(a => a.property === 'rdfs:comment')) {
+            annotations.push({
+                id: 'desc-fallback',
+                property: 'rdfs:comment',
+                value: `"${node.data.description}"`
+            });
+        }
+        
+        if (annotations.length > 0) {
+            const lines: string[] = [];
+            lines.push(`${indent}Annotations:`);
+            // Usually comma separated
+            const annStr = annotations.map(a => {
+                let val = a.value;
+                if (a.language) {
+                    val = `${val.replace(/@\w+$/, '')}@${a.language}`; // Ensure lang tag
+                }
+                return `${a.property} ${val}`;
+            }).join(', ');
+            lines.push(`${indent}    ${annStr}`);
+            return lines;
+        }
+        return [];
     };
 
     // --- Header ---
@@ -66,10 +87,11 @@ export const generateManchesterSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
         objProps.forEach(node => {
             lines.push(`ObjectProperty: ${fmt(node.data.label)}`);
             
+            lines.push(...renderAnnotations(node));
+
             // Characteristics
             const chars: string[] = [];
             node.data.attributes.forEach(attr => {
-                // In our model, attributes on properties are flags like "Functional"
                 chars.push(attr.name); 
             });
             if (chars.length > 0) {
@@ -96,6 +118,8 @@ export const generateManchesterSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
         dataProps.forEach(node => {
             lines.push(`DataProperty: ${fmt(node.data.label)}`);
             
+            lines.push(...renderAnnotations(node));
+
             const chars: string[] = [];
             node.data.attributes.forEach(attr => chars.push(attr.name));
             if (chars.length > 0) {
@@ -119,11 +143,7 @@ export const generateManchesterSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
         const s = fmt(node.data.label);
         lines.push(`Class: ${s}`);
         
-        // Annotations
-        lines.push(`${indent}Annotations: rdfs:label "${node.data.label}"`);
-        if (node.data.description) {
-             lines.push(`${indent}Annotations: rdfs:comment "${node.data.description}"`);
-        }
+        lines.push(...renderAnnotations(node));
 
         // SubClassOf from Edges
         const parentEdges = edges.filter(e => e.source === node.id && (e.label === 'subClassOf' || e.label === 'rdfs:subClassOf'));
@@ -133,7 +153,6 @@ export const generateManchesterSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
         }
 
         // Explicit Axioms (Methods)
-        // Group by type for cleaner output
         const groups: Record<string, string[]> = {};
         
         node.data.methods.forEach(m => {
@@ -146,15 +165,7 @@ export const generateManchesterSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
             else if (n === 'disjointwith') key = 'DisjointWith';
             else if (n === 'disjointunionof') key = 'DisjointUnionOf';
             else if (n === 'haskey') key = 'HasKey';
-            else {
-                // It's likely a restriction where the method name is the property or quantifier?
-                // In our model, 'name' is often the axiom type, but sometimes user might put property name there.
-                // Assuming standard "SubClassOf" mostly.
-                // If it is a Restriction not marked as SubClassOf explicitly in data model (implicit), we treat as SubClassOf
-                // But usually the model stores "SubClassOf" -> "prop some value"
-                key = 'SubClassOf'; 
-                // If the return type looks like a raw string, assume it's a class expression
-            }
+            else key = 'SubClassOf'; 
             
             if (key) {
                 if (!groups[key]) groups[key] = [];
@@ -162,9 +173,7 @@ export const generateManchesterSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
             }
         });
 
-        // Implicit Restrictions from Attributes (Data Properties on Class)
-        // Class: C -> DataProperty: p -> Range: xsd:int
-        // This implies SubClassOf: p some xsd:int
+        // Implicit Restrictions from Attributes
         node.data.attributes.forEach(attr => {
             if (!groups['SubClassOf']) groups['SubClassOf'] = [];
             const prop = fmt(attr.name);
@@ -184,6 +193,8 @@ export const generateManchesterSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
     individuals.forEach(node => {
         lines.push(`Individual: ${fmt(node.data.label)}`);
         
+        lines.push(...renderAnnotations(node));
+
         // Types from Edges (rdf:type)
         const typeEdges = edges.filter(e => e.source === node.id && (e.label === 'rdf:type' || e.label === 'a'));
         if (typeEdges.length > 0) {

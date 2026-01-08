@@ -20,6 +20,7 @@ import AIAssistant from './components/AIAssistant';
 import CreateProjectModal from './components/CreateProjectModal';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
+import { generateTurtle } from './services/owlMapper';
 
 // Must be defined outside component to avoid re-creation
 const nodeTypes = {
@@ -107,13 +108,23 @@ const Flow = () => {
       setEdges(newEdges.map(e => ({ ...e, style: { stroke: '#94a3b8' }, labelStyle: { fill: '#cbd5e1' } })));
   }, [setNodes, setEdges]);
 
-  const handleSave = () => {
+  const handleSaveJSON = () => {
       const data = JSON.stringify({ metadata: projectMetadata, nodes, edges });
       const blob = new Blob([data], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `${projectMetadata.name.replace(/\s+/g, '_') || 'diagram'}.json`;
+      link.click();
+  };
+
+  const handleSaveTurtle = () => {
+      const turtle = generateTurtle(nodes, edges, projectMetadata);
+      const blob = new Blob([turtle], { type: 'text/turtle' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${projectMetadata.name.replace(/\s+/g, '_') || 'ontology'}.ttl`;
       link.click();
   };
 
@@ -174,7 +185,8 @@ const Flow = () => {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-slate-950 text-slate-200 font-sans">
       <TopBar 
-        onSave={handleSave} 
+        onSaveJSON={handleSaveJSON} 
+        onSaveTurtle={handleSaveTurtle}
         onLoad={handleLoad} 
         onNewProject={() => setIsCreateModalOpen(true)}
       />

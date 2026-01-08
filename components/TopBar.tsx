@@ -1,13 +1,16 @@
-import React from 'react';
-import { Download, Upload, Share2, Layers, FilePlus } from 'lucide-react';
+import React, { useState } from 'react';
+import { Download, Upload, Share2, Layers, FilePlus, ChevronDown } from 'lucide-react';
 
 interface TopBarProps {
-    onSave: () => void;
+    onSaveJSON: () => void;
+    onSaveTurtle: () => void;
     onLoad: (event: React.ChangeEvent<HTMLInputElement>) => void;
     onNewProject: () => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ onSave, onLoad, onNewProject }) => {
+const TopBar: React.FC<TopBarProps> = ({ onSaveJSON, onSaveTurtle, onLoad, onNewProject }) => {
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
   return (
     <div className="h-16 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-6 shadow-md z-20 text-white">
       <div className="flex items-center gap-3">
@@ -36,13 +39,38 @@ const TopBar: React.FC<TopBarProps> = ({ onSave, onLoad, onNewProject }) => {
             <span className="hidden sm:inline">New</span>
          </button>
 
-         <button 
-            onClick={onSave}
-            className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition-colors"
-         >
-            <Download size={16} />
-            <span className="hidden sm:inline">Export</span>
-         </button>
+         {/* Export Dropdown */}
+         <div className="relative">
+             <button 
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition-colors focus:outline-none"
+             >
+                <Download size={16} />
+                <span className="hidden sm:inline">Export</span>
+                <ChevronDown size={14} className="opacity-50" />
+             </button>
+             
+             {showExportMenu && (
+                 <div className="absolute top-full right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-md shadow-xl z-50">
+                     <button 
+                        onClick={() => { onSaveJSON(); setShowExportMenu(false); }}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700 first:rounded-t-md"
+                     >
+                        JSON (Project)
+                     </button>
+                     <button 
+                        onClick={() => { onSaveTurtle(); setShowExportMenu(false); }}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700 last:rounded-b-md"
+                     >
+                        Turtle (RDF .ttl)
+                     </button>
+                 </div>
+             )}
+             
+             {showExportMenu && (
+                 <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
+             )}
+         </div>
 
          <label className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition-colors cursor-pointer">
             <Upload size={16} />

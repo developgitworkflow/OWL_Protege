@@ -1,6 +1,28 @@
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, ProjectData } from '../types';
 
+// Table 3.2: OWL 2 RDF-Based Vocabulary
+const OWL_VOCABULARY = new Set([
+  'AllDifferent', 'AllDisjointClasses', 'AllDisjointProperties', 'allValuesFrom', 
+  'annotatedProperty', 'annotatedSource', 'annotatedTarget', 'Annotation', 
+  'AnnotationProperty', 'assertionProperty', 'AsymmetricProperty', 'Axiom', 
+  'backwardCompatibleWith', 'bottomDataProperty', 'bottomObjectProperty', 'cardinality', 
+  'Class', 'complementOf', 'DataRange', 'datatypeComplementOf', 'DatatypeProperty', 
+  'deprecated', 'DeprecatedClass', 'DeprecatedProperty', 'differentFrom', 
+  'disjointUnionOf', 'disjointWith', 'distinctMembers', 'equivalentClass', 
+  'equivalentProperty', 'FunctionalProperty', 'hasKey', 'hasSelf', 'hasValue', 
+  'imports', 'incompatibleWith', 'intersectionOf', 'InverseFunctionalProperty', 
+  'inverseOf', 'IrreflexiveProperty', 'maxCardinality', 'maxQualifiedCardinality', 
+  'members', 'minCardinality', 'minQualifiedCardinality', 'NamedIndividual', 
+  'NegativePropertyAssertion', 'Nothing', 'ObjectProperty', 'onClass', 'onDataRange', 
+  'onDatatype', 'oneOf', 'onProperty', 'onProperties', 'Ontology', 'OntologyProperty', 
+  'priorVersion', 'propertyChainAxiom', 'propertyDisjointWith', 'qualifiedCardinality', 
+  'ReflexiveProperty', 'Restriction', 'sameAs', 'someValuesFrom', 'sourceIndividual', 
+  'SymmetricProperty', 'targetIndividual', 'targetValue', 'Thing', 'topDataProperty', 
+  'topObjectProperty', 'TransitiveProperty', 'unionOf', 'versionInfo', 'versionIRI', 
+  'withRestrictions'
+]);
+
 let bnCounter = 0;
 const nextBn = () => `_:b${bnCounter++}`;
 
@@ -38,6 +60,11 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
       if (!str) return `${userPrefix}:Unknown`;
       if (str.startsWith('http')) return `<${str}>`;
       if (str.includes(':')) return str; // already prefixed
+      
+      // Table 3.2: OWL 2 RDF-Based Vocabulary Check
+      // If the string is a reserved OWL term (e.g. "Thing", "Nothing"), prefix it with owl:
+      if (OWL_VOCABULARY.has(str)) return `owl:${str}`;
+
       // Primitive check for XSD types to avoid 'ex:xsd:string'
       if (str.startsWith('xsd:')) return str;
       return `${defaultPrefix}:${str.replace(/\s+/g, '_')}`;
@@ -137,6 +164,10 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
               // DisjointUnion(C CE1 ... CEn)
               else if (n === 'disjointunionof') {
                    add(`${s} owl:disjointUnionOf ${formatList(v)} .`);
+              }
+              // HasKey(C (p1 ... pn))
+              else if (n === 'haskey') {
+                   add(`${s} owl:hasKey ${formatList(v)} .`);
               }
               
               // --- Individual Axioms ---

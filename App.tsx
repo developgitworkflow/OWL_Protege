@@ -27,6 +27,7 @@ import { generateTurtle } from './services/owlMapper';
 import { validateOntology, ValidationResult } from './services/validatorService';
 import { normalizeOntology } from './services/normalizationService';
 import { parseFunctionalSyntax } from './services/functionalSyntaxParser';
+import { parseManchesterSyntax } from './services/manchesterSyntaxParser';
 
 // Must be defined outside component to avoid re-creation
 const nodeTypes = {
@@ -146,6 +147,29 @@ const Flow = () => {
       link.href = url;
       link.download = `${projectMetadata.name.replace(/\s+/g, '_') || 'ontology'}.ttl`;
       link.click();
+  };
+
+  const handleCodeUpdate = (code: string, syntax: 'functional' | 'manchester') => {
+      let result;
+      try {
+          if (syntax === 'manchester') {
+              result = parseManchesterSyntax(code);
+          } else {
+              result = parseFunctionalSyntax(code);
+          }
+
+          if (result.nodes.length > 0) {
+              const normalizedNodes = normalizeOntology(result.nodes);
+              setNodes(normalizedNodes);
+              setEdges(result.edges);
+              setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
+          } else {
+              throw new Error("No valid entities found in code.");
+          }
+      } catch (e) {
+          console.error(e);
+          throw new Error(`Failed to parse ${syntax} syntax: ${(e as Error).message}`);
+      }
   };
 
   const handleLoadContent = (content: string, fileName: string) => {
@@ -291,7 +315,12 @@ const Flow = () => {
 
         {viewMode === 'code' && (
             <div className="flex-1 h-full">
-                <CodeViewer nodes={nodes} edges={edges} metadata={projectMetadata} />
+                <CodeViewer 
+                    nodes={nodes} 
+                    edges={edges} 
+                    metadata={projectMetadata} 
+                    onImportCode={handleCodeUpdate}
+                />
             </div>
         )}
 

@@ -1,16 +1,18 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ProjectData } from '../types';
 import { generateFunctionalSyntax } from '../services/functionalSyntaxGenerator';
-import { Copy, FileCode } from 'lucide-react';
+import { generateManchesterSyntax } from '../services/manchesterSyntaxGenerator';
+import { Copy, FileCode, AlignLeft, Edit3, Play, AlertCircle } from 'lucide-react';
 
 interface CodeViewerProps {
     nodes: Node<UMLNodeData>[];
     edges: Edge[];
     metadata: ProjectData;
+    onImportCode?: (code: string, syntax: 'functional' | 'manchester') => void;
 }
 
-const OWL_KEYWORDS = new Set([
+const FUNCTIONAL_KEYWORDS = new Set([
   'Ontology', 'Import', 'Declaration', 'Class', 'ObjectProperty', 'DataProperty', 
   'AnnotationProperty', 'NamedIndividual', 'Datatype', 'SubClassOf', 'EquivalentClasses', 
   'DisjointClasses', 'DisjointUnion', 'SubObjectPropertyOf', 'EquivalentObjectProperties', 
@@ -30,9 +32,19 @@ const OWL_KEYWORDS = new Set([
   'DataExactCardinality'
 ]);
 
-const tokenize = (code: string) => {
+const MANCHESTER_KEYWORDS = new Set([
+    'Ontology:', 'Namespace:', 'Prefix:', 'Class:', 'Individual:', 'ObjectProperty:', 'DataProperty:',
+    'AnnotationProperty:', 'Types:', 'Facts:', 'SubClassOf:', 'EquivalentTo:', 'DisjointWith:',
+    'DisjointUnionOf:', 'SubPropertyOf:', 'InverseOf:', 'Domain:', 'Range:', 'Characteristics:',
+    'Annotations:', 'and', 'or', 'not', 'some', 'only', 'value', 'min', 'max', 'exactly', 'that',
+    'Functional', 'InverseFunctional', 'Reflexive', 'Irreflexive', 'Symmetric', 'Asymmetric', 'Transitive'
+]);
+
+const tokenize = (code: string, mode: 'functional' | 'manchester') => {
     const tokens: { text: string, className: string }[] = [];
     let remaining = code;
+    
+    const keywords = mode === 'functional' ? FUNCTIONAL_KEYWORDS : MANCHESTER_KEYWORDS;
     
     while (remaining.length > 0) {
         let match;
@@ -63,7 +75,9 @@ const tokenize = (code: string) => {
         if ((match = remaining.match(/^([a-zA-Z0-9_-]*:[a-zA-Z0-9._-]+)/)) || (match = remaining.match(/^([a-zA-Z0-9_-]*:)/))) {
             const val = match[0];
             let color = 'text-blue-300';
-            if (val.startsWith('xsd:') || val.startsWith('owl:') || val.startsWith('rdf:') || val.startsWith('rdfs:')) {
+            if (mode === 'manchester' && keywords.has(val)) {
+                color = 'text-purple-400 font-bold';
+            } else if (val.startsWith('xsd:') || val.startsWith('owl:') || val.startsWith('rdf:') || val.startsWith('rdfs:')) {
                 color = 'text-amber-400';
             }
             tokens.push({ text: val, className: color });
@@ -74,7 +88,7 @@ const tokenize = (code: string) => {
         // 5. Keywords / Identifiers
         if ((match = remaining.match(/^[a-zA-Z][a-zA-Z0-9_-]*/))) {
             const val = match[0];
-            if (OWL_KEYWORDS.has(val)) {
+            if (keywords.has(val)) {
                 tokens.push({ text: val, className: 'text-purple-400 font-bold' });
             } else {
                  tokens.push({ text: val, className: 'text-slate-200' });
@@ -84,7 +98,7 @@ const tokenize = (code: string) => {
         }
         
         // 6. Delimiters
-        if ((match = remaining.match(/^[()=]/))) {
+        if ((match = remaining.match(/^[()={}\[\],]/))) {
              tokens.push({ text: match[0], className: 'text-slate-500' });
              remaining = remaining.slice(match[0].length);
              continue;
@@ -104,41 +118,138 @@ const tokenize = (code: string) => {
     return tokens;
 }
 
-const CodeViewer: React.FC<CodeViewerProps> = ({ nodes, edges, metadata }) => {
-    const code = useMemo(() => {
-        return generateFunctionalSyntax(nodes, edges, metadata);
-    }, [nodes, edges, metadata]);
+const CodeViewer: React.FC<CodeViewerProps> = ({ nodes, edges, metadata, onImportCode }) => {
+    const [syntax, setSyntax] = useState<'functional' | 'manchester'>('functional');
+    const [isEditing, setIsEditing] = useState(false);
+    const [editContent, setEditContent] = useState('');
+    const [error, setError] = useState<string | null>(null);
 
-    const tokens = useMemo(() => tokenize(code), [code]);
+    // Initial code generation
+    const generatedCode = useMemo(() => {
+        if (syntax === 'manchester') {
+            return generateManchesterSyntax(nodes, edges, metadata);
+        }
+        return generateFunctionalSyntax(nodes, edges, metadata);
+    }, [nodes, edges, metadata, syntax]);
+
+    // Sync editor with generated code when not editing
+    useEffect(() => {
+        if (!isEditing) {
+            setEditContent(generatedCode);
+        }
+    }, [generatedCode, isEditing]);
+
+    const tokens = useMemo(() => tokenize(generatedCode, syntax), [generatedCode, syntax]);
 
     const handleCopy = () => {
-        navigator.clipboard.writeText(code);
+        navigator.clipboard.writeText(isEditing ? editContent : generatedCode);
+    };
+
+    const handleApply = () => {
+        if (onImportCode) {
+            try {
+                onImportCode(editContent, syntax);
+                setIsEditing(false);
+                setError(null);
+            } catch (e) {
+                setError((e as Error).message);
+            }
+        }
     };
 
     return (
-        <div className="h-full flex flex-col bg-slate-900 text-slate-200 font-mono text-sm">
+        <div className="h-full flex flex-col bg-slate-900 text-slate-200 font-mono text-sm relative">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900">
-                <div className="flex items-center gap-3">
-                    <FileCode className="text-blue-500 w-5 h-5" />
-                    <div>
-                        <h2 className="font-semibold text-slate-100">OWL 2 Functional Syntax</h2>
-                        <p className="text-xs text-slate-500">Generated structure based on current diagram.</p>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-slate-100 font-semibold">
+                        <FileCode className="text-blue-500 w-5 h-5" />
+                        OWL 2 Syntax
+                    </div>
+                    
+                    {/* Syntax Toggle */}
+                    <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700">
+                        <button 
+                            onClick={() => { setSyntax('functional'); setIsEditing(false); }}
+                            className={`px-3 py-1 text-xs font-medium rounded transition-all ${
+                                syntax === 'functional' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                            }`}
+                        >
+                            Functional
+                        </button>
+                        <button 
+                            onClick={() => { setSyntax('manchester'); setIsEditing(false); }}
+                            className={`px-3 py-1 text-xs font-medium rounded transition-all flex items-center gap-1 ${
+                                syntax === 'manchester' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                            }`}
+                        >
+                            <AlignLeft size={12} />
+                            Manchester
+                        </button>
                     </div>
                 </div>
-                <button 
-                    onClick={handleCopy}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs transition-colors"
-                >
-                    <Copy size={14} />
-                    Copy to Clipboard
-                </button>
+                
+                <div className="flex items-center gap-2">
+                    {isEditing ? (
+                        <>
+                            <button 
+                                onClick={() => { setIsEditing(false); setError(null); }}
+                                className="px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={handleApply}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded text-xs transition-colors shadow-sm"
+                            >
+                                <Play size={14} />
+                                Apply Changes
+                            </button>
+                        </>
+                    ) : (
+                         <button 
+                            onClick={() => setIsEditing(true)}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs transition-colors"
+                        >
+                            <Edit3 size={14} />
+                            Edit
+                        </button>
+                    )}
+
+                    <button 
+                        onClick={handleCopy}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs transition-colors"
+                    >
+                        <Copy size={14} />
+                        Copy
+                    </button>
+                </div>
             </div>
-            <div className="flex-1 overflow-auto p-6 bg-slate-950">
-                <pre className="whitespace-pre font-mono text-xs leading-relaxed">
-                    {tokens.map((token, i) => (
-                        <span key={i} className={token.className}>{token.text}</span>
-                    ))}
-                </pre>
+
+            {error && (
+                <div className="absolute top-16 left-0 right-0 mx-6 z-10 bg-red-900/90 border border-red-700 text-red-100 px-4 py-2 rounded flex items-center gap-2 text-xs">
+                    <AlertCircle size={14} />
+                    {error}
+                </div>
+            )}
+
+            <div className="flex-1 overflow-hidden relative">
+                {isEditing ? (
+                    <textarea
+                        className="w-full h-full bg-slate-950 p-6 text-xs font-mono text-slate-200 outline-none resize-none leading-relaxed"
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        spellCheck={false}
+                        placeholder={`Paste or type ${syntax} syntax here...`}
+                    />
+                ) : (
+                    <div className="w-full h-full overflow-auto p-6 bg-slate-950">
+                        <pre className="whitespace-pre font-mono text-xs leading-relaxed">
+                            {tokens.map((token, i) => (
+                                <span key={i} className={token.className}>{token.text}</span>
+                            ))}
+                        </pre>
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -52,7 +52,7 @@ const TERMINALS: { type: TokenType, regex: RegExp }[] = [
     { type: 'DECIMAL', regex: /^[+-]?[0-9]*\.[0-9]+/ },
     { type: 'INTEGER', regex: /^[+-]?[0-9]+/ },
     { type: 'DELIMITER', regex: /^[()<>@=^]/ },
-    { type: 'KEYWORD', regex: /^[a-zA-Z][a-zA-Z0-9_-]*/ }, // Candidate regex, validated against Set
+    { type: 'KEYWORD', regex: /^[a-zA-Z][a-zA-Z0-9_-]*/ },
     { type: 'WHITESPACE', regex: /^[\x20\x09\x0A\x0D]+/ }
 ];
 
@@ -81,22 +81,19 @@ const tokenize = (input: string): Token[] => {
         // 2. Validate Keywords
         if (bestMatch.type === 'KEYWORD') {
              if (!KEYWORDS.has(bestMatch.value)) {
-                 // If strictly not a keyword, and didn't match PNAME/IRI, it's invalid.
                  throw new Error(`Syntax Error: Unknown keyword or identifier '${bestMatch.value}' at position ${pos}. Bare identifiers are not allowed unless they are keywords.`);
              }
         }
 
         // 3. Step 6: Boundary Check
-        // If match is not Whitespace/Comment, check delimiters
         if (bestMatch.type !== 'WHITESPACE' && bestMatch.type !== 'COMMENT') {
             const lastChar = bestMatch.value[bestMatch.value.length - 1];
             const nextChar = (pos + bestMatch.value.length < input.length) ? input[pos + bestMatch.value.length] : '';
 
             const isLastDelim = DELIMITERS.has(lastChar);
-            const isNextDelim = DELIMITERS.has(nextChar) || nextChar === ''; // EOF counts as boundary
+            const isNextDelim = DELIMITERS.has(nextChar) || nextChar === ''; 
 
             if (!isLastDelim && !isNextDelim) {
-                // Must be followed by whitespace or comment
                 const rest = input.substring(pos + bestMatch.value.length);
                 const wsMatch = rest.match(/^[\x20\x09\x0A\x0D]+/);
                 const commentMatch = rest.match(/^#[^\x0A\x0D]*/);
@@ -107,7 +104,7 @@ const tokenize = (input: string): Token[] => {
             }
         }
 
-        // 4. Emit Token (Skip WS/Comment)
+        // 4. Emit Token
         if (bestMatch.type !== 'WHITESPACE' && bestMatch.type !== 'COMMENT') {
             tokens.push({ type: bestMatch.type, value: bestMatch.value, pos });
         }
@@ -135,8 +132,8 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
         tokens = tokenize(input);
     } catch (e) {
         console.error(e);
-        alert((e as Error).message);
-        return { nodes: [], edges: [], metadata: { name: 'Error', defaultPrefix: 'ex' } };
+        // Better error handling in UI
+        throw e;
     }
 
     let current = 0;
@@ -146,9 +143,9 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
     
     // Prefix Management
     const prefixes: Record<string, string> = { ...STANDARD_PREFIXES };
+    const declaredPrefixes = new Set<string>();
 
     const iriToNodeId: Record<string, string> = {};
-    const labelToNodeId: Record<string, string> = {};
     let nodeCounter = 0;
 
     // Helper: Expand Abbreviated IRIs (Section 3.7)
@@ -164,24 +161,23 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
             const local = tokenValue.substring(colonIndex + 1);
             if (prefixes[prefix]) {
                 return prefixes[prefix] + local;
+            } else {
+                throw new Error(`Syntax Error: Undefined prefix '${prefix}' in abbreviated IRI '${tokenValue}'.`);
             }
         }
-        // Return raw if no prefix found (though spec says strict)
+        // Strict adherence: if it's not Full IRI and not PNAME, it's invalid unless it's a Keyword (handled by tokenizer)
         return tokenValue;
     };
 
     const getOrCreateNodeId = (iriOrLabel: string, type: ElementType, isIRI = false): string => {
-        // Always store full IRI in data if available
         const fullIRI = isIRI ? resolveIRI(iriOrLabel) : undefined;
-        // Use full IRI as key if possible to deduplicate
         const key = fullIRI || iriOrLabel;
         
         if (iriToNodeId[key]) return iriToNodeId[key];
         
-        // Label derivation for display
         let label = iriOrLabel;
         if (isIRI) {
-            if (label.startsWith('<')) label = label.replace(/[<>]/g, ''); // cleanup
+            if (label.startsWith('<')) label = label.replace(/[<>]/g, '');
             if (label.includes('#')) label = label.split('#')[1];
             else if (label.includes('/')) label = label.split('/').pop() || label;
             else if (label.includes(':')) label = label.split(':')[1];
@@ -220,7 +216,6 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
         if (!match(val)) throw new Error(`Expected '${val}' but got '${peek().value}' at pos ${peek().pos}`);
     };
 
-    // Parse IRI: FullIRI or PNAME
     const parseIRI = (): string | null => {
         const t = peek();
         if (t.type === 'FULL_IRI' || t.type === 'PNAME_LN' || t.type === 'PNAME_NS') {
@@ -229,7 +224,6 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
         return null;
     };
 
-    // Consumes a balanced expression
     const consumeBalanced = (): string => {
         let str = '';
         let balance = 0;
@@ -259,12 +253,25 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
         if (iriTok.type !== 'FULL_IRI') throw new Error(`Expected Full IRI in prefix declaration, got ${iriTok.type}`);
         expect(')');
 
-        prefixes[prefixName] = iriTok.value.replace(/[<>]/g, '');
+        // Strict Check: Table 2 (Section 3.7)
+        if (STANDARD_PREFIXES[prefixName]) {
+             // Spec: "it must not declare a prefix name listed in Table 2"
+             // However, parser might treat redeclaring the exact same thing as okay?
+             // Strictly: "must not declare".
+             throw new Error(`Syntax Error: Cannot redeclare standard prefix '${prefixName}' (Table 2).`);
+        }
         
-        // Update metadata default prefix if empty prefix
+        // Strict Check: Duplicates
+        if (declaredPrefixes.has(prefixName)) {
+             throw new Error(`Syntax Error: Duplicate declaration for prefix '${prefixName}'.`);
+        }
+
+        prefixes[prefixName] = iriTok.value.replace(/[<>]/g, '');
+        declaredPrefixes.add(prefixName);
+        
         if (prefixName === ':') {
              metadata.baseIri = prefixes[prefixName];
-        } else if (prefixName !== 'owl:' && prefixName !== 'rdf:' && prefixName !== 'xsd:' && prefixName !== 'rdfs:') {
+        } else {
              metadata.defaultPrefix = prefixName.replace(':', '');
         }
     }
@@ -276,7 +283,7 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
     // Optional Ontology IRI
     let ontIRI: string | null = null;
     if (peek().type === 'FULL_IRI' || peek().type === 'PNAME_LN' || peek().type === 'PNAME_NS') {
-        // Need to ensure it's not a keyword (like Import, Annotation)
+        // Lookahead to ensure it's not a keyword like 'Import' or 'Annotation' which can start the body
         if (!KEYWORDS.has(peek().value)) {
             ontIRI = parseIRI();
             if (ontIRI) metadata.baseIri = resolveIRI(ontIRI);
@@ -294,15 +301,15 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
     while (peek().value === 'Import') {
         consume();
         expect('(');
-        parseIRI(); // consume imported IRI
+        parseIRI(); 
         expect(')');
     }
 
-    // 4. Annotations (Ontology Annotations)
+    // 4. Annotations
     while (peek().value === 'Annotation') {
         consume();
         expect('(');
-        consumeBalanced(); // Skip ontology annotations for visualization simplicity
+        consumeBalanced(); 
     }
 
     // 5. Axioms
@@ -338,7 +345,6 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
                 if (sub) {
                     const supIRI = parseIRI();
                     if (supIRI) {
-                        // Simple SubClassOf(A B)
                         const subId = getOrCreateNodeId(sub, ElementType.OWL_CLASS, true);
                         const supId = getOrCreateNodeId(supIRI, ElementType.OWL_CLASS, true);
                             edges.push({
@@ -349,8 +355,7 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
                             type: 'smoothstep'
                         });
                     } else {
-                        // Complex: SubClassOf(A Expr)
-                        const expr = consumeBalanced(); // consumes rest
+                        const expr = consumeBalanced();
                         const subId = getOrCreateNodeId(sub, ElementType.OWL_CLASS, true);
                         const node = nodes.find(n => n.id === subId);
                         if(node) {
@@ -393,14 +398,9 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
             }
         }
         else {
-            // Unknown Axiom or Error
-            // To be robust, if it starts with '(', consume balanced.
             if (peek().value === '(') {
                  consumeBalanced();
             } else {
-                // If it's just a keyword that we don't handle explicitly (e.g. TransitiveObjectProperty)
-                // It usually follows format Keyword( args ).
-                // So consume Keyword, then consume Balanced.
                 consume();
                 if (peek().value === '(') {
                     consumeBalanced();
@@ -409,9 +409,8 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
         }
     }
 
-    expect(')'); // Close Ontology
+    expect(')'); 
 
-    // Layout
     const cols = Math.ceil(Math.sqrt(nodes.length));
     nodes.forEach((n, idx) => {
         n.position = { x: (idx % cols) * 320 + 50, y: Math.floor(idx / cols) * 250 + 50 };

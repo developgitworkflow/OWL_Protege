@@ -248,7 +248,40 @@ export const executeDLQuery = (query: string, queryType: QueryType): Node<UMLNod
     if (!classifiedIndex) return [];
     const { nodeMap, subClassOf, superClassOf, instances } = classifiedIndex;
 
-    const targetClasses = resolveExpression(query);
+    const lowerQuery = query.toLowerCase().trim();
+
+    // 0. Meta-Queries (Get all entities of a type)
+    // These bypass the standard DL parser to provide list functionality
+    if (['owl:class', 'class', 'classes'].includes(lowerQuery)) {
+        return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_CLASS);
+    }
+    if (['owl:namedindividual', 'namedindividual', 'individual', 'individuals'].includes(lowerQuery)) {
+        return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL);
+    }
+    if (['owl:objectproperty', 'objectproperty', 'object properties'].includes(lowerQuery)) {
+        return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_OBJECT_PROPERTY);
+    }
+    if (['owl:datatypeproperty', 'datatypeproperty', 'data properties', 'dataproperty'].includes(lowerQuery)) {
+        return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_DATA_PROPERTY);
+    }
+    if (['owl:datatype', 'datatype', 'datatypes'].includes(lowerQuery)) {
+        return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_DATATYPE);
+    }
+
+    // 1. Resolve Expression
+    let targetClasses = resolveExpression(query);
+
+    // 2. Handle owl:Thing (Universal)
+    if (!targetClasses && (lowerQuery === 'thing' || lowerQuery === 'owl:thing')) {
+        if (queryType === 'instances') {
+             // Instances of Thing = All Individuals
+             return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL);
+        } else {
+             // Subclasses of Thing = All Classes (Simplified)
+             return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_CLASS);
+        }
+    }
+
     if (!targetClasses || targetClasses.size === 0) return [];
 
     const resultIds = new Set<string>();

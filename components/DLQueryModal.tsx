@@ -13,11 +13,10 @@ interface DLQueryModalProps {
 }
 
 const EXAMPLE_QUERIES = [
-    { label: 'All Persons', query: 'Person', type: 'subclasses' as QueryType, desc: 'Finds all subclasses of Person' },
-    { label: 'Courses Taught', query: 'teaches some Course', type: 'superclasses' as QueryType, desc: 'Classes that must teach at least one Course' },
-    { label: 'Specific Teacher', query: 'teaches value Artificial_Intelligence_101', type: 'instances' as QueryType, desc: 'Individuals who teach this specific course' },
-    { label: 'Intersection', query: 'Professor and Person', type: 'subclasses' as QueryType, desc: 'Standard intersection logic' },
-    { label: 'Unknown Class', query: 'Martian', type: 'subclasses' as QueryType, desc: 'Example of a query returning no results' },
+    { label: 'All Classes', query: 'owl:Class', type: 'subclasses' as QueryType, desc: 'List all defined OWL Classes' },
+    { label: 'All Individuals', query: 'owl:NamedIndividual', type: 'instances' as QueryType, desc: 'List all defined Individuals' },
+    { label: 'All Object Properties', query: 'owl:ObjectProperty', type: 'subclasses' as QueryType, desc: 'List all Object Properties' },
+    { label: 'All Data Properties', query: 'owl:DatatypeProperty', type: 'subclasses' as QueryType, desc: 'List all Data Properties' },
 ];
 
 const DLQueryModal: React.FC<DLQueryModalProps> = ({ isOpen, onClose, nodes, edges }) => {
@@ -71,6 +70,7 @@ const DLQueryModal: React.FC<DLQueryModalProps> = ({ isOpen, onClose, nodes, edg
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+      {/* Backdrop */}
       <div 
         className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity" 
         onClick={onClose}
@@ -182,8 +182,8 @@ const DLQueryModal: React.FC<DLQueryModalProps> = ({ isOpen, onClose, nodes, edg
                                 <div key={node.id} className="relative group">
                                     <div className="absolute inset-0 bg-purple-500/5 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity" />
                                     <div className="relative flex items-center gap-3 p-3 bg-slate-950 border border-slate-800 rounded-lg shadow-sm hover:border-purple-500/50 transition-colors">
-                                        <div className={`p-2 rounded-md ${node.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'bg-pink-900/20 text-pink-400' : 'bg-blue-900/20 text-blue-400'}`}>
-                                            {node.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? <User size={18} /> : <Database size={18} />}
+                                        <div className={`p-2 rounded-md ${node.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'bg-pink-900/20 text-pink-400' : (node.data.type === ElementType.OWL_OBJECT_PROPERTY || node.data.type === ElementType.OWL_DATA_PROPERTY ? 'bg-green-900/20 text-green-400' : 'bg-blue-900/20 text-blue-400')}`}>
+                                            {node.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? <User size={18} /> : (node.data.type === ElementType.OWL_CLASS ? <Database size={18} /> : <ArrowDownCircle size={18} />)}
                                         </div>
                                         <div>
                                             <div className="text-sm font-medium text-slate-200">{node.data.label}</div>

@@ -3,14 +3,18 @@ import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ProjectData } from '../types';
 import { generateFunctionalSyntax } from '../services/functionalSyntaxGenerator';
 import { generateManchesterSyntax } from '../services/manchesterSyntaxGenerator';
-import { Copy, FileCode, AlignLeft, Edit3, Play, AlertCircle, BookOpen } from 'lucide-react';
+import { generateTurtle } from '../services/owlMapper';
+import { generateRdfXml } from '../services/xmlGenerator';
+import { Copy, FileCode, AlignLeft, Edit3, Play, AlertCircle, BookOpen, ScrollText, Code2 } from 'lucide-react';
 
 interface CodeViewerProps {
     nodes: Node<UMLNodeData>[];
     edges: Edge[];
     metadata: ProjectData;
-    onImportCode?: (code: string, syntax: 'functional' | 'manchester') => void;
+    onImportCode?: (code: string, syntax: 'functional' | 'manchester' | 'turtle') => void;
 }
+
+type SyntaxType = 'functional' | 'manchester' | 'turtle' | 'xml';
 
 const EXAMPLE_MANCHESTER = `Prefix: : <http://example.org/university#>
 Prefix: owl: <http://www.w3.org/2002/07/owl#>
@@ -90,11 +94,48 @@ const MANCHESTER_KEYWORDS = new Set([
     'Functional', 'InverseFunctional', 'Reflexive', 'Irreflexive', 'Symmetric', 'Asymmetric', 'Transitive'
 ]);
 
-const tokenize = (code: string, mode: 'functional' | 'manchester') => {
+const TURTLE_KEYWORDS = new Set([
+    '@prefix', '@base', 'a', 'rdf:type', 'owl:Class', 'owl:ObjectProperty', 'owl:DatatypeProperty', 
+    'owl:NamedIndividual', 'owl:Ontology', 'rdfs:subClassOf', 'owl:disjointWith', 'owl:equivalentClass',
+    'true', 'false'
+]);
+
+const tokenize = (code: string, mode: SyntaxType) => {
     const tokens: { text: string, className: string }[] = [];
     let remaining = code;
     
-    const keywords = mode === 'functional' ? FUNCTIONAL_KEYWORDS : MANCHESTER_KEYWORDS;
+    // Simple XML Tokenizer
+    if (mode === 'xml') {
+        while (remaining.length > 0) {
+            let match;
+            // Tag
+            if ((match = remaining.match(/^<\/?[a-zA-Z0-9_:-]+(\s+[a-zA-Z0-9_:-]+="[^"]*")*\s*\/?>/))) {
+                tokens.push({ text: match[0], className: 'text-blue-300' });
+                remaining = remaining.slice(match[0].length);
+                continue;
+            }
+            // Comment
+            if ((match = remaining.match(/^<!--[\s\S]*?-->/))) {
+                tokens.push({ text: match[0], className: 'text-slate-500 italic' });
+                remaining = remaining.slice(match[0].length);
+                continue;
+            }
+            // Content
+            if ((match = remaining.match(/^[^<]+/))) {
+                tokens.push({ text: match[0], className: 'text-slate-200' });
+                remaining = remaining.slice(match[0].length);
+                continue;
+            }
+            // Fallback
+            tokens.push({ text: remaining[0], className: 'text-slate-200' });
+            remaining = remaining.slice(1);
+        }
+        return tokens;
+    }
+
+    const keywords = mode === 'functional' ? FUNCTIONAL_KEYWORDS : 
+                     mode === 'manchester' ? MANCHESTER_KEYWORDS : 
+                     TURTLE_KEYWORDS;
     
     while (remaining.length > 0) {
         let match;
@@ -136,7 +177,7 @@ const tokenize = (code: string, mode: 'functional' | 'manchester') => {
         }
 
         // 5. Keywords / Identifiers
-        if ((match = remaining.match(/^[a-zA-Z][a-zA-Z0-9_-]*/))) {
+        if ((match = remaining.match(/^[a-zA-Z@][a-zA-Z0-9_-]*/))) {
             const val = match[0];
             if (keywords.has(val)) {
                 tokens.push({ text: val, className: 'text-purple-400 font-bold' });
@@ -148,7 +189,7 @@ const tokenize = (code: string, mode: 'functional' | 'manchester') => {
         }
         
         // 6. Delimiters
-        if ((match = remaining.match(/^[()={}\[\],]/))) {
+        if ((match = remaining.match(/^[()={}\[\],;.]/))) {
              tokens.push({ text: match[0], className: 'text-slate-500' });
              remaining = remaining.slice(match[0].length);
              continue;
@@ -169,17 +210,19 @@ const tokenize = (code: string, mode: 'functional' | 'manchester') => {
 }
 
 const CodeViewer: React.FC<CodeViewerProps> = ({ nodes, edges, metadata, onImportCode }) => {
-    const [syntax, setSyntax] = useState<'functional' | 'manchester'>('functional');
+    const [syntax, setSyntax] = useState<SyntaxType>('functional');
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState('');
     const [error, setError] = useState<string | null>(null);
 
     // Initial code generation
     const generatedCode = useMemo(() => {
-        if (syntax === 'manchester') {
-            return generateManchesterSyntax(nodes, edges, metadata);
+        switch (syntax) {
+            case 'manchester': return generateManchesterSyntax(nodes, edges, metadata);
+            case 'turtle': return generateTurtle(nodes, edges, metadata);
+            case 'xml': return generateRdfXml(nodes, edges, metadata);
+            default: return generateFunctionalSyntax(nodes, edges, metadata);
         }
-        return generateFunctionalSyntax(nodes, edges, metadata);
     }, [nodes, edges, metadata, syntax]);
 
     // Sync editor with generated code when not editing
@@ -196,9 +239,10 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ nodes, edges, metadata, onImpor
     };
 
     const handleApply = () => {
-        if (onImportCode) {
+        if (onImportCode && syntax !== 'xml') {
             try {
-                onImportCode(editContent, syntax);
+                // Assuming onImportCode handles the syntax type (updated App.tsx)
+                onImportCode(editContent, syntax as 'functional' | 'manchester' | 'turtle');
                 setIsEditing(false);
                 setError(null);
             } catch (e) {
@@ -216,18 +260,18 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ nodes, edges, metadata, onImpor
 
     return (
         <div className="h-full flex flex-col bg-slate-900 text-slate-200 font-mono text-sm relative">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900">
-                <div className="flex items-center gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900 gap-4">
+                <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-2 text-slate-100 font-semibold">
                         <FileCode className="text-blue-500 w-5 h-5" />
                         OWL 2 Syntax
                     </div>
                     
                     {/* Syntax Toggle */}
-                    <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700">
+                    <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700 overflow-x-auto max-w-[300px] md:max-w-none">
                         <button 
                             onClick={() => { setSyntax('functional'); setIsEditing(false); }}
-                            className={`px-3 py-1 text-xs font-medium rounded transition-all ${
+                            className={`px-3 py-1 text-xs font-medium rounded transition-all whitespace-nowrap ${
                                 syntax === 'functional' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
                             }`}
                         >
@@ -235,17 +279,32 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ nodes, edges, metadata, onImpor
                         </button>
                         <button 
                             onClick={() => { setSyntax('manchester'); setIsEditing(false); }}
-                            className={`px-3 py-1 text-xs font-medium rounded transition-all flex items-center gap-1 ${
+                            className={`px-3 py-1 text-xs font-medium rounded transition-all flex items-center gap-1 whitespace-nowrap ${
                                 syntax === 'manchester' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
                             }`}
                         >
-                            <AlignLeft size={12} />
                             Manchester
+                        </button>
+                        <button 
+                            onClick={() => { setSyntax('turtle'); setIsEditing(false); }}
+                            className={`px-3 py-1 text-xs font-medium rounded transition-all flex items-center gap-1 whitespace-nowrap ${
+                                syntax === 'turtle' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                            }`}
+                        >
+                            Turtle (RDF)
+                        </button>
+                        <button 
+                            onClick={() => { setSyntax('xml'); setIsEditing(false); }}
+                            className={`px-3 py-1 text-xs font-medium rounded transition-all flex items-center gap-1 whitespace-nowrap ${
+                                syntax === 'xml' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                            }`}
+                        >
+                            RDF/XML
                         </button>
                     </div>
                 </div>
                 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                      <button 
                         onClick={handleLoadExample}
                         className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs transition-colors text-purple-400 hover:text-purple-300"
@@ -255,7 +314,7 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ nodes, edges, metadata, onImpor
                         Example
                     </button>
 
-                    <div className="w-px h-6 bg-slate-800 mx-1" />
+                    <div className="w-px h-6 bg-slate-800 mx-1 hidden md:block" />
 
                     {isEditing ? (
                         <>
@@ -276,7 +335,9 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ nodes, edges, metadata, onImpor
                     ) : (
                          <button 
                             onClick={() => setIsEditing(true)}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs transition-colors"
+                            disabled={syntax === 'xml'}
+                            className={`flex items-center gap-2 px-3 py-1.5 border border-slate-700 rounded text-xs transition-colors ${syntax === 'xml' ? 'bg-slate-900 text-slate-600 cursor-not-allowed' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}`}
+                            title={syntax === 'xml' ? 'Editing XML not supported' : 'Edit Code'}
                         >
                             <Edit3 size={14} />
                             Edit
@@ -294,7 +355,7 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ nodes, edges, metadata, onImpor
             </div>
 
             {error && (
-                <div className="absolute top-16 left-0 right-0 mx-6 z-10 bg-red-900/90 border border-red-700 text-red-100 px-4 py-2 rounded flex items-center gap-2 text-xs">
+                <div className="absolute top-24 md:top-20 left-0 right-0 mx-6 z-10 bg-red-900/90 border border-red-700 text-red-100 px-4 py-2 rounded flex items-center gap-2 text-xs">
                     <AlertCircle size={14} />
                     {error}
                 </div>

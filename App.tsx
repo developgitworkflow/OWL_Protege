@@ -147,11 +147,13 @@ const Flow = () => {
       link.click();
   };
 
-  const handleCodeUpdate = (code: string, syntax: 'functional' | 'manchester') => {
-      let result;
+  const handleCodeUpdate = async (code: string, syntax: 'functional' | 'manchester' | 'turtle') => {
       try {
+          let result;
           if (syntax === 'manchester') {
               result = parseManchesterSyntax(code);
+          } else if (syntax === 'turtle') {
+              result = await parseTurtle(code);
           } else {
               result = parseFunctionalSyntax(code);
           }

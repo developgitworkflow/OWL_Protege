@@ -182,10 +182,22 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges })
 
         // Resize rects once
         linkLabelGroup.select("rect")
-            .attr("width", function() { return ((this.parentNode as any).querySelector('text')._bbox.width || 0) + 8; })
-            .attr("height", function() { return ((this.parentNode as any).querySelector('text')._bbox.height || 0) + 4; })
-            .attr("x", function() { return -(((this.parentNode as any).querySelector('text')._bbox.width || 0) + 8) / 2; })
-            .attr("y", function() { return -(((this.parentNode as any).querySelector('text')._bbox.height || 0) + 4) / 2; });
+            .attr("width", function() { 
+                const parent = (this as unknown as Element).parentNode as Element;
+                return ((parent.querySelector('text') as any)._bbox.width || 0) + 8; 
+            })
+            .attr("height", function() { 
+                const parent = (this as unknown as Element).parentNode as Element;
+                return ((parent.querySelector('text') as any)._bbox.height || 0) + 4; 
+            })
+            .attr("x", function() { 
+                const parent = (this as unknown as Element).parentNode as Element;
+                return -(((parent.querySelector('text') as any)._bbox.width || 0) + 8) / 2; 
+            })
+            .attr("y", function() { 
+                const parent = (this as unknown as Element).parentNode as Element;
+                return -(((parent.querySelector('text') as any)._bbox.height || 0) + 4) / 2; 
+            });
 
         // Nodes
         const node = nodeGroup.selectAll("g")

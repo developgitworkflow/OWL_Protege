@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, RefreshCw, Move } from 'lucide-react';
+import { ZoomIn, ZoomOut, RefreshCw, Move, Search, Maximize, X } from 'lucide-react';
 
 interface GraphVisualizationProps {
     nodes: Node<UMLNodeData>[];
@@ -13,8 +13,13 @@ interface D3Node extends d3.SimulationNodeDatum {
     id: string;
     label: string;
     type: ElementType;
+    iri?: string;
     color: string;
     radius: number;
+    x?: number;
+    y?: number;
+    fx?: number | null;
+    fy?: number | null;
 }
 
 interface D3Link extends d3.SimulationLinkDatum<D3Node> {
@@ -25,17 +30,29 @@ interface D3Link extends d3.SimulationLinkDatum<D3Node> {
 const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges }) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const [zoomLevel, setZoomLevel] = useState(1);
+    const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+    const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    
+    // State for UI interactions
+    const [searchTerm, setSearchTerm] = useState('');
+    const [matchingNodes, setMatchingNodes] = useState<D3Node[]>([]);
+    const [hoveredNode, setHoveredNode] = useState<D3Node | null>(null);
+    const [tooltip, setTooltip] = useState<{x: number, y: number, content: React.ReactNode} | null>(null);
+    
+    // Store simulation data refs to access in event handlers without stale closures
+    const simulationNodes = useRef<D3Node[]>([]);
+    const simulationLinks = useRef<D3Link[]>([]);
+    const adjList = useRef<Map<string, Set<string>>>(new Map());
 
-    // Color Palette matching Neo4j vibes but adapted to our theme
+    // --- Helpers ---
     const getColor = (type: ElementType) => {
         switch (type) {
-            case ElementType.OWL_CLASS: return '#6366f1'; // Indigo (Classes)
-            case ElementType.OWL_NAMED_INDIVIDUAL: return '#ec4899'; // Pink (Individuals)
-            case ElementType.OWL_DATA_PROPERTY: return '#10b981'; // Emerald (Data Props)
-            case ElementType.OWL_OBJECT_PROPERTY: return '#3b82f6'; // Blue (Object Props)
-            case ElementType.OWL_DATATYPE: return '#f59e0b'; // Amber (Datatypes)
-            default: return '#94a3b8'; // Slate
+            case ElementType.OWL_CLASS: return '#6366f1'; // Indigo-500
+            case ElementType.OWL_NAMED_INDIVIDUAL: return '#ec4899'; // Pink-500
+            case ElementType.OWL_DATA_PROPERTY: return '#10b981'; // Emerald-500
+            case ElementType.OWL_OBJECT_PROPERTY: return '#3b82f6'; // Blue-500
+            case ElementType.OWL_DATATYPE: return '#f59e0b'; // Amber-500
+            default: return '#94a3b8'; // Slate-400
         }
     };
 
@@ -47,239 +64,403 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges })
         }
     };
 
+    // --- Graph Initialization ---
     useEffect(() => {
         if (!svgRef.current || !containerRef.current) return;
 
+        const width = containerRef.current.clientWidth;
+        const height = containerRef.current.clientHeight;
+
         // 1. Prepare Data
-        // Deep copy to prevent mutation of props by D3
-        const d3Nodes: D3Node[] = nodes.map(n => ({
+        simulationNodes.current = nodes.map(n => ({
             id: n.id,
             label: n.data.label,
             type: n.data.type,
+            iri: n.data.iri,
             color: getColor(n.data.type),
             radius: getRadius(n.data.type),
-            // Initialize position to help stability if re-rendering
-            x: n.position.x,
-            y: n.position.y
+            x: n.position.x + 100, // Offset to center vaguely if not simulated yet
+            y: n.position.y + 100
         }));
 
-        const d3Links: D3Link[] = edges.map(e => ({
+        simulationLinks.current = edges.map(e => ({
             id: e.id,
             source: e.source,
             target: e.target,
             label: (typeof e.label === 'string' ? e.label : '').replace('owl:', '').replace('rdf:', '')
         }));
 
-        // 2. Setup SVG
-        const width = containerRef.current.clientWidth;
-        const height = containerRef.current.clientHeight;
-        
-        const svg = d3.select(svgRef.current);
-        svg.selectAll("*").remove(); // Clear previous render
+        // Build Adjacency List for fast neighbor lookup
+        const adj = new Map<string, Set<string>>();
+        simulationLinks.current.forEach(l => {
+            // Note: d3 converts source/target to Node objects after simulation start, 
+            // but initially they are strings. We handle strings here for init.
+            const s = (l.source as any).id || l.source;
+            const t = (l.target as any).id || l.target;
+            if (!adj.has(s)) adj.set(s, new Set());
+            if (!adj.has(t)) adj.set(t, new Set());
+            adj.get(s)?.add(t);
+            adj.get(t)?.add(s);
+        });
+        adjList.current = adj;
 
-        // Defs for arrows
+        // 2. Clear & Setup SVG
+        const svg = d3.select(svgRef.current);
+        svg.selectAll("*").remove();
+
+        // Markers
         const defs = svg.append("defs");
         defs.append("marker")
             .attr("id", "arrowhead")
             .attr("viewBox", "0 -5 10 10")
-            .attr("refX", 28) // Position relative to node radius (will need dynamic adjustment or standard)
+            .attr("refX", 28)
             .attr("refY", 0)
             .attr("markerWidth", 6)
             .attr("markerHeight", 6)
             .attr("orient", "auto")
             .append("path")
             .attr("d", "M0,-5L10,0L0,5")
-            .attr("fill", "#64748b"); // Slate-500
+            .attr("fill", "#64748b");
 
-        // Zoom Container
+        // Main Group
         const g = svg.append("g");
-        
+        gRef.current = g;
+
+        // Zoom Behavior
         const zoom = d3.zoom<SVGSVGElement, unknown>()
             .scaleExtent([0.1, 4])
             .on("zoom", (event) => {
                 g.attr("transform", event.transform);
-                setZoomLevel(event.transform.k);
             });
-
+        zoomRef.current = zoom;
         svg.call(zoom);
 
-        // 3. Simulation
-        const simulation = d3.forceSimulation(d3Nodes)
-            .force("link", d3.forceLink(d3Links).id((d: any) => d.id).distance(180))
+        // 3. Simulation Setup
+        const simulation = d3.forceSimulation(simulationNodes.current)
+            .force("link", d3.forceLink(simulationLinks.current).id((d: any) => d.id).distance(150))
             .force("charge", d3.forceManyBody().strength(-800))
             .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collide", d3.forceCollide().radius((d: any) => d.radius + 10).iterations(2));
+            .force("collide", d3.forceCollide().radius((d: any) => d.radius + 15).iterations(2));
 
-        // 4. Render Elements
-
-        // Links Group
+        // 4. Rendering
         const linkGroup = g.append("g").attr("class", "links");
-        
+        const nodeGroup = g.append("g").attr("class", "nodes");
+
+        // Edges
         const link = linkGroup.selectAll("g")
-            .data(d3Links)
-            .join("g");
+            .data(simulationLinks.current)
+            .join("g")
+            .attr("class", "link-group");
 
         const linkPath = link.append("path")
+            .attr("class", "edge-path")
             .attr("stroke", "#475569")
             .attr("stroke-width", 2)
             .attr("fill", "none")
             .attr("marker-end", "url(#arrowhead)");
 
-        // Link Labels (Neo4j style: pill background)
-        const linkLabelGroup = link.append("g");
+        const linkLabelGroup = link.append("g").attr("class", "edge-label");
         
-        const linkLabelRect = linkLabelGroup.append("rect")
+        linkLabelGroup.append("rect")
             .attr("rx", 4)
             .attr("ry", 4)
-            .attr("fill", "#1e293b") // Slate-800
+            .attr("fill", "#1e293b")
             .attr("stroke", "#475569")
             .attr("stroke-width", 1);
 
-        const linkLabelText = linkLabelGroup.append("text")
+        linkLabelGroup.append("text")
             .attr("text-anchor", "middle")
             .attr("dy", "0.3em")
             .attr("fill", "#cbd5e1")
-            .attr("font-size", "10px")
-            .text(d => d.label);
-        
-        // Sizing the rect based on text
-        linkLabelGroup.each(function() {
-            const group = d3.select(this);
-            const text = group.select("text").node() as SVGTextElement;
-            const bbox = text.getBBox();
-            group.select("rect")
-                .attr("x", -bbox.width / 2 - 4)
-                .attr("y", -bbox.height / 2 - 2)
-                .attr("width", bbox.width + 8)
-                .attr("height", bbox.height + 4);
+            .attr("font-size", "9px")
+            .text(d => d.label)
+            .each(function() {
+                const bbox = this.getBBox();
+                // Store bbox for rect sizing in tick
+                (this as any)._bbox = bbox;
+            });
+
+        // Resize rects once
+        linkLabelGroup.select("rect")
+            .attr("width", function() { return ((this.parentNode as any).querySelector('text')._bbox.width || 0) + 8; })
+            .attr("height", function() { return ((this.parentNode as any).querySelector('text')._bbox.height || 0) + 4; })
+            .attr("x", function() { return -(((this.parentNode as any).querySelector('text')._bbox.width || 0) + 8) / 2; })
+            .attr("y", function() { return -(((this.parentNode as any).querySelector('text')._bbox.height || 0) + 4) / 2; });
+
+        // Nodes
+        const node = nodeGroup.selectAll("g")
+            .data(simulationNodes.current)
+            .join("g")
+            .attr("class", "node-group")
+            .call(d3.drag<any, any>()
+                .on("start", (event, d) => {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    d.fx = d.x;
+                    d.fy = d.y;
+                })
+                .on("drag", (event, d) => {
+                    d.fx = event.x;
+                    d.fy = event.y;
+                })
+                .on("end", (event, d) => {
+                    if (!event.active) simulation.alphaTarget(0);
+                    d.fx = null;
+                    d.fy = null;
+                })
+            );
+
+        // Hover Interactions
+        node.on('mouseenter', (event, d) => {
+            setHoveredNode(d);
+            
+            // Tooltip
+            const containerRect = containerRef.current?.getBoundingClientRect();
+            if (containerRect) {
+                 setTooltip({
+                     x: event.clientX - containerRect.left,
+                     y: event.clientY - containerRect.top - 20,
+                     content: (
+                         <div className="flex flex-col gap-1">
+                             <span className="font-bold text-sm text-white">{d.label}</span>
+                             <span className="text-[10px] text-slate-400 font-mono">{d.iri || d.id}</span>
+                             <span className="text-[10px] uppercase bg-slate-800 px-1 rounded w-fit text-blue-300">{d.type.replace('owl_', '').replace('_', ' ')}</span>
+                         </div>
+                     )
+                 });
+            }
+
+            // Highlight Logic
+            const connectedSet = new Set<string>();
+            connectedSet.add(d.id);
+            if (adjList.current.has(d.id)) {
+                adjList.current.get(d.id)!.forEach(n => connectedSet.add(n));
+            }
+
+            // Dim others
+            node.transition().duration(200).style('opacity', o => connectedSet.has(o.id) ? 1 : 0.1);
+            link.transition().duration(200).style('opacity', o => 
+                (o.source as any).id === d.id || (o.target as any).id === d.id ? 1 : 0.05
+            );
+            linkLabelGroup.transition().duration(200).style('opacity', o => 
+                (o.source as any).id === d.id || (o.target as any).id === d.id ? 1 : 0.05
+            );
+
+        }).on('mouseleave', () => {
+            setHoveredNode(null);
+            setTooltip(null);
+            
+            // Reset
+            node.transition().duration(200).style('opacity', 1);
+            link.transition().duration(200).style('opacity', 1);
+            linkLabelGroup.transition().duration(200).style('opacity', 1);
         });
 
-
-        // Nodes Group
-        const node = g.append("g")
-            .attr("class", "nodes")
-            .selectAll("g")
-            .data(d3Nodes)
-            .join("g")
-            .call(d3.drag<any, any>()
-                .on("start", dragstarted)
-                .on("drag", dragged)
-                .on("end", dragended));
-
-        // Node Circle
+        // Circle
         node.append("circle")
             .attr("r", d => d.radius)
             .attr("fill", d => d.color)
             .attr("stroke", "#fff")
             .attr("stroke-width", 2)
-            .attr("cursor", "grab");
+            .attr("class", "node-circle shadow-lg");
 
-        // Node Label
+        // Label
         node.append("text")
             .attr("text-anchor", "middle")
             .attr("dy", "0.3em")
             .attr("fill", "#fff")
             .attr("font-weight", "bold")
-            .attr("font-size", d => Math.min(12, d.radius / 2) + "px") // simple scaling
+            .attr("font-size", d => Math.min(12, d.radius / 2.5) + "px")
             .attr("pointer-events", "none")
-            .text(d => {
-                const label = d.label;
-                return label.length > 8 ? label.substring(0, 7) + "..." : label;
-            });
+            .style("text-shadow", "0px 1px 2px rgba(0,0,0,0.8)")
+            .text(d => d.label.length > 8 ? d.label.substring(0, 7) + ".." : d.label);
 
-        // 5. Ticks
+        // Simulation Tick
         simulation.on("tick", () => {
             linkPath.attr("d", (d: any) => {
                 const dx = d.target.x - d.source.x;
                 const dy = d.target.y - d.source.y;
                 const dr = Math.sqrt(dx * dx + dy * dy);
-                // Adjust arrow endpoint to stop at circle edge
                 const r = d.target.radius + 5; 
+                if (dr === 0) return `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`; // Handle stacked nodes
                 const offsetX = (dx * r) / dr;
                 const offsetY = (dy * r) / dr;
                 return `M${d.source.x},${d.source.y}L${d.target.x - offsetX},${d.target.y - offsetY}`;
             });
 
             linkLabelGroup.attr("transform", (d: any) => {
-                const x = (d.source.x + d.target.x) / 2;
-                const y = (d.source.y + d.target.y) / 2;
-                // Calculate angle for rotation if desired, but horizontal usually reads better for labels
-                return `translate(${x}, ${y})`; 
+                 const x = (d.source.x + d.target.x) / 2;
+                 const y = (d.source.y + d.target.y) / 2;
+                 return `translate(${x}, ${y})`;
             });
 
             node.attr("transform", d => `translate(${d.x},${d.y})`);
         });
 
-        // Drag functions
-        function dragstarted(event: any, d: any) {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x;
-            d.fy = d.y;
-            d3.select(this).select("circle").attr("cursor", "grabbing");
-        }
-
-        function dragged(event: any, d: any) {
-            d.fx = event.x;
-            d.fy = event.y;
-        }
-
-        function dragended(event: any, d: any) {
-            if (!event.active) simulation.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-            d3.select(this).select("circle").attr("cursor", "grab");
-        }
-
+        // Cleanup
         return () => {
             simulation.stop();
         };
     }, [nodes, edges]);
 
-    const handleZoomIn = () => {
-        const svg = d3.select(svgRef.current);
-        const zoom = d3.zoom<SVGSVGElement, unknown>();
-        svg.transition().call(zoom.scaleBy, 1.2);
-    };
 
-    const handleZoomOut = () => {
-        const svg = d3.select(svgRef.current);
-        const zoom = d3.zoom<SVGSVGElement, unknown>();
-        svg.transition().call(zoom.scaleBy, 0.8);
-    };
-    
-    const handleFit = () => {
-         // Reset zoom logic could be complex without storing zoom instance
-         // Re-rendering triggers re-center due to forceCenter, simple enough for now
+    // --- Controls ---
+
+    const handleZoomIn = useCallback(() => {
+        if (!svgRef.current || !zoomRef.current) return;
+        d3.select(svgRef.current).transition().duration(300).call(zoomRef.current.scaleBy, 1.3);
+    }, []);
+
+    const handleZoomOut = useCallback(() => {
+        if (!svgRef.current || !zoomRef.current) return;
+        d3.select(svgRef.current).transition().duration(300).call(zoomRef.current.scaleBy, 0.7);
+    }, []);
+
+    const handleFitView = useCallback(() => {
+        if (!svgRef.current || !zoomRef.current || !gRef.current) return;
+        const bounds = gRef.current.node()?.getBBox();
+        if (!bounds) return;
+
+        const parent = svgRef.current.parentElement;
+        if (!parent) return;
+
+        const width = parent.clientWidth;
+        const height = parent.clientHeight;
+        const dx = bounds.width;
+        const dy = bounds.height;
+        const x = bounds.x + dx / 2;
+        const y = bounds.y + dy / 2;
+        
+        // Calculate scale
+        const scale = Math.max(0.1, Math.min(3, 0.9 / Math.max(dx / width, dy / height)));
+        const translate = [width / 2 - scale * x, height / 2 - scale * y];
+
+        d3.select(svgRef.current).transition().duration(750).call(
+            zoomRef.current.transform,
+            d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale)
+        );
+    }, []);
+
+    // --- Search ---
+
+    useEffect(() => {
+        if (!searchTerm.trim()) {
+            setMatchingNodes([]);
+            return;
+        }
+        const matches = simulationNodes.current.filter(n => 
+            n.label.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        setMatchingNodes(matches);
+    }, [searchTerm]);
+
+    const focusNode = (node: D3Node) => {
+        if (!svgRef.current || !zoomRef.current || !containerRef.current) return;
+        
+        const width = containerRef.current.clientWidth;
+        const height = containerRef.current.clientHeight;
+
+        d3.select(svgRef.current).transition().duration(750).call(
+            zoomRef.current.transform,
+            d3.zoomIdentity.translate(width / 2, height / 2).scale(1.5).translate(-(node.x ?? 0), -(node.y ?? 0))
+        );
+        
+        // Highlight temporarily
+        const nodeSel = d3.selectAll('.node-group').filter((d: any) => d.id === node.id);
+        const circle = nodeSel.select('circle');
+        
+        circle
+            .transition().duration(200).attr('stroke', '#fff').attr('stroke-width', 6)
+            .transition().delay(1000).duration(500).attr('stroke-width', 2);
+            
+        setSearchTerm(''); // Clear search to hide dropdown
     };
 
     return (
-        <div ref={containerRef} className="relative w-full h-full bg-slate-950 overflow-hidden">
-             {/* Toolbar */}
-             <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
-                <div className="bg-slate-800 border border-slate-700 rounded-lg p-1 shadow-lg flex flex-col gap-1">
-                    <button onClick={handleZoomIn} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded" title="Zoom In">
+        <div ref={containerRef} className="relative w-full h-full bg-slate-950 overflow-hidden group/canvas">
+            
+            {/* Top Toolbar: Zoom & Search */}
+            <div className="absolute top-4 left-4 right-4 z-10 flex justify-between items-start pointer-events-none">
+                
+                {/* Left: Search Bar */}
+                <div className="flex flex-col gap-2 pointer-events-auto w-64 relative">
+                    <div className="bg-slate-800/90 backdrop-blur border border-slate-700 rounded-lg shadow-lg flex items-center px-3 py-2 gap-2 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all">
+                        <Search size={16} className="text-slate-400" />
+                        <input 
+                            className="bg-transparent border-none outline-none text-sm text-slate-200 placeholder-slate-500 w-full"
+                            placeholder="Find node..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        {searchTerm && (
+                            <button onClick={() => setSearchTerm('')} className="text-slate-500 hover:text-white">
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
+                    
+                    {/* Search Results Dropdown */}
+                    {matchingNodes.length > 0 && (
+                        <div className="absolute top-full mt-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2">
+                            {matchingNodes.map(node => (
+                                <button
+                                    key={node.id}
+                                    onClick={() => focusNode(node)}
+                                    className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-blue-600 hover:text-white flex items-center justify-between group"
+                                >
+                                    <span>{node.label}</span>
+                                    <span className="text-[10px] uppercase opacity-50 border border-slate-600 rounded px-1 group-hover:border-white/50">
+                                        {node.type.replace('owl_', '').substring(0, 3)}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Right: Legend */}
+                <div className="bg-slate-900/80 backdrop-blur border border-slate-800 p-3 rounded-lg text-xs text-slate-300 pointer-events-auto shadow-xl">
+                    <h3 className="font-bold mb-2 text-slate-500 uppercase tracking-wider text-[10px]">Legend</h3>
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></span> Class</div>
+                        <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.6)]"></span> Individual</div>
+                        <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span> Data Prop</div>
+                        <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]"></span> Object Prop</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Bottom Left: Zoom Controls */}
+            <div className="absolute bottom-6 left-6 z-10 flex flex-col gap-2 pointer-events-auto">
+                <div className="bg-slate-800/90 backdrop-blur border border-slate-700 rounded-lg p-1 shadow-lg flex flex-col gap-1">
+                    <button onClick={handleZoomIn} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors" title="Zoom In">
                         <ZoomIn size={20} />
                     </button>
-                    <button onClick={handleZoomOut} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded" title="Zoom Out">
+                    <button onClick={handleZoomOut} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors" title="Zoom Out">
                         <ZoomOut size={20} />
                     </button>
-                    <button onClick={() => window.location.reload()} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded" title="Reset Simulation">
+                    <div className="h-px bg-slate-700 mx-1 my-0.5"></div>
+                    <button onClick={handleFitView} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors" title="Fit to Screen">
+                        <Maximize size={20} />
+                    </button>
+                    <button onClick={() => window.location.reload()} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors" title="Reset Simulation">
                         <RefreshCw size={20} />
                     </button>
                 </div>
             </div>
 
-            <div className="absolute top-4 right-4 z-10 bg-slate-900/80 backdrop-blur border border-slate-800 p-3 rounded-lg text-xs text-slate-300 pointer-events-none select-none">
-                <h3 className="font-bold mb-2 text-slate-500 uppercase">Legend</h3>
-                <div className="space-y-1.5">
-                    <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-indigo-500 border border-white"></span> Class</div>
-                    <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-pink-500 border border-white"></span> Individual</div>
-                    <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500 border border-white"></span> Data Prop</div>
-                    <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-blue-500 border border-white"></span> Object Prop</div>
+            {/* Custom Tooltip */}
+            {tooltip && (
+                <div 
+                    className="absolute z-50 bg-slate-900/95 border border-slate-700 p-3 rounded-lg shadow-2xl pointer-events-none transform -translate-x-1/2 min-w-[150px] animate-in fade-in zoom-in-95 duration-150"
+                    style={{ left: tooltip.x, top: tooltip.y }}
+                >
+                    {tooltip.content}
+                    {/* Little arrow at bottom */}
+                    <div className="absolute left-1/2 -bottom-1.5 w-3 h-3 bg-slate-900 border-r border-b border-slate-700 transform rotate-45 -translate-x-1/2"></div>
                 </div>
-            </div>
+            )}
 
-            <svg ref={svgRef} className="w-full h-full cursor-move" />
+            <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing touch-none" />
         </div>
     );
 };

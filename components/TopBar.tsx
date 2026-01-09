@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -9,8 +9,8 @@ interface TopBarProps {
     onOpenSettings: () => void;
     onValidate: () => void;
     onOpenDLQuery: () => void;
-    currentView: 'design' | 'code' | 'graph';
-    onViewChange: (view: 'design' | 'code' | 'graph') => void;
+    currentView: 'design' | 'code' | 'graph' | 'mindmap';
+    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap') => void;
 }
 
 const TopBar: React.FC<TopBarProps> = ({ 
@@ -60,6 +60,13 @@ const TopBar: React.FC<TopBarProps> = ({
             >
                 <Network size={12} />
                 Graph
+            </button>
+            <button 
+                onClick={() => onViewChange('mindmap')}
+                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'mindmap' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
+            >
+                <GitGraph size={12} />
+                Mindmap
             </button>
          </div>
 

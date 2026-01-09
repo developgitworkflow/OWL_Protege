@@ -25,6 +25,7 @@ import ValidationModal from './components/ValidationModal';
 import DLQueryModal from './components/DLQueryModal';
 import CodeViewer from './components/CodeViewer';
 import GraphVisualization from './components/GraphVisualization';
+import MindmapVisualization from './components/MindmapVisualization';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
 import { generateTurtle } from './services/owlMapper';
@@ -42,7 +43,7 @@ const Flow = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph'>('design');
+  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap'>('design');
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -365,6 +366,15 @@ const Flow = () => {
         {viewMode === 'graph' && (
             <div className="flex-1 h-full">
                 <GraphVisualization 
+                    nodes={nodes} 
+                    edges={edges} 
+                />
+            </div>
+        )}
+
+        {viewMode === 'mindmap' && (
+            <div className="flex-1 h-full">
+                <MindmapVisualization 
                     nodes={nodes} 
                     edges={edges} 
                 />

@@ -24,30 +24,38 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
       return 'bg-slate-800 text-slate-200 border-slate-700';
   }
 
-  const borderColor = selected ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-slate-600';
-  
+  // Visual state for selection
+  const containerClasses = `
+    group w-64 bg-slate-800 rounded-md text-xs font-sans overflow-hidden transition-all duration-300
+    ${selected 
+        ? 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] ring-1 ring-blue-500' 
+        : 'border-slate-600 shadow-lg hover:border-slate-500 hover:shadow-xl'
+    }
+    border
+  `;
+
   // Dynamic Labels based on type
   let section1Label = 'Data Properties';
   let section2Label = 'Restrictions / Axioms';
   
   if (data.type === ElementType.OWL_OBJECT_PROPERTY || data.type === ElementType.OWL_DATA_PROPERTY) {
-      section1Label = 'Characteristics'; // Functional, Transitive, etc.
-      section2Label = 'Property Axioms'; // SubPropertyOf, InverseOf, Domain, Range
+      section1Label = 'Characteristics'; 
+      section2Label = 'Property Axioms'; 
   }
 
-  // Format IRI for display (e.g. show only the fragment if long)
   const displayIRI = data.iri ? (data.iri.includes('#') ? `:${data.iri.split('#')[1]}` : data.iri) : `:${data.label}`;
-
-  // Merge legacy description with annotations for display if needed, 
-  // but strictly prefer annotations if available.
   const hasAnnotations = (data.annotations && data.annotations.length > 0) || data.description;
 
   return (
-    <div className={`w-64 bg-slate-800 rounded-md shadow-lg border ${borderColor} text-xs font-sans overflow-hidden transition-all duration-200`}>
-      <Handle type="target" position={Position.Top} className="!bg-slate-400 !w-3 !h-2 !rounded-sm" />
+    <div className={containerClasses}>
+      <Handle 
+        type="target" 
+        position={Position.Top} 
+        className="!bg-slate-500 !w-3 !h-2 !rounded-sm !border-none group-hover:!bg-blue-400 transition-colors duration-200" 
+      />
       
       {/* Header */}
-      <div className={`px-3 py-2 border-b flex flex-col items-center justify-center ${getHeaderStyle()}`}>
+      <div className={`px-3 py-2 border-b flex flex-col items-center justify-center backdrop-blur-sm ${getHeaderStyle()}`}>
         <div className="flex items-center font-bold">
             {getIcon()}
             <span className="truncate">{data.label}</span>
@@ -68,7 +76,6 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
                      </div>
                 ))
             ) : (
-                // Legacy Fallback
                 <div className="text-[10px] text-slate-400 italic">
                     {data.description}
                 </div>
@@ -76,8 +83,8 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
         </div>
       )}
 
-      {/* Section 1: Attributes / Characteristics */}
-      <div className="px-3 py-2 border-b border-slate-700 min-h-[20px]">
+      {/* Section 1: Attributes */}
+      <div className="px-3 py-2 border-b border-slate-700 min-h-[20px] bg-slate-800/50">
         <div className="text-[9px] text-slate-500 uppercase font-semibold mb-1 tracking-wider">{section1Label}</div>
         {data.attributes && data.attributes.length > 0 ? (
           data.attributes.map((attr) => (
@@ -100,7 +107,7 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
       </div>
 
       {/* Section 2: Axioms */}
-      <div className="px-3 py-2 min-h-[20px]">
+      <div className="px-3 py-2 min-h-[20px] bg-slate-800/50">
         <div className="text-[9px] text-slate-500 uppercase font-semibold mb-1 tracking-wider">{section2Label}</div>
         {data.methods && data.methods.length > 0 ? (
           data.methods.map((method) => (
@@ -119,7 +126,11 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
         )}
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="!bg-slate-400 !w-3 !h-2 !rounded-sm" />
+      <Handle 
+        type="source" 
+        position={Position.Bottom} 
+        className="!bg-slate-500 !w-3 !h-2 !rounded-sm !border-none group-hover:!bg-blue-400 transition-colors duration-200" 
+      />
     </div>
   );
 };

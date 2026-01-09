@@ -10,7 +10,9 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   ReactFlowProvider,
-  Panel
+  Panel,
+  BackgroundVariant,
+  MarkerType
 } from 'reactflow';
 import Sidebar from './components/Sidebar';
 import PropertiesPanel from './components/PropertiesPanel';
@@ -55,7 +57,14 @@ const Flow = () => {
   });
 
   const onConnect = useCallback((params: Connection) => {
-      setEdges((eds) => addEdge({ ...params, type: 'smoothstep', label: 'use', style: { stroke: '#94a3b8' }, labelStyle: { fill: '#cbd5e1' } }, eds));
+      setEdges((eds) => addEdge({ 
+          ...params, 
+          type: 'smoothstep', 
+          label: 'use',
+          style: { stroke: '#64748b', strokeWidth: 1.5 },
+          labelStyle: { fill: '#cbd5e1', fontWeight: 500 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' }
+      }, eds));
   }, [setEdges]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -110,7 +119,12 @@ const Flow = () => {
   const onDiagramGenerated = useCallback((newNodes: Node[], newEdges: Edge[]) => {
       const normalizedNodes = normalizeOntology(newNodes);
       setNodes(normalizedNodes);
-      setEdges(newEdges.map(e => ({ ...e, style: { stroke: '#94a3b8' }, labelStyle: { fill: '#cbd5e1' } })));
+      setEdges(newEdges.map(e => ({ 
+          ...e, 
+          style: { stroke: '#64748b', strokeWidth: 1.5 }, 
+          labelStyle: { fill: '#cbd5e1' },
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' }
+      })));
   }, [setNodes, setEdges]);
 
   const handleSaveJSON = () => {
@@ -294,9 +308,24 @@ const Flow = () => {
                         onPaneClick={onPaneClick}
                         fitView
                         className="bg-slate-950"
+                        snapToGrid={true}
+                        snapGrid={[16, 16]}
+                        defaultEdgeOptions={{
+                            type: 'smoothstep',
+                            style: { stroke: '#64748b', strokeWidth: 2 },
+                            labelStyle: { fill: '#cbd5e1', fontWeight: 500, fontSize: 11 },
+                            markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' }
+                        }}
+                        connectionLineStyle={{ stroke: '#60a5fa', strokeWidth: 2 }}
                     >
-                        <Background color="#334155" gap={16} size={1} />
-                        <Controls className="!bg-slate-800 !border-slate-700 !shadow-sm !rounded-md [&>button]:!fill-slate-400 [&>button:hover]:!bg-slate-700" />
+                        <Background 
+                            color="#334155" 
+                            gap={20} 
+                            size={1.5} 
+                            variant={BackgroundVariant.Dots}
+                            className="opacity-50"
+                        />
+                        <Controls className="!bg-slate-800 !border-slate-700 !shadow-sm !rounded-md" />
                         <MiniMap 
                             nodeColor={(n) => {
                                 if (n.type === 'umlNode') return '#6366f1';
@@ -305,7 +334,7 @@ const Flow = () => {
                             className="!bg-slate-800 !border-slate-700 !shadow-sm !rounded-md"
                             maskColor="rgba(15, 23, 42, 0.6)"
                         />
-                        <Panel position="top-right" className="bg-slate-800/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 border border-slate-700/50">
+                        <Panel position="top-right" className="bg-slate-800/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 border border-slate-700/50 shadow-sm pointer-events-none select-none">
                             {projectMetadata.name} • {projectMetadata.defaultPrefix || 'ex'}
                         </Panel>
                     </ReactFlow>

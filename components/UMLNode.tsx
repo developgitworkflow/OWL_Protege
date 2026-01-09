@@ -46,6 +46,16 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
   const displayIRI = data.iri ? (data.iri.includes('#') ? `:${data.iri.split('#')[1]}` : data.iri) : `:${data.label}`;
   const hasAnnotations = (data.annotations && data.annotations.length > 0) || data.description;
 
+  const getVisibilityColor = (v: string) => {
+      switch(v) {
+          case '+': return 'text-green-400';
+          case '-': return 'text-red-400';
+          case '#': return 'text-amber-400';
+          case '~': return 'text-blue-400';
+          default: return 'text-slate-500';
+      }
+  };
+
   return (
     <div className={containerClasses}>
       <Handle 
@@ -89,6 +99,10 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
         {data.attributes && data.attributes.length > 0 ? (
           data.attributes.map((attr) => (
             <div key={attr.id} className="flex items-center py-0.5 text-slate-300">
+               {/* Visibility Symbol */}
+               <span className={`font-mono mr-1.5 w-2 text-center ${getVisibilityColor(attr.visibility)}`}>
+                   {attr.visibility}
+               </span>
               <span className="font-semibold mr-1">
                   {attr.isDerived && <span className="text-slate-500 mr-0.5">/</span>}
                   {attr.name}
@@ -114,10 +128,16 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
             <div key={method.id} className="flex items-center py-0.5 text-slate-300">
                <div className="flex flex-col leading-tight w-full">
                    <div className="flex justify-between items-center">
-                        <span className="font-medium text-slate-300">{method.name}</span>
+                        <div className="flex items-center">
+                             {/* Visibility Symbol */}
+                            <span className={`font-mono mr-1.5 w-2 text-center text-[10px] ${getVisibilityColor(method.visibility)}`}>
+                                {method.visibility}
+                            </span>
+                            <span className="font-medium text-slate-300">{method.name}</span>
+                        </div>
                         {method.isOrdered && <span className="text-[8px] px-1 bg-slate-700 rounded text-slate-400 ml-2">{`{ordered}`}</span>}
                    </div>
-                   <span className="text-[9px] text-slate-500 break-words">{method.returnType}</span>
+                   <span className="text-[9px] text-slate-500 break-words pl-4">{method.returnType}</span>
                </div>
             </div>
           ))

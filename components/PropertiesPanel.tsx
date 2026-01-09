@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Node } from 'reactflow';
+import { Node as FlowNode } from 'reactflow';
 import { UMLNodeData, ElementType, Annotation, Method } from '../types';
-import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split } from 'lucide-react';
+import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye } from 'lucide-react';
 import AnnotationManager from './AnnotationManager';
 
 interface PropertiesPanelProps {
-  selectedNode: Node<UMLNodeData> | null;
+  selectedNode: FlowNode<UMLNodeData> | null;
   onUpdateNode: (id: string, data: UMLNodeData) => void;
   onDeleteNode: (id: string) => void;
 }
@@ -24,6 +24,63 @@ const CHARACTERISTICS = [
 ];
 
 const QUANTIFIERS = ['some', 'only', 'min', 'max', 'exactly', 'value', 'self'];
+
+const VISIBILITY_OPTIONS = [
+    { value: '+', label: 'Public', icon: Globe, color: 'text-emerald-400', desc: 'Visible to all' },
+    { value: '-', label: 'Private', icon: Lock, color: 'text-red-400', desc: 'Restricted access' },
+    { value: '#', label: 'Protected', icon: Shield, color: 'text-amber-400', desc: 'Visible to subclasses' },
+    { value: '~', label: 'Package', icon: Box, color: 'text-blue-400', desc: 'Visible in package' },
+];
+
+const VisibilitySelector: React.FC<{ value: string; onChange: (val: string) => void }> = ({ value, onChange }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const current = VISIBILITY_OPTIONS.find(o => o.value === value) || VISIBILITY_OPTIONS[0];
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    return (
+        <div className="relative" ref={containerRef}>
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className={`p-1.5 rounded-md border border-slate-800 bg-slate-900 hover:border-slate-600 transition-colors ${current.color}`}
+                title={`Visibility: ${current.label}`}
+            >
+                <current.icon size={12} />
+            </button>
+            
+            {isOpen && (
+                <div className="absolute top-full left-0 mt-1 w-40 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                    <div className="py-1">
+                        {VISIBILITY_OPTIONS.map((opt) => (
+                            <button
+                                key={opt.value}
+                                onClick={() => { onChange(opt.value); setIsOpen(false); }}
+                                className="w-full text-left px-3 py-2 text-xs hover:bg-slate-800 flex items-center gap-2 transition-colors group"
+                            >
+                                <opt.icon size={12} className={opt.color} />
+                                <div>
+                                    <div className="text-slate-200 font-medium">{opt.label}</div>
+                                    <div className="text-[9px] text-slate-500">{opt.desc}</div>
+                                </div>
+                                {value === opt.value && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500"></div>}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdateNode, onDeleteNode }) => {
   const [localData, setLocalData] = useState<UMLNodeData | null>(null);
@@ -162,6 +219,9 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                   {axioms.length > 0 ? axioms.map(method => (
                       <div key={method.id} className="bg-slate-950 border border-slate-800 rounded-lg p-2 group hover:border-slate-700 transition-colors">
                           <div className="flex items-start gap-2">
+                              {/* Visibility Selector for Axioms if needed, though rarely used for pure axioms, useful for operations */}
+                              {/* <VisibilitySelector value={method.visibility} onChange={(v) => updateMethod(method.id, 'visibility', v)} /> */}
+                              
                               <div className="flex-1">
                                   <input
                                       className="w-full bg-transparent text-xs text-slate-200 focus:outline-none placeholder-slate-700 font-mono"
@@ -319,6 +379,14 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                         {localData.attributes?.map((attr) => (
                         <div key={attr.id} className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 group hover:border-slate-700 transition-all">
                             <div className="flex gap-2 items-start">
+                                {/* Visibility Selector */}
+                                <div className="pt-0.5">
+                                    <VisibilitySelector 
+                                        value={attr.visibility} 
+                                        onChange={(v) => updateAttribute(attr.id, 'visibility', v)} 
+                                    />
+                                </div>
+
                                 <div className="flex-1 flex flex-col gap-2">
                                     <div className="flex items-center gap-2">
                                         <button
@@ -404,6 +472,12 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                     <div className="space-y-2">
                         {localData.methods?.map((method) => (
                              <div key={method.id} className="bg-slate-950 border border-slate-800 rounded-lg p-2 group hover:border-slate-700 transition-colors flex gap-2 items-center">
+                                 {/* Optional Visibility for Axioms/Operations */}
+                                 <VisibilitySelector 
+                                    value={method.visibility} 
+                                    onChange={(v) => updateMethod(method.id, 'visibility', v)} 
+                                 />
+
                                  <input 
                                      className="w-1/3 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[10px] text-purple-300 font-mono"
                                      value={method.name}

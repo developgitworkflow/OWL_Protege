@@ -55,7 +55,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
         const fname = e.dataTransfer.files[0].name.toLowerCase();
-        if (fname.endsWith('.json') || fname.endsWith('.ofn') || fname.endsWith('.owl') || fname.endsWith('.ttl') || fname.endsWith('.rdf')) {
+        if (fname.endsWith('.json') || fname.endsWith('.ofn') || fname.endsWith('.owl') || fname.endsWith('.ttl') || fname.endsWith('.rdf') || fname.endsWith('.xml')) {
             setFile(e.dataTransfer.files[0]);
         }
     }
@@ -139,7 +139,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                     type="file" 
                     ref={fileInputRef}
                     onChange={handleFileChange}
-                    accept=".json,.ofn,.owl,.ttl,.rdf,.nt" 
+                    accept=".json,.ofn,.owl,.ttl,.rdf,.nt,.xml" 
                     className="hidden" 
                 />
                 <div className="flex flex-col items-center justify-center gap-2">
@@ -153,7 +153,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                         <>
                             <div className="w-10 h-10 rounded-full bg-slate-800 text-slate-500 group-hover:bg-blue-900/30 group-hover:text-blue-400 transition-colors flex items-center justify-center"><Upload size={20} /></div>
                             <div className="text-sm text-slate-400"><span className="font-semibold text-blue-500 hover:underline">Click to upload</span> or drag and drop</div>
-                            <p className="text-xs text-slate-500">JSON, Turtle, RDF, or OWL</p>
+                            <p className="text-xs text-slate-500">JSON, Turtle, RDF/XML, or OWL</p>
                         </>
                     )}
                 </div>

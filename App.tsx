@@ -34,6 +34,7 @@ import { normalizeOntology } from './services/normalizationService';
 import { parseFunctionalSyntax } from './services/functionalSyntaxParser';
 import { parseManchesterSyntax } from './services/manchesterSyntaxParser';
 import { parseTurtle } from './services/rdfParser';
+import { parseRdfXml } from './services/rdfXmlParser';
 
 const nodeTypes = {
   umlNode: UMLNode,
@@ -175,12 +176,6 @@ const Flow = () => {
 
   const handleLoadContent = async (content: string, fileName: string) => {
       try {
-          // Check for RDF/XML which is not supported
-          if (content.trim().startsWith('<') && (content.includes('<rdf:RDF') || content.includes('<owl:Ontology'))) {
-              alert("RDF/XML format is not currently supported. Please convert to Turtle (.ttl) or Functional Syntax (.ofn) before importing.");
-              return;
-          }
-
           // 1. Try JSON Project Format
           try {
               const flow = JSON.parse(content);
@@ -211,8 +206,23 @@ const Flow = () => {
               }
           }
 
-          // 3. Try OWL Functional Syntax
-          // Even if extension is .owl, we try functional syntax logic
+          // 3. Try RDF/XML (Check content or extension)
+          if (content.trim().startsWith('<') || fileName.endsWith('.xml') || fileName.endsWith('.rdf') || fileName.endsWith('.owl')) {
+              try {
+                  const result = parseRdfXml(content);
+                  if (result.nodes.length > 0) {
+                      const normalizedNodes = normalizeOntology(result.nodes);
+                      setNodes(normalizedNodes);
+                      setEdges(result.edges);
+                      setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
+                      return;
+                  }
+              } catch (xmlErr) {
+                  console.warn("XML Parse failed, trying Functional Syntax...", xmlErr);
+              }
+          }
+
+          // 4. Try OWL Functional Syntax
           if (content.includes('Ontology') || content.includes('Declaration') || fileName.endsWith('.ofn') || fileName.endsWith('.owl')) {
               try {
                 const result = parseFunctionalSyntax(content);

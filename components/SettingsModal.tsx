@@ -158,7 +158,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     onClick={onExportTurtle}
                                     className="p-4 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 hover:border-green-500 transition-all text-left group"
                                 >
-                                    <div className="font-semibold text-slate-200 group-hover:text-green-400 mb-1">Turtle (RDF/OWL)</div>
+                                    <div className="font-semibold text-slate-200 group-hover:text-green-400 mb-1">Turtle (RDF .ttl)</div>
                                     <p className="text-xs text-slate-500">Standard semantic web format (.ttl) for use in Protégé, etc.</p>
                                 </button>
                             </div>
@@ -174,7 +174,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     type="file" 
                                     ref={fileInputRef}
                                     onChange={onImportJSON}
-                                    accept=".json"
+                                    accept=".json,.ttl,.rdf,.nt,.owl,.ofn,.xml"
                                     className="hidden"
                                 />
                                 <div className="mb-3">
@@ -182,9 +182,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                         <Upload size={24} />
                                     </div>
                                 </div>
-                                <h4 className="text-sm font-medium text-slate-200 mb-1">Import JSON Project</h4>
+                                <h4 className="text-sm font-medium text-slate-200 mb-1">Import Ontology / Project</h4>
                                 <p className="text-xs text-slate-500 mb-4 max-w-xs mx-auto">
-                                    Restore a previously saved project file. This will replace the current canvas.
+                                    Supported formats: JSON, Turtle (.ttl), RDF/XML (.rdf, .xml), OWL Functional (.ofn).
                                 </p>
                                 <button 
                                     onClick={() => fileInputRef.current?.click()}

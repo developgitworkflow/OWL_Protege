@@ -12,6 +12,7 @@ interface CodeViewerProps {
     edges: Edge[];
     metadata: ProjectData;
     onImportCode?: (code: string, syntax: 'functional' | 'manchester' | 'turtle') => void;
+    searchTerm?: string;
 }
 
 type SyntaxType = 'functional' | 'manchester' | 'turtle' | 'xml';
@@ -209,7 +210,7 @@ const tokenize = (code: string, mode: SyntaxType) => {
     return tokens;
 }
 
-const CodeViewer: React.FC<CodeViewerProps> = ({ nodes, edges, metadata, onImportCode }) => {
+const CodeViewer: React.FC<CodeViewerProps> = ({ nodes, edges, metadata, onImportCode, searchTerm = '' }) => {
     const [syntax, setSyntax] = useState<SyntaxType>('functional');
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState('');
@@ -373,9 +374,12 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ nodes, edges, metadata, onImpor
                 ) : (
                     <div className="w-full h-full overflow-auto p-6 bg-slate-950">
                         <pre className="whitespace-pre font-mono text-xs leading-relaxed">
-                            {tokens.map((token, i) => (
-                                <span key={i} className={token.className}>{token.text}</span>
-                            ))}
+                            {tokens.map((token, i) => {
+                                const isMatch = searchTerm && token.text.toLowerCase().includes(searchTerm.toLowerCase());
+                                return (
+                                    <span key={i} className={`${token.className} ${isMatch ? 'bg-yellow-900/50 text-yellow-200' : ''}`}>{token.text}</span>
+                                );
+                            })}
                         </pre>
                     </div>
                 )}

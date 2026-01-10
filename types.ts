@@ -55,6 +55,7 @@ export interface UMLNodeData {
   annotations?: Annotation[]; // OWL Annotations on the entity
   stereotype?: string;     // Used for <<Stereotypes>>
   description?: string;    // Deprecated in favor of annotations
+  isSearchMatch?: boolean; // UI State for search highlighting
 }
 
 export type UMLNode = Node<UMLNodeData>;

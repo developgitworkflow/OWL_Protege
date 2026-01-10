@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
 import { ChevronRight, ChevronDown, Database, User, Tag, ArrowRightLeft, FileType, Box, Layers } from 'lucide-react';
@@ -6,6 +6,7 @@ import { ChevronRight, ChevronDown, Database, User, Tag, ArrowRightLeft, FileTyp
 interface TreeVisualizationProps {
     nodes: Node<UMLNodeData>[];
     edges: Edge[];
+    searchTerm?: string;
 }
 
 interface TreeNode {
@@ -15,10 +16,17 @@ interface TreeNode {
     children: TreeNode[];
 }
 
-const TreeNodeItem: React.FC<{ node: TreeNode; level: number }> = ({ node, level }) => {
+const TreeNodeItem: React.FC<{ node: TreeNode; level: number; searchTerm: string }> = ({ node, level, searchTerm }) => {
     const [isOpen, setIsOpen] = useState(false);
     const hasChildren = node.children.length > 0;
+    
+    // Check match
+    const isMatch = searchTerm && node.label.toLowerCase().includes(searchTerm.toLowerCase());
+    const isDimmed = searchTerm && !isMatch;
 
+    // Auto-open if children have match? (Recursive search logic omitted for simplicity, relying on user exploration)
+    // Simple highlight logic
+    
     const getIcon = () => {
         switch (node.type) {
             case ElementType.OWL_CLASS: return <Database size={14} className="text-purple-400" />;
@@ -33,8 +41,8 @@ const TreeNodeItem: React.FC<{ node: TreeNode; level: number }> = ({ node, level
     return (
         <div className="select-none">
             <div 
-                className={`flex items-center gap-2 py-1 px-2 hover:bg-slate-800 rounded cursor-pointer transition-colors group ${level === 0 ? 'mb-1' : ''}`}
-                style={{ paddingLeft: `${level * 16 + 8}px` }}
+                className={`flex items-center gap-2 py-1 px-2 hover:bg-slate-800 rounded cursor-pointer transition-colors group ${level === 0 ? 'mb-1' : ''} ${isMatch ? 'bg-yellow-900/30 border border-yellow-700/50' : ''}`}
+                style={{ paddingLeft: `${level * 16 + 8}px`, opacity: isDimmed ? 0.3 : 1 }}
                 onClick={() => setIsOpen(!isOpen)}
             >
                 <div className="w-4 flex items-center justify-center shrink-0">
@@ -45,7 +53,7 @@ const TreeNodeItem: React.FC<{ node: TreeNode; level: number }> = ({ node, level
                     )}
                 </div>
                 {getIcon()}
-                <span className={`text-sm ${node.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'text-pink-200' : 'text-slate-200'} truncate`}>
+                <span className={`text-sm truncate ${isMatch ? 'text-yellow-200 font-bold' : (node.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'text-pink-200' : 'text-slate-200')}`}>
                     {node.label}
                 </span>
                 {node.type !== ElementType.OWL_NAMED_INDIVIDUAL && (
@@ -57,7 +65,7 @@ const TreeNodeItem: React.FC<{ node: TreeNode; level: number }> = ({ node, level
             {isOpen && hasChildren && (
                 <div>
                     {node.children.map((child, idx) => (
-                        <TreeNodeItem key={`${child.id}-${idx}`} node={child} level={level + 1} />
+                        <TreeNodeItem key={`${child.id}-${idx}`} node={child} level={level + 1} searchTerm={searchTerm} />
                     ))}
                 </div>
             )}
@@ -65,7 +73,7 @@ const TreeNodeItem: React.FC<{ node: TreeNode; level: number }> = ({ node, level
     );
 };
 
-const TreeSection: React.FC<{ title: string; icon: React.ReactNode; nodes: TreeNode[] }> = ({ title, icon, nodes }) => {
+const TreeSection: React.FC<{ title: string; icon: React.ReactNode; nodes: TreeNode[]; searchTerm: string }> = ({ title, icon, nodes, searchTerm }) => {
     const [isExpanded, setIsExpanded] = useState(true);
 
     if (nodes.length === 0) return null;
@@ -84,7 +92,7 @@ const TreeSection: React.FC<{ title: string; icon: React.ReactNode; nodes: TreeN
             {isExpanded && (
                 <div className="border-l border-slate-800 ml-4">
                     {nodes.map((node, i) => (
-                        <TreeNodeItem key={i} node={node} level={0} />
+                        <TreeNodeItem key={i} node={node} level={0} searchTerm={searchTerm} />
                     ))}
                 </div>
             )}
@@ -92,7 +100,7 @@ const TreeSection: React.FC<{ title: string; icon: React.ReactNode; nodes: TreeN
     );
 };
 
-const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges }) => {
+const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, searchTerm = '' }) => {
     
     const { classRoots, objPropRoots, dataPropRoots, datatypes } = useMemo(() => {
         const nodeMap = new Map(nodes.map(n => [n.id, n]));
@@ -232,10 +240,10 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges }) =
                     </p>
                 </div>
 
-                <TreeSection title="Class Hierarchy" icon={<Database size={16} className="text-purple-400"/>} nodes={classRoots} />
-                <TreeSection title="Object Properties" icon={<ArrowRightLeft size={16} className="text-blue-400"/>} nodes={objPropRoots} />
-                <TreeSection title="Data Properties" icon={<Tag size={16} className="text-green-400"/>} nodes={dataPropRoots} />
-                <TreeSection title="Datatypes" icon={<FileType size={16} className="text-amber-400"/>} nodes={datatypes} />
+                <TreeSection title="Class Hierarchy" icon={<Database size={16} className="text-purple-400"/>} nodes={classRoots} searchTerm={searchTerm} />
+                <TreeSection title="Object Properties" icon={<ArrowRightLeft size={16} className="text-blue-400"/>} nodes={objPropRoots} searchTerm={searchTerm} />
+                <TreeSection title="Data Properties" icon={<Tag size={16} className="text-green-400"/>} nodes={dataPropRoots} searchTerm={searchTerm} />
+                <TreeSection title="Datatypes" icon={<FileType size={16} className="text-amber-400"/>} nodes={datatypes} searchTerm={searchTerm} />
             </div>
         </div>
     );

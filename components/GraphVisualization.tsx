@@ -2,11 +2,12 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, RefreshCw, Move, Search, Maximize, X } from 'lucide-react';
+import { ZoomIn, ZoomOut, RefreshCw, Move, Maximize } from 'lucide-react';
 
 interface GraphVisualizationProps {
     nodes: Node<UMLNodeData>[];
     edges: Edge[];
+    searchTerm?: string;
 }
 
 interface D3Node extends d3.SimulationNodeDatum {
@@ -20,6 +21,7 @@ interface D3Node extends d3.SimulationNodeDatum {
     y?: number;
     fx?: number | null;
     fy?: number | null;
+    isMatch?: boolean;
 }
 
 interface D3Link extends d3.SimulationLinkDatum<D3Node> {
@@ -27,15 +29,12 @@ interface D3Link extends d3.SimulationLinkDatum<D3Node> {
     label: string;
 }
 
-const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges }) => {
+const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, searchTerm = '' }) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
     
-    // State for UI interactions
-    const [searchTerm, setSearchTerm] = useState('');
-    const [matchingNodes, setMatchingNodes] = useState<D3Node[]>([]);
     const [hoveredNode, setHoveredNode] = useState<D3Node | null>(null);
     const [tooltip, setTooltip] = useState<{x: number, y: number, content: React.ReactNode} | null>(null);
     
@@ -63,6 +62,39 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges })
             default: return 20;
         }
     };
+
+    // --- Search Logic ---
+    useEffect(() => {
+        if (!svgRef.current) return;
+        
+        const svg = d3.select(svgRef.current);
+        const nodeGroup = svg.selectAll('.node-group');
+        const linkGroup = svg.selectAll('.link-group');
+
+        if (searchTerm.trim()) {
+            const term = searchTerm.toLowerCase();
+            nodeGroup.style('opacity', (d: any) => {
+                const match = d.label.toLowerCase().includes(term);
+                return match ? 1 : 0.1;
+            });
+            // Also dim links unless connected to match? Simplest is just dim links
+            linkGroup.style('opacity', 0.1);
+            
+            // Highlight circles of matches
+            nodeGroup.select('circle')
+                .attr('stroke', (d: any) => d.label.toLowerCase().includes(term) ? '#facc15' : '#fff')
+                .attr('stroke-width', (d: any) => d.label.toLowerCase().includes(term) ? 4 : 2);
+
+        } else {
+            // Reset
+            nodeGroup.style('opacity', 1);
+            linkGroup.style('opacity', 1);
+            nodeGroup.select('circle')
+                .attr('stroke', '#fff')
+                .attr('stroke-width', 2);
+        }
+
+    }, [searchTerm]);
 
     // --- Graph Initialization ---
     useEffect(() => {
@@ -241,30 +273,33 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges })
                  });
             }
 
-            // Highlight Logic
-            const connectedSet = new Set<string>();
-            connectedSet.add(d.id);
-            if (adjList.current.has(d.id)) {
-                adjList.current.get(d.id)!.forEach(n => connectedSet.add(n));
-            }
+            // Highlight Logic (only if not filtering search)
+            if (!searchTerm.trim()) {
+                const connectedSet = new Set<string>();
+                connectedSet.add(d.id);
+                if (adjList.current.has(d.id)) {
+                    adjList.current.get(d.id)!.forEach(n => connectedSet.add(n));
+                }
 
-            // Dim others
-            node.transition().duration(200).style('opacity', o => connectedSet.has(o.id) ? 1 : 0.1);
-            link.transition().duration(200).style('opacity', o => 
-                (o.source as any).id === d.id || (o.target as any).id === d.id ? 1 : 0.05
-            );
-            linkLabelGroup.transition().duration(200).style('opacity', o => 
-                (o.source as any).id === d.id || (o.target as any).id === d.id ? 1 : 0.05
-            );
+                node.transition().duration(200).style('opacity', o => connectedSet.has(o.id) ? 1 : 0.1);
+                link.transition().duration(200).style('opacity', o => 
+                    (o.source as any).id === d.id || (o.target as any).id === d.id ? 1 : 0.05
+                );
+                linkLabelGroup.transition().duration(200).style('opacity', o => 
+                    (o.source as any).id === d.id || (o.target as any).id === d.id ? 1 : 0.05
+                );
+            }
 
         }).on('mouseleave', () => {
             setHoveredNode(null);
             setTooltip(null);
             
-            // Reset
-            node.transition().duration(200).style('opacity', 1);
-            link.transition().duration(200).style('opacity', 1);
-            linkLabelGroup.transition().duration(200).style('opacity', 1);
+            // Reset (respect search)
+            if (!searchTerm.trim()) {
+                node.transition().duration(200).style('opacity', 1);
+                link.transition().duration(200).style('opacity', 1);
+                linkLabelGroup.transition().duration(200).style('opacity', 1);
+            }
         });
 
         // Circle
@@ -352,83 +387,11 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges })
         );
     }, []);
 
-    // --- Search ---
-
-    useEffect(() => {
-        if (!searchTerm.trim()) {
-            setMatchingNodes([]);
-            return;
-        }
-        const matches = simulationNodes.current.filter(n => 
-            n.label.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-        setMatchingNodes(matches);
-    }, [searchTerm]);
-
-    const focusNode = (node: D3Node) => {
-        if (!svgRef.current || !zoomRef.current || !containerRef.current) return;
-        
-        const width = containerRef.current.clientWidth;
-        const height = containerRef.current.clientHeight;
-
-        d3.select(svgRef.current).transition().duration(750).call(
-            zoomRef.current.transform,
-            d3.zoomIdentity.translate(width / 2, height / 2).scale(1.5).translate(-(node.x ?? 0), -(node.y ?? 0))
-        );
-        
-        // Highlight temporarily
-        const nodeSel = d3.selectAll('.node-group').filter((d: any) => d.id === node.id);
-        const circle = nodeSel.select('circle');
-        
-        circle
-            .transition().duration(200).attr('stroke', '#fff').attr('stroke-width', 6)
-            .transition().delay(1000).duration(500).attr('stroke-width', 2);
-            
-        setSearchTerm(''); // Clear search to hide dropdown
-    };
-
     return (
         <div ref={containerRef} className="relative w-full h-full bg-slate-950 overflow-hidden group/canvas">
             
-            {/* Top Toolbar: Zoom & Search */}
-            <div className="absolute top-4 left-4 right-4 z-10 flex justify-between items-start pointer-events-none">
-                
-                {/* Left: Search Bar */}
-                <div className="flex flex-col gap-2 pointer-events-auto w-64 relative">
-                    <div className="bg-slate-800/90 backdrop-blur border border-slate-700 rounded-lg shadow-lg flex items-center px-3 py-2 gap-2 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all">
-                        <Search size={16} className="text-slate-400" />
-                        <input 
-                            className="bg-transparent border-none outline-none text-sm text-slate-200 placeholder-slate-500 w-full"
-                            placeholder="Find node..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                        {searchTerm && (
-                            <button onClick={() => setSearchTerm('')} className="text-slate-500 hover:text-white">
-                                <X size={14} />
-                            </button>
-                        )}
-                    </div>
-                    
-                    {/* Search Results Dropdown */}
-                    {matchingNodes.length > 0 && (
-                        <div className="absolute top-full mt-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2">
-                            {matchingNodes.map(node => (
-                                <button
-                                    key={node.id}
-                                    onClick={() => focusNode(node)}
-                                    className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-blue-600 hover:text-white flex items-center justify-between group"
-                                >
-                                    <span>{node.label}</span>
-                                    <span className="text-[10px] uppercase opacity-50 border border-slate-600 rounded px-1 group-hover:border-white/50">
-                                        {node.type.replace('owl_', '').substring(0, 3)}
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
+            {/* Top Toolbar: Search Hint or Legend */}
+            <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 pointer-events-none">
                 {/* Right: Legend */}
                 <div className="bg-slate-900/80 backdrop-blur border border-slate-800 p-3 rounded-lg text-xs text-slate-300 pointer-events-auto shadow-xl">
                     <h3 className="font-bold mb-2 text-slate-500 uppercase tracking-wider text-[10px]">Legend</h3>

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import ReactFlow, { 
   Node, 
   Edge, 
@@ -48,6 +48,7 @@ const Flow = () => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree'>('design');
   const [showIndividuals, setShowIndividuals] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -63,7 +64,20 @@ const Flow = () => {
       rules: []
   });
 
-  // --- Filtering Logic for Visibility ---
+  // --- Filtering & Search Logic for Visibility ---
+  
+  // Update nodes with search highlight status
+  useEffect(() => {
+      setNodes((nds) => nds.map(n => {
+          const isMatch = searchTerm && n.data.label.toLowerCase().includes(searchTerm.toLowerCase());
+          // Only update if changed to avoid loop
+          if (!!n.data.isSearchMatch !== !!isMatch) {
+              return { ...n, data: { ...n.data, isSearchMatch: !!isMatch } };
+          }
+          return n;
+      }));
+  }, [searchTerm, setNodes]);
+
   const visibleNodes = useMemo(() => {
       if (showIndividuals) return nodes;
       return nodes.filter(n => n.data.type !== ElementType.OWL_NAMED_INDIVIDUAL);
@@ -325,6 +339,8 @@ const Flow = () => {
         onViewChange={setViewMode}
         showIndividuals={showIndividuals}
         onToggleIndividuals={() => setShowIndividuals(!showIndividuals)}
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
       />
       
       <div className="flex flex-1 overflow-hidden">
@@ -391,6 +407,7 @@ const Flow = () => {
                     edges={edges} 
                     metadata={projectMetadata} 
                     onImportCode={handleCodeUpdate}
+                    searchTerm={searchTerm}
                 />
             </div>
         )}
@@ -400,6 +417,7 @@ const Flow = () => {
                 <GraphVisualization 
                     nodes={visibleNodes} 
                     edges={visibleEdges} 
+                    searchTerm={searchTerm}
                 />
             </div>
         )}
@@ -408,7 +426,8 @@ const Flow = () => {
             <div className="flex-1 h-full">
                 <MindmapVisualization 
                     nodes={visibleNodes} 
-                    edges={visibleEdges} 
+                    edges={visibleEdges}
+                    searchTerm={searchTerm}
                 />
             </div>
         )}
@@ -418,6 +437,7 @@ const Flow = () => {
                 <TreeVisualization 
                     nodes={visibleNodes} 
                     edges={visibleEdges} 
+                    searchTerm={searchTerm}
                 />
             </div>
         )}

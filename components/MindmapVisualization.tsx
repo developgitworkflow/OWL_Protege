@@ -7,6 +7,7 @@ import { ZoomIn, ZoomOut, RefreshCw, Maximize } from 'lucide-react';
 interface MindmapVisualizationProps {
     nodes: Node<UMLNodeData>[];
     edges: Edge[];
+    searchTerm?: string;
 }
 
 interface HierarchyNode {
@@ -17,7 +18,7 @@ interface HierarchyNode {
     _children?: HierarchyNode[]; // For collapsing
 }
 
-const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edges }) => {
+const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edges, searchTerm = '' }) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
@@ -132,11 +133,6 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
 
         const root = d3.hierarchy(rootData);
         
-        // Collapse generic depth
-        // root.descendants().forEach(d => {
-        //    if (d.depth > 2) d.children = null; 
-        // });
-
         const update = (source: any) => {
             const treeLayout = d3.tree().nodeSize([30, 150]); // height, width spacing
             treeLayout(root as any);
@@ -192,11 +188,35 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
             nodeUpdate.transition().duration(200)
                 .attr("transform", (d: any) => `translate(${d.y},${d.x})`);
 
+            // Apply Search Highlighting
             nodeUpdate.select("circle")
-                .style("fill", (d: any) => d._children ? "#fbbf24" : (
-                    d.data.type === ElementType.OWL_CLASS ? "#6366f1" : 
-                    d.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? "#ec4899" : "#64748b"
-                ));
+                .style("fill", (d: any) => {
+                    const match = searchTerm && d.data.name.toLowerCase().includes(searchTerm.toLowerCase());
+                    if (match) return "#facc15"; // Yellow for match
+                    if (d._children) return "#fbbf24";
+                    if (d.data.type === ElementType.OWL_CLASS) return "#6366f1";
+                    if (d.data.type === ElementType.OWL_NAMED_INDIVIDUAL) return "#ec4899";
+                    return "#64748b";
+                })
+                .style("stroke", (d: any) => {
+                    const match = searchTerm && d.data.name.toLowerCase().includes(searchTerm.toLowerCase());
+                    return match ? "#fff" : "#1e293b";
+                })
+                .style("stroke-width", (d: any) => {
+                    const match = searchTerm && d.data.name.toLowerCase().includes(searchTerm.toLowerCase());
+                    return match ? 3 : 2;
+                });
+            
+            // Dim text if searching
+            nodeUpdate.select("text")
+                .style("opacity", (d: any) => {
+                    if (!searchTerm) return 1;
+                    return d.data.name.toLowerCase().includes(searchTerm.toLowerCase()) ? 1 : 0.3;
+                })
+                .style("font-weight", (d: any) => {
+                    if (searchTerm && d.data.name.toLowerCase().includes(searchTerm.toLowerCase())) return "bold";
+                    return "normal";
+                });
 
             const nodeExit = node.exit().transition().duration(200)
                 .attr("transform", (d: any) => `translate(${source.y},${source.x})`)
@@ -223,6 +243,9 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
             
             linkUpdate.transition().duration(200)
                 .attr("d", (d: any) => diagonal(d.source, d.target));
+            
+            // Dim links on search
+            linkUpdate.style("opacity", searchTerm ? 0.1 : 1);
 
             link.exit().transition().duration(200)
                 .attr("d", (d: any) => {
@@ -251,7 +274,7 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
 
         update(root);
 
-    }, [rootData]);
+    }, [rootData, searchTerm]);
 
     const handleZoomIn = useCallback(() => {
         if (!svgRef.current || !zoomRef.current) return;

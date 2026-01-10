@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -14,6 +14,8 @@ interface TopBarProps {
     onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree') => void;
     showIndividuals: boolean;
     onToggleIndividuals: () => void;
+    searchTerm: string;
+    onSearchChange: (term: string) => void;
 }
 
 const TopBar: React.FC<TopBarProps> = ({ 
@@ -28,7 +30,9 @@ const TopBar: React.FC<TopBarProps> = ({
     currentView,
     onViewChange,
     showIndividuals,
-    onToggleIndividuals
+    onToggleIndividuals,
+    searchTerm,
+    onSearchChange
 }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
 
@@ -45,6 +49,29 @@ const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       <div className="flex items-center gap-4">
+         
+         {/* Search Bar */}
+         <div className="relative group hidden lg:block">
+             <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                 <Search size={14} className="text-slate-500 group-focus-within:text-blue-400 transition-colors" />
+             </div>
+             <input 
+                type="text" 
+                placeholder="Find item..." 
+                className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-md pl-8 pr-8 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 w-48 focus:w-64 transition-all"
+                value={searchTerm}
+                onChange={(e) => onSearchChange(e.target.value)}
+             />
+             {searchTerm && (
+                 <button 
+                    onClick={() => onSearchChange('')}
+                    className="absolute inset-y-0 right-0 pr-2 flex items-center text-slate-500 hover:text-white"
+                 >
+                     <X size={12} />
+                 </button>
+             )}
+         </div>
+
          <div className="hidden md:flex gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700/50">
             <button 
                 onClick={() => onViewChange('design')}

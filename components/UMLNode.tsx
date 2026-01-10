@@ -24,12 +24,14 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
       return 'bg-slate-800 text-slate-200 border-slate-700';
   }
 
-  // Visual state for selection
+  // Visual state for selection and search match
   const containerClasses = `
     group w-64 bg-slate-800 rounded-md text-xs font-sans overflow-hidden transition-all duration-300
     ${selected 
         ? 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] ring-1 ring-blue-500' 
-        : 'border-slate-600 shadow-lg hover:border-slate-500 hover:shadow-xl'
+        : data.isSearchMatch
+            ? 'border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)] ring-2 ring-yellow-400/50 scale-105 z-10'
+            : 'border-slate-600 shadow-lg hover:border-slate-500 hover:shadow-xl'
     }
     border
   `;

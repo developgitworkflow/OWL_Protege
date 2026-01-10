@@ -58,13 +58,17 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
   // Helper to format Resource (U)
   const fmt = (str: string | undefined, defaultPrefix = userPrefix) => {
       if (!str) return `${userPrefix}:Unknown`;
-      if (str.startsWith('http')) return `<${str}>`;
-      if (str.includes(':')) return str; // already prefixed
+      const trimmed = str.trim();
+      if (trimmed.startsWith('http')) return `<${trimmed}>`;
+      if (trimmed.includes(':')) return trimmed; // already prefixed
       
       // Table 3.2: OWL 2 RDF-Based Vocabulary Check
-      if (OWL_VOCABULARY.has(str)) return `owl:${str}`;
-      if (str.startsWith('xsd:')) return str;
-      return `${defaultPrefix}:${str.replace(/\s+/g, '_')}`;
+      if (OWL_VOCABULARY.has(trimmed)) return `owl:${trimmed}`;
+      if (trimmed.startsWith('xsd:')) return trimmed;
+      if (trimmed === 'true' || trimmed === 'false') return `"${trimmed}"^^xsd:boolean`;
+      if (!isNaN(Number(trimmed))) return `"${trimmed}"^^xsd:integer`;
+      
+      return `${defaultPrefix}:${trimmed.replace(/\s+/g, '_')}`;
   };
 
   const getNodeIRI = (node: Node<UMLNodeData>) => {
@@ -74,7 +78,140 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
   // Helper for T(SEQ y1 ... yn) -> ( T(y1) ... T(yn) )
   const formatList = (str: string) => {
       if (!str) return '()';
+      // If it contains Manchester operators, parsing as list is tricky.
+      // Assuming simple list for now if not expression.
       return `( ${str.split(' ').map(s => fmt(s)).join(' ')} )`;
+  };
+
+  /**
+   * RECURSIVE MANCHESTER PARSER TO TURTLE
+   * Generates Turtle structure (Resource or BNode) for a class expression string.
+   */
+  const parseManchesterExpression = (expr: string): string => {
+      let clean = expr.trim();
+      
+      // 1. Parentheses: (A and B)
+      // Strip outer parens if matched
+      if (clean.startsWith('(') && clean.endsWith(')')) {
+          // Verify they match
+          let depth = 0;
+          let matched = true;
+          for(let i=0; i<clean.length-1; i++) {
+              if (clean[i] === '(') depth++;
+              if (clean[i] === ')') depth--;
+              if (depth === 0) { matched = false; break; }
+          }
+          if (matched) return parseManchesterExpression(clean.substring(1, clean.length - 1));
+      }
+
+      // 2. Boolean Operators: 'or', 'and'
+      // We need to split by top-level operators
+      const splitByOp = (text: string, op: string) => {
+          const parts: string[] = [];
+          let current = '';
+          let depth = 0;
+          const opRegex = new RegExp(`^\\s+${op}\\s+`, 'i');
+          
+          let i = 0;
+          while (i < text.length) {
+              if (text[i] === '(') depth++;
+              if (text[i] === ')') depth--;
+              
+              if (depth === 0 && text.substring(i).match(opRegex)) {
+                  parts.push(current.trim());
+                  current = '';
+                  // consume op
+                  const match = text.substring(i).match(opRegex);
+                  i += match![0].length;
+                  continue;
+              }
+              current += text[i];
+              i++;
+          }
+          if (current) parts.push(current.trim());
+          return parts;
+      };
+
+      const orParts = splitByOp(clean, 'or');
+      if (orParts.length > 1) {
+          const bn = nextBn();
+          add(`${bn} rdf:type owl:Class .`);
+          const members = orParts.map(p => parseManchesterExpression(p)).join(' ');
+          add(`${bn} owl:unionOf ( ${members} ) .`);
+          return bn;
+      }
+
+      const andParts = splitByOp(clean, 'and');
+      if (andParts.length > 1) {
+          const bn = nextBn();
+          add(`${bn} rdf:type owl:Class .`);
+          const members = andParts.map(p => parseManchesterExpression(p)).join(' ');
+          add(`${bn} owl:intersectionOf ( ${members} ) .`);
+          return bn;
+      }
+
+      // 3. Negation: 'not'
+      if (clean.toLowerCase().startsWith('not ')) {
+          const target = clean.substring(4);
+          const bn = nextBn();
+          add(`${bn} rdf:type owl:Class .`);
+          add(`${bn} owl:complementOf ${parseManchesterExpression(target)} .`);
+          return bn;
+      }
+
+      // 4. Restrictions: property some/only/value/min/max C
+      // Regex to find "prop keyword target"
+      const restrictionRegex = /^([a-zA-Z0-9_:-]+)\s+(some|only|value|min|max|exactly)\s+(.*)$/i;
+      const match = clean.match(restrictionRegex);
+      
+      if (match) {
+          const prop = fmt(match[1]);
+          const type = match[2].toLowerCase();
+          const rest = match[3];
+          
+          const bn = nextBn();
+          add(`${bn} rdf:type owl:Restriction .`);
+          add(`${bn} owl:onProperty ${prop} .`);
+
+          if (type === 'some') {
+              if (rest.trim().toLowerCase() === 'self') {
+                  add(`${bn} owl:hasSelf "true"^^xsd:boolean .`);
+              } else {
+                  add(`${bn} owl:someValuesFrom ${parseManchesterExpression(rest)} .`);
+              }
+          } 
+          else if (type === 'only') {
+              add(`${bn} owl:allValuesFrom ${parseManchesterExpression(rest)} .`);
+          }
+          else if (type === 'value') {
+              add(`${bn} owl:hasValue ${fmt(rest)} .`);
+          }
+          else {
+              // Cardinality
+              // Format: "1 Class"
+              const cardMatch = rest.match(/^(\d+)\s+(.*)$/);
+              if (cardMatch) {
+                  const num = cardMatch[1];
+                  const target = cardMatch[2].trim();
+                  
+                  let pred = 'owl:cardinality';
+                  if (type === 'min') pred = target ? 'owl:minQualifiedCardinality' : 'owl:minCardinality';
+                  if (type === 'max') pred = target ? 'owl:maxQualifiedCardinality' : 'owl:maxCardinality';
+                  if (type === 'exactly') pred = target ? 'owl:qualifiedCardinality' : 'owl:cardinality';
+                  
+                  add(`${bn} ${pred} "${num}"^^xsd:nonNegativeInteger .`);
+                  
+                  if (target) {
+                      const onProp = target.startsWith('xsd:') ? 'owl:onDataRange' : 'owl:onClass';
+                      add(`${bn} ${onProp} ${parseManchesterExpression(target)} .`);
+                  }
+              }
+          }
+          return bn;
+      }
+
+      // 5. Fallback: Simple Named Class / Datatype
+      return fmt(clean);
   };
 
   // 1. Explicit Nodes
@@ -171,13 +308,17 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
               else {
                 // SubClassOf(CE1 CE2)
                 if (n === 'subclassof') {
-                     add(`${s} rdfs:subClassOf ${fmt(v)} .`);
+                     // Check if v is simple named class or expression
+                     const target = parseManchesterExpression(v);
+                     add(`${s} rdfs:subClassOf ${target} .`);
                 } 
                 else if (n === 'disjointwith') {
-                     add(`${s} owl:disjointWith ${fmt(v)} .`);
+                     const target = parseManchesterExpression(v);
+                     add(`${s} owl:disjointWith ${target} .`);
                 } 
                 else if (n === 'equivalentto' || n === 'equivalentclass') {
-                     add(`${s} owl:equivalentClass ${fmt(v)} .`);
+                     const target = parseManchesterExpression(v);
+                     add(`${s} owl:equivalentClass ${target} .`);
                 } 
                 else if (n === 'unionof') {
                      add(`${s} owl:unionOf ${formatList(v)} .`);
@@ -204,34 +345,11 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
                      add(`${s} owl:differentFrom ${fmt(v)} .`);
                 }
                 else {
-                    // Implicit Restrictions
-                    const parts = v.split(' ');
-                    if (parts.length >= 1) {
-                        const quantifier = parts[0].toLowerCase();
-                        const targetStr = parts.slice(1).join(' '); 
-                        const bn = nextBn();
-                        add(`${s} rdfs:subClassOf ${bn} .`);
-                        add(`${bn} rdf:type owl:Restriction .`);
-                        add(`${bn} owl:onProperty ${fmt(name)} .`);
-
-                        if (quantifier === 'some') add(`${bn} owl:someValuesFrom ${fmt(targetStr)} .`);
-                        else if (quantifier === 'only' || quantifier === 'all') add(`${bn} owl:allValuesFrom ${fmt(targetStr)} .`);
-                        else if (quantifier === 'value' || quantifier === 'hasvalue') add(`${bn} owl:hasValue ${targetStr.startsWith('"') ? targetStr : fmt(targetStr)} .`);
-                        else if (quantifier === 'self') add(`${bn} owl:hasSelf "true"^^xsd:boolean .`);
-                        else if (['min', 'max', 'exactly', 'cardinality'].includes(quantifier)) {
-                           const [num, ...rest] = targetStr.split(' ');
-                           const cls = rest.join(' ');
-                           let pred = '';
-                           let isQualified = cls.length > 0;
-                           if (quantifier === 'min') pred = isQualified ? 'owl:minQualifiedCardinality' : 'owl:minCardinality';
-                           else if (quantifier === 'max') pred = isQualified ? 'owl:maxQualifiedCardinality' : 'owl:maxCardinality';
-                           else pred = isQualified ? 'owl:qualifiedCardinality' : 'owl:cardinality';
-                           add(`${bn} ${pred} "${num}"^^xsd:nonNegativeInteger .`);
-                           if (isQualified) {
-                               const onProp = cls.startsWith('xsd:') ? 'owl:onDataRange' : 'owl:onClass';
-                               add(`${bn} ${onProp} ${fmt(cls)} .`);
-                           }
-                        }
+                    // Implicit Restrictions fallback (for "Legacy" simple string format)
+                    const target = parseManchesterExpression(v);
+                    // Assume subclass if unknown axiom type but valid expression
+                    if (target) {
+                        add(`${s} rdfs:subClassOf ${target} .`);
                     }
                 }
               }

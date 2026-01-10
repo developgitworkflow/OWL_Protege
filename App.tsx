@@ -29,6 +29,7 @@ import MindmapVisualization from './components/MindmapVisualization';
 import TreeVisualization from './components/TreeVisualization';
 import UMLVisualization from './components/UMLVisualization';
 import SWRLModal from './components/SWRLModal';
+import DLAxiomModal from './components/DLAxiomModal';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
 import { generateTurtle } from './services/owlMapper';
@@ -56,6 +57,7 @@ const Flow = () => {
   const [isValidationModalOpen, setIsValidationModalOpen] = useState(false);
   const [isDLQueryModalOpen, setIsDLQueryModalOpen] = useState(false);
   const [isSWRLModalOpen, setIsSWRLModalOpen] = useState(false);
+  const [isDLAxiomModalOpen, setIsDLAxiomModalOpen] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
 
   const [projectMetadata, setProjectMetadata] = useState<ProjectData>({ 
@@ -336,6 +338,7 @@ const Flow = () => {
         onValidate={handleValidate}
         onOpenDLQuery={() => setIsDLQueryModalOpen(true)}
         onOpenSWRL={() => setIsSWRLModalOpen(true)}
+        onOpenDLAxioms={() => setIsDLAxiomModalOpen(true)}
         currentView={viewMode}
         onViewChange={setViewMode}
         showIndividuals={showIndividuals}
@@ -496,6 +499,13 @@ const Flow = () => {
         onClose={() => setIsSWRLModalOpen(false)}
         projectData={projectMetadata}
         onUpdateProjectData={setProjectMetadata}
+        nodes={nodes}
+        edges={edges}
+      />
+
+      <DLAxiomModal 
+        isOpen={isDLAxiomModalOpen}
+        onClose={() => setIsDLAxiomModalOpen(false)}
         nodes={nodes}
         edges={edges}
       />

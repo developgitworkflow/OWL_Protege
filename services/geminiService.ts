@@ -159,3 +159,44 @@ export const explainDiagram = async (nodes: Node[], edges: Edge[]): Promise<stri
         return "Error analyzing diagram.";
     }
 }
+
+export const generateSWRLRule = async (description: string, ontologyContext: string): Promise<string | null> => {
+  if (!apiKey) return null;
+
+  const systemInstruction = `
+    You are an expert in Semantic Web Rule Language (SWRL).
+    Convert the user's natural language description into a valid SWRL rule.
+    
+    Ontology Context (Vocabulary you should try to use):
+    ${ontologyContext}
+
+    Syntax Rules:
+    1. Atoms: Class(?x), Property(?x, ?y), BuiltIn(?x, val).
+    2. Variables: Start with '?'.
+    3. Conjunction: ' ^ '.
+    4. Implication: ' -> '.
+    5. Strings: enclosed in double quotes.
+    6. Integers: standard numbers.
+    7. Built-ins: Use 'swrlb:' prefix (e.g., swrlb:greaterThan, swrlb:equal).
+    
+    Example Input: "If a person has an age greater than 18, they are an Adult"
+    Example Output: Person(?p) ^ hasAge(?p, ?age) ^ swrlb:greaterThan(?age, 18) -> Adult(?p)
+    
+    Return ONLY the rule string. No markdown, no explanations.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: description,
+      config: {
+        systemInstruction: systemInstruction,
+        temperature: 0.1, // Low temp for syntax precision
+      }
+    });
+    return response.text?.trim() || null;
+  } catch (error) {
+    console.error("Error generating SWRL:", error);
+    return null;
+  }
+};

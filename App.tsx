@@ -439,6 +439,8 @@ const Flow = () => {
         onClose={() => setIsSWRLModalOpen(false)}
         projectData={projectMetadata}
         onUpdateProjectData={setProjectMetadata}
+        nodes={nodes}
+        edges={edges}
       />
     </div>
   );

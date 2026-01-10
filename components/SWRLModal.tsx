@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { X, ScrollText, Plus, Trash2, Save, AlertCircle, ArrowRight, Check, Code } from 'lucide-react';
-import { ProjectData, SWRLRule } from '../types';
+import { X, ScrollText, Plus, Trash2, Save, AlertCircle, ArrowRight, Check, Code, Sparkles, Loader2 } from 'lucide-react';
+import { ProjectData, SWRLRule, ElementType, UMLNodeData } from '../types';
+import { Node, Edge } from 'reactflow';
+import { generateSWRLRule } from '../services/geminiService';
 
 interface SWRLModalProps {
   isOpen: boolean;
   onClose: () => void;
   projectData: ProjectData;
   onUpdateProjectData: (data: ProjectData) => void;
+  nodes?: Node<UMLNodeData>[]; // Optional for context
+  edges?: Edge[];
 }
 
-const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onUpdateProjectData }) => {
+const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onUpdateProjectData, nodes = [], edges = [] }) => {
   const [rules, setRules] = useState<SWRLRule[]>([]);
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   
@@ -17,6 +21,8 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
   const [editName, setEditName] = useState('');
   const [editExpression, setEditExpression] = useState('');
   const [editComment, setEditComment] = useState('');
+  const [naturalLanguage, setNaturalLanguage] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -33,6 +39,7 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
       setEditName(rule.name);
       setEditExpression(rule.expression);
       setEditComment(rule.comment || '');
+      setNaturalLanguage(''); // Reset generator input
       setError(null);
   };
 
@@ -80,6 +87,33 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
 
   const insertSymbol = (sym: string) => {
       setEditExpression(prev => prev + ' ' + sym + ' ');
+  };
+
+  const handleGenerateRule = async () => {
+      if (!naturalLanguage.trim()) return;
+      
+      setIsGenerating(true);
+      
+      // Build Context String from Nodes
+      const classes = nodes.filter(n => n.data.type === ElementType.OWL_CLASS).map(n => n.data.label).join(', ');
+      const properties = nodes
+          .filter(n => n.data.type === ElementType.OWL_OBJECT_PROPERTY || n.data.type === ElementType.OWL_DATA_PROPERTY)
+          .map(n => n.data.label).join(', ');
+      // Also get attributes that serve as data properties
+      const attributes = nodes.flatMap(n => n.data.attributes?.map(a => a.name) || []).join(', ');
+      
+      const context = `Classes: [${classes}]. Properties: [${properties}, ${attributes}]`;
+      
+      const generatedRule = await generateSWRLRule(naturalLanguage, context);
+      
+      if (generatedRule) {
+          setEditExpression(generatedRule);
+          if (!editComment) setEditComment(`Generated from: "${naturalLanguage}"`);
+      } else {
+          setError("Could not generate rule. Please try a different description.");
+      }
+      
+      setIsGenerating(false);
   };
 
   if (!isOpen) return null;
@@ -183,6 +217,34 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
                         {/* Editor Inputs */}
                         <div className="p-6 flex-1 overflow-y-auto space-y-6">
                             
+                            {/* AI Generation Section */}
+                            <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-4 rounded-lg border border-slate-700/50 relative overflow-hidden group">
+                                <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                                <div className="flex items-start gap-3">
+                                    <Sparkles className="text-blue-400 mt-1 shrink-0" size={18} />
+                                    <div className="flex-1 space-y-2">
+                                        <label className="text-xs font-bold text-blue-300 uppercase tracking-wider">Natural Language to SWRL</label>
+                                        <div className="flex gap-2">
+                                            <input 
+                                                className="flex-1 bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm text-slate-200 focus:border-blue-500 outline-none placeholder-slate-600"
+                                                placeholder="e.g. If a Person has age > 18, then they are an Adult."
+                                                value={naturalLanguage}
+                                                onChange={(e) => setNaturalLanguage(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleGenerateRule()}
+                                            />
+                                            <button 
+                                                onClick={handleGenerateRule}
+                                                disabled={isGenerating || !naturalLanguage.trim()}
+                                                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-medium text-sm transition-colors disabled:opacity-50 flex items-center gap-2 shadow-lg"
+                                            >
+                                                {isGenerating ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
+                                                Generate
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">

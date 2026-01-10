@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ScrollText, Plus, Trash2, Save, AlertCircle, ArrowRight, Check, Code, Sparkles, Loader2 } from 'lucide-react';
+import { X, ScrollText, Plus, Trash2, Save, AlertCircle, ArrowRight, Check, Code, Sparkles, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { ProjectData, SWRLRule, ElementType, UMLNodeData } from '../types';
 import { Node, Edge } from 'reactflow';
 import { generateSWRLRule } from '../services/geminiService';
@@ -13,6 +13,12 @@ interface SWRLModalProps {
   edges?: Edge[];
 }
 
+interface VerificationResult {
+    status: 'success' | 'warning' | 'error';
+    message: string;
+    issues: string[];
+}
+
 const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onUpdateProjectData, nodes = [], edges = [] }) => {
   const [rules, setRules] = useState<SWRLRule[]>([]);
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
@@ -24,6 +30,7 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
   const [naturalLanguage, setNaturalLanguage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
 
   useEffect(() => {
     if (projectData.rules) {
@@ -41,6 +48,7 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
       setEditComment(rule.comment || '');
       setNaturalLanguage(''); // Reset generator input
       setError(null);
+      setVerificationResult(null);
   };
 
   const handleAddRule = () => {
@@ -83,6 +91,7 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
       setRules(updatedRules);
       onUpdateProjectData({ ...projectData, rules: updatedRules });
       setError(null);
+      setVerificationResult(null);
   };
 
   const insertSymbol = (sym: string) => {
@@ -109,11 +118,116 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
       if (generatedRule) {
           setEditExpression(generatedRule);
           if (!editComment) setEditComment(`Generated from: "${naturalLanguage}"`);
+          setError(null);
+          setVerificationResult(null);
       } else {
           setError("Could not generate rule. Please try a different description.");
       }
       
       setIsGenerating(false);
+  };
+
+  const handleVerifyRule = () => {
+      const issues: string[] = [];
+      
+      // 1. Syntax Check
+      if (!editExpression.includes('->') && !editExpression.includes('→')) {
+          setVerificationResult({ status: 'error', message: "Syntax Error", issues: ["Missing implication arrow '->'"] });
+          return;
+      }
+
+      const parts = editExpression.split(/->|→/);
+      const body = parts[0];
+      const head = parts[1];
+
+      // Regex to capture Predicate(args)
+      const atomRegex = /([a-zA-Z0-9_:-]+)\s*\(([^)]+)\)/g;
+      
+      const getAtoms = (str: string) => {
+          const atoms: { pred: string, args: string[] }[] = [];
+          let match;
+          while ((match = atomRegex.exec(str)) !== null) {
+              atoms.push({ pred: match[1], args: match[2].split(',').map(s => s.trim()) });
+          }
+          return atoms;
+      };
+
+      const bodyAtoms = getAtoms(body);
+      const headAtoms = getAtoms(head);
+      
+      if (bodyAtoms.length === 0 && body.trim().length > 0) issues.push("Warning: Could not parse Body atoms. Check syntax.");
+      if (headAtoms.length === 0 && head.trim().length > 0) issues.push("Warning: Could not parse Head atoms. Check syntax.");
+
+      // 2. Vocabulary Check
+      const allAtoms = [...bodyAtoms, ...headAtoms];
+      const builtIns = ['swrlb:', 'swrl:'];
+
+      allAtoms.forEach(atom => {
+          const isBuiltIn = builtIns.some(p => atom.pred.startsWith(p));
+          if (isBuiltIn) return;
+
+          // Check if predicate exists in nodes
+          // We search by label (e.g. Person) or IRI fragment or Attribute Name (Data Props on Classes)
+          const node = nodes.find(n => {
+              // Direct Match
+              if (n.data.label === atom.pred) return true;
+              if (n.data.iri === atom.pred || (n.data.iri && n.data.iri.endsWith(`:${atom.pred}`) || n.data.iri.endsWith(`#${atom.pred}`))) return true;
+              
+              // Attribute Match (e.g. Class Person has attribute 'hasAge')
+              // Only if atom has 2 args (Property)
+              if (atom.args.length === 2 && n.data.attributes?.some(a => a.name === atom.pred)) return true;
+              
+              return false;
+          });
+
+          // Check Attributes in isolation if not found as Node
+          const isAttribute = !node && nodes.some(n => n.data.attributes?.some(a => a.name === atom.pred));
+
+          if (!node && !isAttribute) {
+              issues.push(`Entity '${atom.pred}' not found in ontology.`);
+          } else if (node) {
+              // Type Check
+              if (atom.args.length === 1) {
+                  // Class Atom: Expects Class
+                  if (node.data.type !== ElementType.OWL_CLASS) {
+                      issues.push(`Entity '${atom.pred}' is used as a Class (1 arg), but defined as ${node.data.type.replace('owl_', '')}.`);
+                  }
+              } else if (atom.args.length === 2) {
+                  // Property Atom: Expects Property
+                  if (node.data.type !== ElementType.OWL_OBJECT_PROPERTY && node.data.type !== ElementType.OWL_DATA_PROPERTY) {
+                      // It might be valid if it's a class with an attribute of this name, but we found the Class Node first?
+                      // If 'node' matched because of label 'Person', but 'pred' was 'Person' used with 2 args...
+                      // Wait, if pred is 'hasAge' and 'hasAge' is an attribute of Person, `node` found might be Person if names collide?
+                      // Unlikely. But if `node` found is the Property Node, check type.
+                      issues.push(`Entity '${atom.pred}' is used as a Property (2 args), but defined as ${node.data.type.replace('owl_', '')}.`);
+                  }
+              }
+          }
+      });
+
+      // 3. DL-Safety Check (Variables in Head must appear in Body)
+      const getVars = (atoms: { args: string[] }[]) => {
+          const vars = new Set<string>();
+          atoms.forEach(a => a.args.forEach(arg => {
+              if (arg.startsWith('?')) vars.add(arg);
+          }));
+          return vars;
+      };
+
+      const bodyVars = getVars(bodyAtoms);
+      const headVars = getVars(headAtoms);
+
+      headVars.forEach(v => {
+          if (!bodyVars.has(v)) {
+              issues.push(`Safety Violation: Variable '${v}' used in Head must also appear in Body (DL-Safe Rule).`);
+          }
+      });
+
+      if (issues.length > 0) {
+          setVerificationResult({ status: 'warning', message: "Verification found potential issues:", issues });
+      } else {
+          setVerificationResult({ status: 'success', message: "Rule is syntactically valid and compliant with ontology.", issues: [] });
+      }
   };
 
   if (!isOpen) return null;
@@ -202,7 +316,14 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
                                         onChange={(e) => setEditName(e.target.value)}
                                     />
                                 </div>
-                                <div className="flex-1 flex justify-end">
+                                <div className="flex-1 flex justify-end gap-2">
+                                    <button 
+                                        onClick={handleVerifyRule}
+                                        className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-slate-200 rounded text-sm font-medium transition-colors"
+                                    >
+                                        <ShieldCheck size={16} />
+                                        Verify
+                                    </button>
                                     <button 
                                         onClick={handleSaveCurrent}
                                         className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded text-sm font-medium shadow-sm transition-colors"
@@ -259,13 +380,34 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
                                 <textarea 
                                     className="w-full h-32 bg-slate-950 border border-slate-700 rounded-lg p-4 text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-mono leading-relaxed resize-none shadow-inner"
                                     value={editExpression}
-                                    onChange={(e) => setEditExpression(e.target.value)}
+                                    onChange={(e) => { setEditExpression(e.target.value); setVerificationResult(null); setError(null); }}
                                     placeholder="Person(?p) ^ hasAge(?p, ?age) ^ swrlb:greaterThan(?age, 18) -> Adult(?p)"
                                 />
                                 {error && (
                                     <div className="flex items-center gap-2 text-xs text-red-400 bg-red-950/30 p-2 rounded border border-red-900/50">
                                         <AlertCircle size={14} />
                                         {error}
+                                    </div>
+                                )}
+                                
+                                {/* Verification Report */}
+                                {verificationResult && (
+                                    <div className={`mt-2 rounded-lg p-3 border ${
+                                        verificationResult.status === 'success' 
+                                        ? 'bg-green-950/20 border-green-900/50 text-green-300' 
+                                        : 'bg-amber-950/20 border-amber-900/50 text-amber-300'
+                                    }`}>
+                                        <div className="flex items-center gap-2 mb-1 font-bold text-xs">
+                                            {verificationResult.status === 'success' ? <Check size={14} /> : <AlertTriangle size={14} />}
+                                            {verificationResult.message}
+                                        </div>
+                                        {verificationResult.issues.length > 0 && (
+                                            <ul className="list-disc list-inside text-xs opacity-90 space-y-0.5 ml-1">
+                                                {verificationResult.issues.map((iss, i) => (
+                                                    <li key={i}>{iss}</li>
+                                                ))}
+                                            </ul>
+                                        )}
                                     </div>
                                 )}
                             </div>

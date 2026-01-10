@@ -171,7 +171,9 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
           const node = nodes.find(n => {
               // Direct Match
               if (n.data.label === atom.pred) return true;
-              if (n.data.iri === atom.pred || (n.data.iri && n.data.iri.endsWith(`:${atom.pred}`) || n.data.iri.endsWith(`#${atom.pred}`))) return true;
+              // Safe check for IRI matching with correct operator precedence
+              if (n.data.iri === atom.pred) return true;
+              if (n.data.iri && (n.data.iri.endsWith(`:${atom.pred}`) || n.data.iri.endsWith(`#${atom.pred}`))) return true;
               
               // Attribute Match (e.g. Class Person has attribute 'hasAge')
               // Only if atom has 2 args (Property)

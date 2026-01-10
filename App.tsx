@@ -323,6 +323,11 @@ const Flow = () => {
       setIsValidationModalOpen(true);
   };
 
+  const handleOntologyUpdate = useCallback((newNodes: Node<UMLNodeData>[], newEdges: Edge[]) => {
+      setNodes(newNodes);
+      setEdges(newEdges);
+  }, [setNodes, setEdges]);
+
   const selectedNode = useMemo(() => {
       return nodes.find(n => n.id === selectedNodeId) || null;
   }, [nodes, selectedNodeId]);
@@ -508,6 +513,7 @@ const Flow = () => {
         onClose={() => setIsDLAxiomModalOpen(false)}
         nodes={nodes}
         edges={edges}
+        onUpdateOntology={handleOntologyUpdate}
       />
     </div>
   );

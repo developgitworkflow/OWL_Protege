@@ -27,6 +27,7 @@ import CodeViewer from './components/CodeViewer';
 import GraphVisualization from './components/GraphVisualization';
 import MindmapVisualization from './components/MindmapVisualization';
 import TreeVisualization from './components/TreeVisualization';
+import UMLVisualization from './components/UMLVisualization';
 import SWRLModal from './components/SWRLModal';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
@@ -46,7 +47,7 @@ const Flow = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree'>('design');
+  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml'>('design');
   const [showIndividuals, setShowIndividuals] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -315,7 +316,7 @@ const Flow = () => {
   };
 
   const handleValidate = () => {
-      const result = validateOntology(nodes, edges);
+      const result = validateOntology(nodes, edges, projectMetadata);
       setValidationResult(result);
       setIsValidationModalOpen(true);
   };
@@ -435,6 +436,16 @@ const Flow = () => {
         {viewMode === 'tree' && (
             <div className="flex-1 h-full">
                 <TreeVisualization 
+                    nodes={visibleNodes} 
+                    edges={visibleEdges} 
+                    searchTerm={searchTerm}
+                />
+            </div>
+        )}
+
+        {viewMode === 'uml' && (
+            <div className="flex-1 h-full">
+                <UMLVisualization 
                     nodes={visibleNodes} 
                     edges={visibleEdges} 
                     searchTerm={searchTerm}

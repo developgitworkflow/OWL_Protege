@@ -1,5 +1,5 @@
 import { Node, Edge } from 'reactflow';
-import { UMLNodeData, ElementType, Attribute, Method } from '../types';
+import { UMLNodeData, ElementType, Attribute, Method, ProjectData } from '../types';
 
 export type IssueSeverity = 'error' | 'warning' | 'info';
 
@@ -46,7 +46,7 @@ const isSetEquivalent = <T>(a: T[], b: T[], eq: (x: T, y: T) => boolean): boolea
     return true;
 };
 
-export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): ValidationResult => {
+export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[], metadata?: ProjectData): ValidationResult => {
   const issues: ValidationIssue[] = [];
 
   // --- 1. Build Index Maps ---
@@ -533,6 +533,88 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]): Val
               message: `This entity is structurally equivalent to ${duplicates.length} other entit${duplicates.length > 1 ? 'ies' : 'y'} (${duplicates.map(id => getLabel(id)).join(', ')}). This may indicate redundant definitions.`
           });
       }
+  }
+
+  // --- 9. SWRL Rule Validation ---
+  if (metadata?.rules) {
+      // Build vocabulary set for fast lookup
+      const validPredicates = new Set<string>();
+      nodes.forEach(n => {
+          validPredicates.add(n.data.label);
+          if (n.data.iri) validPredicates.add(n.data.iri);
+          // Add simplified versions (e.g. ex:Person -> Person)
+          if (n.data.label.includes(':')) validPredicates.add(n.data.label.split(':')[1]);
+          else validPredicates.add(n.data.label);
+          
+          // Attributes
+          n.data.attributes?.forEach(a => validPredicates.add(a.name));
+      });
+
+      metadata.rules.forEach(rule => {
+          // A. Syntax check
+          if (!rule.expression.includes('->') && !rule.expression.includes('→')) {
+              issues.push({
+                  id: `swrl-syntax-${rule.id}`,
+                  severity: 'error',
+                  title: 'Invalid SWRL Syntax',
+                  message: `Rule '${rule.name}' is missing implication arrow '->'.`
+              });
+              return;
+          }
+
+          // Atom Parser Regex
+          const atomRegex = /([a-zA-Z0-9_:-]+)\s*\(([^)]+)\)/g;
+          const getAtoms = (str: string) => {
+              const atoms: { pred: string, args: string[] }[] = [];
+              let match;
+              while ((match = atomRegex.exec(str)) !== null) {
+                  atoms.push({ pred: match[1], args: match[2].split(',').map(s => s.trim()) });
+              }
+              return atoms;
+          };
+
+          const parts = rule.expression.split(/->|→/);
+          const bodyAtoms = getAtoms(parts[0]);
+          const headAtoms = getAtoms(parts[1]);
+          const allAtoms = [...bodyAtoms, ...headAtoms];
+          const builtIns = ['swrlb:', 'swrl:'];
+
+          // B. Vocabulary Check
+          allAtoms.forEach(atom => {
+              const isBuiltIn = builtIns.some(p => atom.pred.startsWith(p));
+              if (!isBuiltIn && !validPredicates.has(atom.pred)) {
+                  issues.push({
+                      id: `swrl-vocab-${rule.id}-${atom.pred}`,
+                      severity: 'warning',
+                      title: 'Unknown Rule Entity',
+                      message: `Rule '${rule.name}' references '${atom.pred}', which is not found in the ontology.`
+                  });
+              }
+          });
+
+          // C. DL-Safety Check
+          const getVars = (atoms: { args: string[] }[]) => {
+              const vars = new Set<string>();
+              atoms.forEach(a => a.args.forEach(arg => {
+                  if (arg.startsWith('?')) vars.add(arg);
+              }));
+              return vars;
+          };
+
+          const bodyVars = getVars(bodyAtoms);
+          const headVars = getVars(headAtoms);
+
+          headVars.forEach(v => {
+              if (!bodyVars.has(v)) {
+                  issues.push({
+                      id: `swrl-safety-${rule.id}-${v}`,
+                      severity: 'error',
+                      title: 'DL-Safety Violation',
+                      message: `Rule '${rule.name}' uses variable '${v}' in the Head that does not appear in the Body.`
+                  });
+              }
+          });
+      });
   }
 
   return {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -10,8 +10,8 @@ interface TopBarProps {
     onValidate: () => void;
     onOpenDLQuery: () => void;
     onOpenSWRL: () => void;
-    currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree';
-    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree') => void;
+    currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml';
+    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml') => void;
     showIndividuals: boolean;
     onToggleIndividuals: () => void;
     searchTerm: string;
@@ -100,6 +100,13 @@ const TopBar: React.FC<TopBarProps> = ({
             >
                 <GitGraph size={12} />
                 Mindmap
+            </button>
+            <button 
+                onClick={() => onViewChange('uml')}
+                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'uml' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
+            >
+                <Box size={12} />
+                UML
             </button>
             <button 
                 onClick={() => onViewChange('tree')}

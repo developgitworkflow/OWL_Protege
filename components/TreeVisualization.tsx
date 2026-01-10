@@ -87,7 +87,7 @@ const TreeSection: React.FC<{ title: string; icon: React.ReactNode; nodes: TreeN
                 {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                 {icon}
                 <h3 className="font-bold text-xs uppercase tracking-wider">{title}</h3>
-                <span className="ml-auto text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-500">{nodes.length} Roots</span>
+                <span className="ml-auto text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-500">{nodes.length} Items</span>
             </div>
             {isExpanded && (
                 <div className="border-l border-slate-800 ml-4">
@@ -102,13 +102,13 @@ const TreeSection: React.FC<{ title: string; icon: React.ReactNode; nodes: TreeN
 
 const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, searchTerm = '' }) => {
     
-    const { classRoots, objPropRoots, dataPropRoots, datatypes } = useMemo(() => {
+    const { classRoots, objPropRoots, dataPropRoots, datatypes, individuals } = useMemo(() => {
         const nodeMap = new Map(nodes.map(n => [n.id, n]));
         
         // Relationships
         const subClassOf = new Map<string, string[]>(); // Parent -> Children
         const subPropOf = new Map<string, string[]>();
-        const instances = new Map<string, string[]>(); // Class -> Individuals
+        const classInstances = new Map<string, string[]>(); // Class -> Individuals
         
         // Track child status to find roots
         const isChildClass = new Set<string>();
@@ -132,8 +132,8 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
             }
             // Instantiation
             else if (['rdf:type', 'a'].includes(label)) {
-                if (!instances.has(t)) instances.set(t, []);
-                instances.get(t)!.push(s);
+                if (!classInstances.has(t)) classInstances.set(t, []);
+                classInstances.get(t)!.push(s);
             }
         });
 
@@ -152,8 +152,8 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
                 .filter(Boolean)
                 .map(c => buildClassTree(c!.id, newVisited));
             
-            // Instances
-            const childInstances = (instances.get(classId) || [])
+            // Instances (Nested in Class Tree)
+            const childInstances = (classInstances.get(classId) || [])
                 .map(iid => nodeMap.get(iid))
                 .filter(Boolean)
                 .map(i => ({
@@ -223,7 +223,13 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
             .map(n => ({ id: n.id, label: n.data.label, type: n.data.type, children: [] }))
             .sort((a,b) => a.label.localeCompare(b.label));
 
-        return { classRoots, objPropRoots, dataPropRoots, datatypes };
+        // 5. Individuals (All - Flat List)
+        const individuals = nodes
+            .filter(n => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL)
+            .map(n => ({ id: n.id, label: n.data.label, type: n.data.type, children: [] }))
+            .sort((a,b) => a.label.localeCompare(b.label));
+
+        return { classRoots, objPropRoots, dataPropRoots, datatypes, individuals };
 
     }, [nodes, edges]);
 
@@ -244,6 +250,7 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
                 <TreeSection title="Object Properties" icon={<ArrowRightLeft size={16} className="text-blue-400"/>} nodes={objPropRoots} searchTerm={searchTerm} />
                 <TreeSection title="Data Properties" icon={<Tag size={16} className="text-green-400"/>} nodes={dataPropRoots} searchTerm={searchTerm} />
                 <TreeSection title="Datatypes" icon={<FileType size={16} className="text-amber-400"/>} nodes={datatypes} searchTerm={searchTerm} />
+                <TreeSection title="Named Individuals" icon={<User size={16} className="text-pink-400"/>} nodes={individuals} searchTerm={searchTerm} />
             </div>
         </div>
     );

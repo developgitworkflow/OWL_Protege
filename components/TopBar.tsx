@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -9,6 +9,7 @@ interface TopBarProps {
     onOpenSettings: () => void;
     onValidate: () => void;
     onOpenDLQuery: () => void;
+    onOpenSWRL: () => void;
     currentView: 'design' | 'code' | 'graph' | 'mindmap';
     onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap') => void;
 }
@@ -21,6 +22,7 @@ const TopBar: React.FC<TopBarProps> = ({
     onOpenSettings, 
     onValidate,
     onOpenDLQuery,
+    onOpenSWRL,
     currentView,
     onViewChange
 }) => {
@@ -96,6 +98,15 @@ const TopBar: React.FC<TopBarProps> = ({
          >
             <Search size={16} />
             <span className="hidden sm:inline">DL Query</span>
+         </button>
+
+         <button 
+            onClick={onOpenSWRL}
+            className="flex items-center gap-2 text-sm font-medium text-amber-400 hover:text-amber-300 transition-colors"
+            title="SWRL Rules"
+         >
+            <ScrollText size={16} />
+            <span className="hidden sm:inline">Rules</span>
          </button>
 
          {/* Export Dropdown */}

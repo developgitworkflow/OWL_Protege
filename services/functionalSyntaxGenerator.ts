@@ -1,5 +1,6 @@
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, ProjectData } from '../types';
+import { convertRuleToFunctional } from './swrlService';
 
 export const generateFunctionalSyntax = (nodes: Node<UMLNodeData>[], edges: Edge[], metadata: ProjectData): string => {
     const lines: string[] = [];
@@ -14,6 +15,8 @@ export const generateFunctionalSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
     lines.push(`Prefix( xml:=<http://www.w3.org/XML/1998/namespace> )`);
     lines.push(`Prefix( rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#> )`);
     lines.push(`Prefix( rdfs:=<http://www.w3.org/2000/01/rdf-schema#> )`);
+    lines.push(`Prefix( swrl:=<http://www.w3.org/2003/11/swrl#> )`);
+    lines.push(`Prefix( swrlb:=<http://www.w3.org/2003/11/swrlb#> )`);
     lines.push(`Prefix( : =<${baseIRI}> )`); 
     if (prefix !== ':') lines.push(`Prefix( ${prefix}:=<${baseIRI}> )`);
     
@@ -102,7 +105,7 @@ export const generateFunctionalSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
             const fmtTarget = tokens.map(p => {
                  // Skip keywords
                  if (['ObjectUnionOf', 'ObjectIntersectionOf', 'ObjectOneOf', 'DataUnionOf', 'DataIntersectionOf', 'DataOneOf'].some(k => p.includes(k))) return p;
-                 if (p.startsWith('xsd:') || p.startsWith('owl:') || p.startsWith('rdf:') || p.startsWith('rdfs:')) return p;
+                 if (p.startsWith('xsd:') || p.startsWith('owl:') || p.startsWith('rdf:') || p.startsWith('rdfs:') || p.startsWith('swrl:') || p.startsWith('swrlb:')) return p;
                  if (p.startsWith('<') || p.includes(':')) return p;
                  if (p.match(/^[a-zA-Z0-9_]+$/) && !['some', 'only', 'value', 'min', 'max', 'exactly', 'that', 'not', 'and', 'or'].includes(p.toLowerCase())) return `:${p}`;
                  return p;
@@ -179,6 +182,18 @@ export const generateFunctionalSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
             }
         }
     });
+
+    // 5. SWRL Rules
+    if (metadata.rules && metadata.rules.length > 0) {
+        lines.push('');
+        lines.push(`${indent(1)}# SWRL Rules`);
+        metadata.rules.forEach(rule => {
+             const functionalRule = convertRuleToFunctional(rule, prefix === ':' ? ':' : prefix + ':');
+             if (functionalRule) {
+                 lines.push(`${indent(1)}${functionalRule}`);
+             }
+        });
+    }
 
     lines.push(')');
     return lines.join('\n');

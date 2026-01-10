@@ -26,6 +26,7 @@ import DLQueryModal from './components/DLQueryModal';
 import CodeViewer from './components/CodeViewer';
 import GraphVisualization from './components/GraphVisualization';
 import MindmapVisualization from './components/MindmapVisualization';
+import SWRLModal from './components/SWRLModal';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
 import { generateTurtle } from './services/owlMapper';
@@ -50,12 +51,14 @@ const Flow = () => {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isValidationModalOpen, setIsValidationModalOpen] = useState(false);
   const [isDLQueryModalOpen, setIsDLQueryModalOpen] = useState(false);
+  const [isSWRLModalOpen, setIsSWRLModalOpen] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
 
   const [projectMetadata, setProjectMetadata] = useState<ProjectData>({ 
       name: 'Untitled Project',
       baseIri: 'http://example.org/ontology#',
-      defaultPrefix: 'ex'
+      defaultPrefix: 'ex',
+      rules: []
   });
 
   const onConnect = useCallback((params: Connection) => {
@@ -263,7 +266,8 @@ const Flow = () => {
     setProjectMetadata({
         ...data,
         baseIri: data.baseIri || 'http://example.org/ontology#',
-        defaultPrefix: data.defaultPrefix || 'ex'
+        defaultPrefix: data.defaultPrefix || 'ex',
+        rules: []
     });
     
     if (data.file) {
@@ -301,6 +305,7 @@ const Flow = () => {
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onValidate={handleValidate}
         onOpenDLQuery={() => setIsDLQueryModalOpen(true)}
+        onOpenSWRL={() => setIsSWRLModalOpen(true)}
         currentView={viewMode}
         onViewChange={setViewMode}
       />
@@ -427,6 +432,13 @@ const Flow = () => {
         onClose={() => setIsDLQueryModalOpen(false)}
         nodes={nodes}
         edges={edges}
+      />
+
+      <SWRLModal 
+        isOpen={isSWRLModalOpen}
+        onClose={() => setIsSWRLModalOpen(false)}
+        projectData={projectMetadata}
+        onUpdateProjectData={setProjectMetadata}
       />
     </div>
   );

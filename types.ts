@@ -38,6 +38,14 @@ export interface Method {
   annotations?: Annotation[]; // Annotations on the axiom
 }
 
+export interface SWRLRule {
+  id: string;
+  name: string; // Rule ID/Label
+  expression: string; // Human readable: Person(?x) ^ hasAge(?x, ?y) -> Adult(?x)
+  comment?: string;
+  annotations?: Annotation[];
+}
+
 export interface UMLNodeData {
   label: string;
   type: ElementType;
@@ -69,4 +77,5 @@ export interface ProjectData {
   defaultPrefix?: string;
   file?: File;
   annotations?: Annotation[]; // Annotations on the Ontology itself
+  rules?: SWRLRule[]; // SWRL Rules
 }

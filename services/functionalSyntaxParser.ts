@@ -1,5 +1,6 @@
 import { Node, Edge } from 'reactflow';
-import { UMLNodeData, ElementType, ProjectData } from '../types';
+import { UMLNodeData, ElementType, ProjectData, SWRLRule } from '../types';
+import { convertFunctionalToHuman } from './swrlService';
 
 // --- 1. Lexical Analysis (Tokenizer) ---
 
@@ -88,7 +89,9 @@ const STANDARD_PREFIXES: Record<string, string> = {
     'rdf:': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
     'rdfs:': 'http://www.w3.org/2000/01/rdf-schema#',
     'xsd:': 'http://www.w3.org/2001/XMLSchema#',
-    'owl:': 'http://www.w3.org/2002/07/owl#'
+    'owl:': 'http://www.w3.org/2002/07/owl#',
+    'swrl:': 'http://www.w3.org/2003/11/swrl#',
+    'swrlb:': 'http://www.w3.org/2003/11/swrlb#'
 };
 
 export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>[], edges: Edge[], metadata: ProjectData } => {
@@ -103,7 +106,7 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
     let current = 0;
     const nodes: Node<UMLNodeData>[] = [];
     const edges: Edge[] = [];
-    const metadata: ProjectData = { name: 'Imported Ontology', defaultPrefix: 'ex', baseIri: 'http://example.org/ontology#' };
+    const metadata: ProjectData = { name: 'Imported Ontology', defaultPrefix: 'ex', baseIri: 'http://example.org/ontology#', rules: [] };
     
     const prefixes: Record<string, string> = { ...STANDARD_PREFIXES };
     const declaredPrefixes = new Set<string>();
@@ -285,6 +288,30 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
                  const oId = getOrCreateNodeId(obj, ElementType.OWL_NAMED_INDIVIDUAL, true);
                  edges.push({ id: `e-${Math.random()}`, source: sId, target: oId, label: resolveIRI(prop), type: 'smoothstep' });
              }
+        }
+        else if (t.value === 'DLSafeRule') {
+             // Parse SWRL Rule
+             // Format: DLSafeRule( Annotation(...) Body(...) Head(...) )
+             consume(); 
+             const fullRuleStr = consumeBalanced(); // This gets everything inside DLSafeRule()
+             
+             // Extract optional annotation for comment
+             let comment = '';
+             const annMatch = fullRuleStr.match(/Annotation\s*\(\s*rdfs:comment\s+"([^"]+)"\s*\)/);
+             if (annMatch) comment = annMatch[1];
+             
+             // Convert functional body/head to human readable
+             const humanExpr = convertFunctionalToHuman(fullRuleStr);
+             
+             const newRule: SWRLRule = {
+                 id: `rule-${Math.random()}`,
+                 name: `Rule-${(metadata.rules?.length || 0) + 1}`,
+                 expression: humanExpr,
+                 comment: comment
+             };
+             
+             if (!metadata.rules) metadata.rules = [];
+             metadata.rules.push(newRule);
         }
         else {
             // Skip unknown axiom

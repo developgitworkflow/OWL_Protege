@@ -30,6 +30,7 @@ import TreeVisualization from './components/TreeVisualization';
 import UMLVisualization from './components/UMLVisualization';
 import SWRLModal from './components/SWRLModal';
 import DLAxiomModal from './components/DLAxiomModal';
+import ExpressivityModal from './components/ExpressivityModal';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
 import { generateTurtle } from './services/owlMapper';
@@ -58,6 +59,7 @@ const Flow = () => {
   const [isDLQueryModalOpen, setIsDLQueryModalOpen] = useState(false);
   const [isSWRLModalOpen, setIsSWRLModalOpen] = useState(false);
   const [isDLAxiomModalOpen, setIsDLAxiomModalOpen] = useState(false);
+  const [isExpressivityModalOpen, setIsExpressivityModalOpen] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
 
   const [projectMetadata, setProjectMetadata] = useState<ProjectData>({ 
@@ -344,6 +346,7 @@ const Flow = () => {
         onOpenDLQuery={() => setIsDLQueryModalOpen(true)}
         onOpenSWRL={() => setIsSWRLModalOpen(true)}
         onOpenDLAxioms={() => setIsDLAxiomModalOpen(true)}
+        onOpenExpressivity={() => setIsExpressivityModalOpen(true)}
         currentView={viewMode}
         onViewChange={setViewMode}
         showIndividuals={showIndividuals}
@@ -514,6 +517,13 @@ const Flow = () => {
         nodes={nodes}
         edges={edges}
         onUpdateOntology={handleOntologyUpdate}
+      />
+
+      <ExpressivityModal 
+        isOpen={isExpressivityModalOpen}
+        onClose={() => setIsExpressivityModalOpen(false)}
+        nodes={nodes}
+        edges={edges}
       />
     </div>
   );

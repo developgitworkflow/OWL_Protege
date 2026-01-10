@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -11,6 +11,7 @@ interface TopBarProps {
     onOpenDLQuery: () => void;
     onOpenSWRL: () => void;
     onOpenDLAxioms: () => void;
+    onOpenExpressivity: () => void;
     currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml';
     onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml') => void;
     showIndividuals: boolean;
@@ -29,6 +30,7 @@ const TopBar: React.FC<TopBarProps> = ({
     onOpenDLQuery,
     onOpenSWRL,
     onOpenDLAxioms,
+    onOpenExpressivity,
     currentView,
     onViewChange,
     showIndividuals,
@@ -126,6 +128,15 @@ const TopBar: React.FC<TopBarProps> = ({
              >
                 <ShieldCheck size={16} />
                 <span className="hidden xl:inline">Validate</span>
+             </button>
+
+             <button 
+                onClick={onOpenExpressivity}
+                className="flex items-center gap-2 text-sm font-medium text-pink-400 hover:text-pink-300 transition-colors"
+                title="Calculate DL Expressivity"
+             >
+                <Calculator size={16} />
+                <span className="hidden xl:inline">Calc</span>
              </button>
 
              <button 

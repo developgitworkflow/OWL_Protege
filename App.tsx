@@ -26,6 +26,7 @@ import DLQueryModal from './components/DLQueryModal';
 import CodeViewer from './components/CodeViewer';
 import GraphVisualization from './components/GraphVisualization';
 import MindmapVisualization from './components/MindmapVisualization';
+import TreeVisualization from './components/TreeVisualization';
 import SWRLModal from './components/SWRLModal';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
@@ -45,7 +46,7 @@ const Flow = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap'>('design');
+  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree'>('design');
   const [showIndividuals, setShowIndividuals] = useState(true);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -406,6 +407,15 @@ const Flow = () => {
         {viewMode === 'mindmap' && (
             <div className="flex-1 h-full">
                 <MindmapVisualization 
+                    nodes={visibleNodes} 
+                    edges={visibleEdges} 
+                />
+            </div>
+        )}
+
+        {viewMode === 'tree' && (
+            <div className="flex-1 h-full">
+                <TreeVisualization 
                     nodes={visibleNodes} 
                     edges={visibleEdges} 
                 />

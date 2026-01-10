@@ -46,6 +46,7 @@ const Flow = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap'>('design');
+  const [showIndividuals, setShowIndividuals] = useState(true);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -60,6 +61,19 @@ const Flow = () => {
       defaultPrefix: 'ex',
       rules: []
   });
+
+  // --- Filtering Logic for Visibility ---
+  const visibleNodes = useMemo(() => {
+      if (showIndividuals) return nodes;
+      return nodes.filter(n => n.data.type !== ElementType.OWL_NAMED_INDIVIDUAL);
+  }, [nodes, showIndividuals]);
+
+  const visibleEdges = useMemo(() => {
+      if (showIndividuals) return edges;
+      const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+      // Only show edges where both source and target are visible
+      return edges.filter(e => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target));
+  }, [edges, visibleNodes, showIndividuals]);
 
   const onConnect = useCallback((params: Connection) => {
       setEdges((eds) => addEdge({ 
@@ -308,6 +322,8 @@ const Flow = () => {
         onOpenSWRL={() => setIsSWRLModalOpen(true)}
         currentView={viewMode}
         onViewChange={setViewMode}
+        showIndividuals={showIndividuals}
+        onToggleIndividuals={() => setShowIndividuals(!showIndividuals)}
       />
       
       <div className="flex flex-1 overflow-hidden">
@@ -316,8 +332,8 @@ const Flow = () => {
                 <Sidebar />
                 <div className="flex-1 h-full relative" onDrop={onDrop} onDragOver={onDragOver}>
                     <ReactFlow
-                        nodes={nodes}
-                        edges={edges}
+                        nodes={visibleNodes}
+                        edges={visibleEdges}
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
                         onConnect={onConnect}
@@ -381,8 +397,8 @@ const Flow = () => {
         {viewMode === 'graph' && (
             <div className="flex-1 h-full">
                 <GraphVisualization 
-                    nodes={nodes} 
-                    edges={edges} 
+                    nodes={visibleNodes} 
+                    edges={visibleEdges} 
                 />
             </div>
         )}
@@ -390,8 +406,8 @@ const Flow = () => {
         {viewMode === 'mindmap' && (
             <div className="flex-1 h-full">
                 <MindmapVisualization 
-                    nodes={nodes} 
-                    edges={edges} 
+                    nodes={visibleNodes} 
+                    edges={visibleEdges} 
                 />
             </div>
         )}

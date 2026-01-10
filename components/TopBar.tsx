@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -12,6 +12,8 @@ interface TopBarProps {
     onOpenSWRL: () => void;
     currentView: 'design' | 'code' | 'graph' | 'mindmap';
     onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap') => void;
+    showIndividuals: boolean;
+    onToggleIndividuals: () => void;
 }
 
 const TopBar: React.FC<TopBarProps> = ({ 
@@ -24,7 +26,9 @@ const TopBar: React.FC<TopBarProps> = ({
     onOpenDLQuery,
     onOpenSWRL,
     currentView,
-    onViewChange
+    onViewChange,
+    showIndividuals,
+    onToggleIndividuals
 }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
 
@@ -71,6 +75,17 @@ const TopBar: React.FC<TopBarProps> = ({
                 Mindmap
             </button>
          </div>
+
+         <div className="h-6 w-px bg-slate-700 mx-2"></div>
+         
+         <button 
+            onClick={onToggleIndividuals}
+            className={`flex items-center gap-2 text-sm font-medium transition-colors ${showIndividuals ? 'text-pink-400 hover:text-pink-300' : 'text-slate-500 hover:text-slate-400'}`}
+            title={showIndividuals ? "Hide Individuals" : "Show Individuals"}
+         >
+            {showIndividuals ? <Eye size={16} /> : <EyeOff size={16} />}
+            <span className="hidden lg:inline">Individuals</span>
+         </button>
 
          <div className="h-6 w-px bg-slate-700 mx-2"></div>
          

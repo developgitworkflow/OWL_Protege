@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -14,8 +14,8 @@ interface TopBarProps {
     onOpenDLAxioms: () => void;
     onOpenExpressivity: () => void;
     onOpenDatalog: () => void;
-    currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml';
-    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml') => void;
+    currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce';
+    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce') => void;
     showIndividuals: boolean;
     onToggleIndividuals: () => void;
     searchTerm: string;
@@ -74,6 +74,14 @@ const TopBar: React.FC<TopBarProps> = ({
             >
                 <Box size={12} />
                 UML
+            </button>
+            <button 
+                onClick={() => onViewChange('peirce')}
+                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'peirce' ? 'bg-amber-900/50 text-amber-200 shadow border border-amber-800' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
+                title="Peirce Existential Graphs"
+            >
+                <Feather size={12} />
+                Peirce
             </button>
             <button 
                 onClick={() => onViewChange('graph')}

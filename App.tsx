@@ -29,6 +29,7 @@ import GraphVisualization from './components/GraphVisualization';
 import MindmapVisualization from './components/MindmapVisualization';
 import TreeVisualization from './components/TreeVisualization';
 import UMLVisualization from './components/UMLVisualization';
+import PeirceVisualization from './components/PeirceVisualization';
 import SWRLModal from './components/SWRLModal';
 import DLAxiomModal from './components/DLAxiomModal';
 import ExpressivityModal from './components/ExpressivityModal';
@@ -51,7 +52,7 @@ const Flow = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml'>('design');
+  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce'>('design');
   const [showIndividuals, setShowIndividuals] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -464,6 +465,15 @@ const Flow = () => {
                     nodes={visibleNodes} 
                     edges={visibleEdges} 
                     searchTerm={searchTerm}
+                />
+            </div>
+        )}
+
+        {viewMode === 'peirce' && (
+            <div className="flex-1 h-full">
+                <PeirceVisualization 
+                    nodes={visibleNodes} 
+                    edges={visibleEdges} 
                 />
             </div>
         )}

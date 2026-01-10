@@ -200,3 +200,44 @@ export const generateSWRLRule = async (description: string, ontologyContext: str
     return null;
   }
 };
+
+export const generateDLQuery = async (description: string, ontologyContext: string): Promise<string | null> => {
+  if (!apiKey) return null;
+
+  const systemInstruction = `
+    You are an expert in OWL 2 Manchester Syntax Description Logic queries.
+    Convert the user's natural language question into a valid DL query expression.
+
+    Ontology Context (Vocabulary you MUST use):
+    ${ontologyContext}
+
+    Syntax Rules (Manchester Syntax):
+    1. Intersection: 'and'
+    2. Union: 'or'
+    3. Negation: 'not'
+    4. Existential: 'property some Class'
+    5. Universal: 'property only Class'
+    6. Cardinality: 'property min n Class', 'property max n Class', 'property exactly n Class'
+    7. Has Value: 'property value Individual' or 'property value "literal"'
+
+    Example Input: "People who teach at least one course"
+    Example Output: Person and teaches some Course
+
+    Return ONLY the query string. No markdown, no explanations.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: description,
+      config: {
+        systemInstruction: systemInstruction,
+        temperature: 0.1,
+      }
+    });
+    return response.text?.trim() || null;
+  } catch (error) {
+    console.error("Error generating DL Query:", error);
+    return null;
+  }
+};

@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -12,6 +13,7 @@ interface TopBarProps {
     onOpenSWRL: () => void;
     onOpenDLAxioms: () => void;
     onOpenExpressivity: () => void;
+    onOpenDatalog: () => void;
     currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml';
     onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml') => void;
     showIndividuals: boolean;
@@ -31,6 +33,7 @@ const TopBar: React.FC<TopBarProps> = ({
     onOpenSWRL,
     onOpenDLAxioms,
     onOpenExpressivity,
+    onOpenDatalog,
     currentView,
     onViewChange,
     showIndividuals,
@@ -164,6 +167,15 @@ const TopBar: React.FC<TopBarProps> = ({
              >
                 <Sigma size={16} />
                 <span className="hidden xl:inline">Axioms</span>
+             </button>
+
+             <button 
+                onClick={onOpenDatalog}
+                className="flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+                title="Datalog Translation (Logic Programming)"
+             >
+                <Terminal size={16} />
+                <span className="hidden xl:inline">Datalog</span>
              </button>
          </div>
 

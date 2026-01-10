@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import ReactFlow, { 
   Node, 
@@ -31,6 +32,7 @@ import UMLVisualization from './components/UMLVisualization';
 import SWRLModal from './components/SWRLModal';
 import DLAxiomModal from './components/DLAxiomModal';
 import ExpressivityModal from './components/ExpressivityModal';
+import DatalogModal from './components/DatalogModal';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
 import { generateTurtle } from './services/owlMapper';
@@ -60,6 +62,7 @@ const Flow = () => {
   const [isSWRLModalOpen, setIsSWRLModalOpen] = useState(false);
   const [isDLAxiomModalOpen, setIsDLAxiomModalOpen] = useState(false);
   const [isExpressivityModalOpen, setIsExpressivityModalOpen] = useState(false);
+  const [isDatalogModalOpen, setIsDatalogModalOpen] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
 
   const [projectMetadata, setProjectMetadata] = useState<ProjectData>({ 
@@ -347,6 +350,7 @@ const Flow = () => {
         onOpenSWRL={() => setIsSWRLModalOpen(true)}
         onOpenDLAxioms={() => setIsDLAxiomModalOpen(true)}
         onOpenExpressivity={() => setIsExpressivityModalOpen(true)}
+        onOpenDatalog={() => setIsDatalogModalOpen(true)}
         currentView={viewMode}
         onViewChange={setViewMode}
         showIndividuals={showIndividuals}
@@ -522,6 +526,13 @@ const Flow = () => {
       <ExpressivityModal 
         isOpen={isExpressivityModalOpen}
         onClose={() => setIsExpressivityModalOpen(false)}
+        nodes={nodes}
+        edges={edges}
+      />
+
+      <DatalogModal 
+        isOpen={isDatalogModalOpen}
+        onClose={() => setIsDatalogModalOpen(false)}
         nodes={nodes}
         edges={edges}
       />

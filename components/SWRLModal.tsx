@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ScrollText, Plus, Trash2, Save, AlertCircle, ArrowRight, Check, Code, Sparkles, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { X, ScrollText, Plus, Trash2, Save, AlertCircle, ArrowRight, Check, Code, Sparkles, Loader2, ShieldCheck, AlertTriangle, Lightbulb } from 'lucide-react';
 import { ProjectData, SWRLRule, ElementType, UMLNodeData } from '../types';
 import { Node, Edge } from 'reactflow';
 import { generateSWRLRule } from '../services/geminiService';
@@ -18,6 +18,14 @@ interface VerificationResult {
     message: string;
     issues: string[];
 }
+
+const SWRL_EXAMPLES = [
+    { label: "Adult Classification", rule: "Person(?p) ^ hasAge(?p, ?age) ^ swrlb:greaterThan(?age, 17) -> Adult(?p)", desc: "Classifies a person as an Adult if age > 17." },
+    { label: "Uncle Definition", rule: "hasParent(?x, ?y) ^ hasBrother(?y, ?z) -> hasUncle(?x, ?z)", desc: "Infers uncle relationship via parent's brother." },
+    { label: "High Value Customer", rule: "Customer(?c) ^ totalPurchases(?c, ?t) ^ swrlb:greaterThan(?t, 1000) -> HighValue(?c)", desc: "Classifies customers based on purchase threshold." },
+    { label: "Sibling Relation", rule: "hasParent(?x, ?p) ^ hasParent(?y, ?p) -> Sibling(?x, ?y)", desc: "Infers sibling relationship if sharing a parent." },
+    { label: "Free Shipping", rule: "Order(?o) ^ totalWeight(?o, ?w) ^ swrlb:lessThan(?w, 10) -> FreeShipping(?o)", desc: "Business rule based on weight limit." }
+];
 
 const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onUpdateProjectData, nodes = [], edges = [] }) => {
   const [rules, setRules] = useState<SWRLRule[]>([]);
@@ -49,6 +57,16 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
       setNaturalLanguage(''); // Reset generator input
       setError(null);
       setVerificationResult(null);
+  };
+
+  const loadExample = (ex: typeof SWRL_EXAMPLES[0]) => {
+      setEditExpression(ex.rule);
+      setEditComment(ex.desc);
+      if (!editName || editName.startsWith('NewRule')) {
+          setEditName(ex.label.replace(/\s+/g, ''));
+      }
+      setVerificationResult(null);
+      setError(null);
   };
 
   const handleAddRule = () => {
@@ -424,14 +442,34 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
                                 />
                             </div>
 
-                            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-800">
-                                <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Cheat Sheet</h4>
-                                <ul className="text-xs text-slate-400 space-y-1 font-mono">
-                                    <li><span className="text-blue-400">Class Atom:</span> Person(?x)</li>
-                                    <li><span className="text-blue-400">Property Atom:</span> hasParent(?x, ?y)</li>
-                                    <li><span className="text-blue-400">Built-in:</span> swrlb:greaterThan(?age, 18)</li>
-                                    <li><span className="text-blue-400">Implication:</span> Body -&gt; Head</li>
-                                </ul>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-800">
+                                    <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Cheat Sheet</h4>
+                                    <ul className="text-xs text-slate-400 space-y-1 font-mono">
+                                        <li><span className="text-blue-400">Class Atom:</span> Person(?x)</li>
+                                        <li><span className="text-blue-400">Property Atom:</span> hasParent(?x, ?y)</li>
+                                        <li><span className="text-blue-400">Built-in:</span> swrlb:greaterThan(?age, 18)</li>
+                                        <li><span className="text-blue-400">Implication:</span> Body -&gt; Head</li>
+                                    </ul>
+                                </div>
+
+                                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-800">
+                                    <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider flex items-center gap-2">
+                                        <Lightbulb size={12} /> Templates
+                                    </h4>
+                                    <div className="space-y-1 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
+                                        {SWRL_EXAMPLES.map((ex, i) => (
+                                            <button 
+                                                key={i} 
+                                                onClick={() => loadExample(ex)}
+                                                className="w-full text-left px-2 py-1.5 rounded hover:bg-slate-700/50 group transition-colors border border-transparent hover:border-slate-700"
+                                            >
+                                                <div className="text-xs font-bold text-slate-300 group-hover:text-blue-300">{ex.label}</div>
+                                                <div className="text-[10px] text-slate-500 truncate font-mono">{ex.rule}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
 
                         </div>

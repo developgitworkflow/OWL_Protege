@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, Layers, X, Brain, ArrowRight, Tag, Info, BookOpen, Quote } from 'lucide-react';
+import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, Layers, X, Brain, ArrowRight, Tag, Info, BookOpen, Quote, Key, GitCommit, Split, Shield, Globe } from 'lucide-react';
 
 interface ConceptGraphProps {
     nodes: Node<UMLNodeData>[];
@@ -464,6 +464,18 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         }
     };
 
+    const highlightSyntax = (text: string) => {
+        if (!text) return null;
+        // Split by keywords, capturing them
+        const parts = text.split(/(\b(?:some|only|value|min|max|exactly|that|not|and|or)\b)/g);
+        return parts.map((part, i) => {
+            if (['some', 'only', 'value', 'min', 'max', 'exactly', 'that', 'not', 'and', 'or'].includes(part.toLowerCase())) {
+                return <span key={i} className="text-purple-400 font-bold">{part}</span>;
+            }
+            return <span key={i}>{part}</span>;
+        });
+    };
+
     // Calculate details for selected entity
     const selectedDetails = useMemo(() => {
         if (!selectedEntity) return null;
@@ -486,11 +498,50 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         // Filter Inferred
         const inferred = connectedEdges.filter(e => e.data?.isInferred);
         
+        // Categorize Axioms
+        const tboxAxioms: any[] = [];
+        const rboxAxioms: any[] = [];
+        const aboxAxioms: any[] = [];
+
+        if (originalNode) {
+            // Internal Methods
+            if (originalNode.data.methods) {
+                originalNode.data.methods.forEach(m => {
+                    const name = m.name.toLowerCase().replace(/[^a-z]/g, '');
+                    if (['subclassof', 'equivalentto', 'disjointwith', 'disjointunionof', 'haskey', 'oneof', 'unionof', 'intersectionof'].includes(name)) {
+                        tboxAxioms.push(m);
+                    } else if (['subpropertyof', 'inverseof', 'propertychainaxiom', 'domain', 'range'].includes(name)) {
+                        rboxAxioms.push(m);
+                    } else if (['type', 'sameas', 'differentfrom'].includes(name)) {
+                        aboxAxioms.push(m);
+                    } else {
+                        // Fallback
+                        if (originalNode?.data.type === ElementType.OWL_CLASS) tboxAxioms.push(m);
+                        else if (originalNode?.data.type === ElementType.OWL_OBJECT_PROPERTY) rboxAxioms.push(m);
+                        else aboxAxioms.push(m);
+                    }
+                });
+            }
+
+            // Convert Attributes to Axioms for display where appropriate
+            if (originalNode.data.attributes) {
+                originalNode.data.attributes.forEach(attr => {
+                    if (originalNode?.data.type === ElementType.OWL_OBJECT_PROPERTY || originalNode?.data.type === ElementType.OWL_DATA_PROPERTY) {
+                        // These are Characteristics -> RBox
+                        rboxAxioms.push({ id: attr.id, name: attr.name, returnType: 'True', isCharacteristic: true });
+                    }
+                });
+            }
+        }
+
         return {
             node: originalNode,
             simNode: selectedEntity,
             inferredEdges: inferred,
-            assertedEdges: connectedEdges.filter(e => !e.data?.isInferred)
+            assertedEdges: connectedEdges.filter(e => !e.data?.isInferred),
+            tbox: tboxAxioms,
+            rbox: rboxAxioms,
+            abox: aboxAxioms
         };
     }, [selectedEntity, nodes, edges]);
 
@@ -586,28 +637,6 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                             </div>
                         )}
 
-                        {/* Axioms / Formal Definitions */}
-                        {selectedDetails?.node?.data.methods && selectedDetails.node.data.methods.length > 0 && (
-                            <div>
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                    <BookOpen size={12} /> Axioms
-                                </h3>
-                                <div className="space-y-1">
-                                    {selectedDetails.node.data.methods.map(method => (
-                                        <div key={method.id} className="text-xs bg-slate-800/50 p-2 rounded border border-slate-800">
-                                            <div className="flex items-baseline gap-2 mb-0.5">
-                                                <span className="text-purple-400 font-bold text-[10px] uppercase">{method.name}</span>
-                                                {method.isOrdered && <span className="text-[8px] text-slate-500 bg-slate-900 px-1 rounded">Ordered</span>}
-                                            </div>
-                                            <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">
-                                                {method.returnType}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
                         {/* Annotations */}
                         {selectedDetails?.node?.data.annotations && selectedDetails.node.data.annotations.length > 0 && (
                             <div>
@@ -616,20 +645,96 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                                 </h3>
                                 <div className="space-y-1">
                                     {selectedDetails.node.data.annotations.map(ann => (
-                                        <div key={ann.id} className="text-xs bg-slate-800/50 p-2 rounded border border-slate-800">
-                                            <span className="text-blue-400 font-mono text-[10px] block mb-0.5">{ann.property}</span>
-                                            <span className="text-slate-300">{ann.value.replace(/"/g, '')}</span>
+                                        <div key={ann.id} className="text-xs bg-slate-800/50 p-2 rounded border border-slate-800 flex justify-between">
+                                            <div className="flex flex-col">
+                                                <span className="text-blue-400 font-mono text-[10px] block mb-0.5">{ann.property}</span>
+                                                <span className="text-slate-300">{ann.value.replace(/"/g, '')}</span>
+                                            </div>
+                                            {ann.language && (
+                                                <span className="text-[9px] text-slate-500 self-start bg-slate-900 px-1 rounded ml-2">@{ann.language}</span>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* Relationships (Asserted) */}
+                        {/* TBox: Schema Definitions */}
+                        {selectedDetails && selectedDetails.tbox.length > 0 && (
+                            <div>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <Database size={12} /> TBox (Schema)
+                                </h3>
+                                <div className="space-y-1">
+                                    {selectedDetails.tbox.map(method => (
+                                        <div key={method.id} className="text-xs bg-indigo-950/20 p-2 rounded border border-indigo-900/30">
+                                            <div className="flex items-baseline gap-2 mb-0.5">
+                                                {method.name.toLowerCase() === 'haskey' && <Key size={10} className="text-yellow-400" />}
+                                                {method.name.toLowerCase().includes('disjoint') && <Split size={10} className="text-red-400" />}
+                                                <span className="text-indigo-400 font-bold text-[10px] uppercase">{method.name}</span>
+                                            </div>
+                                            <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">
+                                                {highlightSyntax(method.returnType)}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* RBox: Property Definitions */}
+                        {selectedDetails && selectedDetails.rbox.length > 0 && (
+                            <div>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <BookOpen size={12} /> RBox (Properties)
+                                </h3>
+                                <div className="space-y-1">
+                                    {selectedDetails.rbox.map(method => (
+                                        <div key={method.id} className="text-xs bg-blue-950/20 p-2 rounded border border-blue-900/30">
+                                            <div className="flex items-baseline gap-2 mb-0.5">
+                                                {method.name.toLowerCase() === 'propertychainaxiom' && <GitCommit size={10} className="text-cyan-400" />}
+                                                {method.isCharacteristic && <Shield size={10} className="text-emerald-400" />}
+                                                <span className={`font-bold text-[10px] uppercase ${method.isCharacteristic ? 'text-emerald-400' : 'text-blue-400'}`}>
+                                                    {method.name}{method.isCharacteristic ? ' Property' : ''}
+                                                </span>
+                                            </div>
+                                            {!method.isCharacteristic && (
+                                                <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">
+                                                    {highlightSyntax(method.returnType)}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ABox: Assertions */}
+                        {selectedDetails && selectedDetails.abox.length > 0 && (
+                            <div>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <Globe size={12} /> ABox (Assertions)
+                                </h3>
+                                <div className="space-y-1">
+                                    {selectedDetails.abox.map(method => (
+                                        <div key={method.id} className="text-xs bg-pink-950/20 p-2 rounded border border-pink-900/30">
+                                            <div className="flex items-baseline gap-2 mb-0.5">
+                                                <span className="text-pink-400 font-bold text-[10px] uppercase">{method.name}</span>
+                                            </div>
+                                            <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">
+                                                {highlightSyntax(method.returnType)}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ABox: Fact Edges (Relationships) */}
                         {selectedDetails && selectedDetails.assertedEdges.length > 0 && (
                             <div>
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                    <ArrowRight size={12} /> Direct Relations
+                                    <ArrowRight size={12} /> Direct Facts
                                 </h3>
                                 <div className="space-y-1">
                                     {selectedDetails.assertedEdges.map(edge => {
@@ -649,8 +754,8 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                             </div>
                         )}
 
-                        {/* Data Properties / Values */}
-                        {selectedDetails?.node?.data.attributes && selectedDetails.node.data.attributes.length > 0 && (
+                        {/* ABox: Data Assertions / TBox: Data Props */}
+                        {selectedDetails?.node?.data.attributes && selectedDetails.node.data.attributes.length > 0 && selectedDetails.node.data.type !== ElementType.OWL_OBJECT_PROPERTY && selectedDetails.node.data.type !== ElementType.OWL_DATA_PROPERTY && (
                             <div>
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
                                     <Tag size={12} /> 

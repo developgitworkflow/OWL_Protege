@@ -103,7 +103,7 @@ const TreeSection: React.FC<{ title: string; icon: React.ReactNode; nodes: TreeN
 const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, searchTerm = '' }) => {
     
     const { classRoots, objPropRoots, dataPropRoots, datatypes, individuals } = useMemo(() => {
-        const nodeMap = new Map(nodes.map(n => [n.id, n]));
+        const nodeMap = new Map<string, Node<UMLNodeData>>(nodes.map(n => [n.id, n]));
         
         // Relationships
         const subClassOf = new Map<string, string[]>(); // Parent -> Children
@@ -201,32 +201,32 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
         // 1. Classes
         // Roots are OWL_CLASS nodes that are not in `isChildClass`
         const classRoots = nodes
-            .filter(n => n.data.type === ElementType.OWL_CLASS && !isChildClass.has(n.id))
-            .map(n => buildClassTree(n.id))
+            .filter((n: Node<UMLNodeData>) => n.data.type === ElementType.OWL_CLASS && !isChildClass.has(n.id))
+            .map((n: Node<UMLNodeData>) => buildClassTree(n.id))
             .sort((a,b) => a.label.localeCompare(b.label));
 
         // 2. Object Properties
         const objPropRoots = nodes
-            .filter(n => n.data.type === ElementType.OWL_OBJECT_PROPERTY && !isChildProp.has(n.id))
-            .map(n => buildPropTree(n.id))
+            .filter((n: Node<UMLNodeData>) => n.data.type === ElementType.OWL_OBJECT_PROPERTY && !isChildProp.has(n.id))
+            .map((n: Node<UMLNodeData>) => buildPropTree(n.id))
             .sort((a,b) => a.label.localeCompare(b.label));
 
         // 3. Data Properties
         const dataPropRoots = nodes
-            .filter(n => n.data.type === ElementType.OWL_DATA_PROPERTY && !isChildProp.has(n.id))
-            .map(n => buildPropTree(n.id))
+            .filter((n: Node<UMLNodeData>) => n.data.type === ElementType.OWL_DATA_PROPERTY && !isChildProp.has(n.id))
+            .map((n: Node<UMLNodeData>) => buildPropTree(n.id))
             .sort((a,b) => a.label.localeCompare(b.label));
 
         // 4. Datatypes (Flat list usually)
         const datatypes = nodes
-            .filter(n => n.data.type === ElementType.OWL_DATATYPE)
-            .map(n => ({ id: n.id, label: n.data.label, type: n.data.type, children: [] }))
+            .filter((n: Node<UMLNodeData>) => n.data.type === ElementType.OWL_DATATYPE)
+            .map((n: Node<UMLNodeData>) => ({ id: n.id, label: n.data.label, type: n.data.type, children: [] }))
             .sort((a,b) => a.label.localeCompare(b.label));
 
         // 5. Individuals (All - Flat List)
         const individuals = nodes
-            .filter(n => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL)
-            .map(n => ({ id: n.id, label: n.data.label, type: n.data.type, children: [] }))
+            .filter((n: Node<UMLNodeData>) => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL)
+            .map((n: Node<UMLNodeData>) => ({ id: n.id, label: n.data.label, type: n.data.type, children: [] }))
             .sort((a,b) => a.label.localeCompare(b.label));
 
         return { classRoots, objPropRoots, dataPropRoots, datatypes, individuals };

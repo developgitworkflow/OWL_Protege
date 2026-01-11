@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Search, Database, User, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Lightbulb, Sparkles, Loader2, ArrowRight, BookOpen, ExternalLink } from 'lucide-react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
 import { classifyOntology, executeDLQuery, QueryType } from '../services/reasonerService';
 import { generateDLQuery } from '../services/geminiService';
+import { generateManchesterSyntax } from '../services/manchesterSyntaxGenerator';
 import UMLNode from './UMLNode';
 
 interface DLQueryModalProps {
@@ -149,14 +151,14 @@ const DLQueryModal: React.FC<DLQueryModalProps> = ({ isOpen, onClose, nodes, edg
       
       setIsGenerating(true);
       
-      // Build Context String from Nodes
-      const classes = nodes.filter(n => n.data.type === ElementType.OWL_CLASS).map(n => n.data.label).join(', ');
-      const properties = nodes
-          .filter(n => n.data.type === ElementType.OWL_OBJECT_PROPERTY || n.data.type === ElementType.OWL_DATA_PROPERTY)
-          .map(n => n.data.label).join(', ');
-      const individuals = nodes.filter(n => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL).map(n => n.data.label).join(', ');
-      
-      const context = `Classes: [${classes}]. Properties: [${properties}]. Individuals: [${individuals}]`;
+      // Build Context String using Manchester Syntax Generator
+      // This provides the AI with the full structure (Classes, Properties, Axioms, Individuals)
+      // allowing it to infer relationships correctly.
+      const context = generateManchesterSyntax(nodes, edges, { 
+          name: 'QueryContext', 
+          baseIri: 'http://context.org#', 
+          defaultPrefix: '' 
+      });
       
       const generatedQuery = await generateDLQuery(naturalLanguage, context);
       

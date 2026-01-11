@@ -228,7 +228,7 @@ const ExpressivityModal: React.FC<ExpressivityModalProps> = ({ isOpen, onClose, 
 
             {/* Detailed Breakdown */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {Object.values(analysis.features).map((feat) => (
+                {(Object.values(analysis.features) as LogicFeature[]).map((feat) => (
                     <div 
                         key={feat.code} 
                         className={`p-4 rounded-lg border transition-all ${

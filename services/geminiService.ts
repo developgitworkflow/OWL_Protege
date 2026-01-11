@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { UMLNode, UMLNodeData, ElementType, Attribute, Method } from "../types";
 import { Node, Edge } from 'reactflow';
@@ -206,9 +207,9 @@ export const generateDLQuery = async (description: string, ontologyContext: stri
 
   const systemInstruction = `
     You are an expert in OWL 2 Manchester Syntax Description Logic queries.
-    Convert the user's natural language question into a valid DL query expression.
+    Convert the user's natural language question into a valid DL query expression based on the provided ontology.
 
-    Ontology Context (Vocabulary you MUST use):
+    Ontology Context (Manchester Syntax):
     ${ontologyContext}
 
     Syntax Rules (Manchester Syntax):
@@ -219,6 +220,13 @@ export const generateDLQuery = async (description: string, ontologyContext: stri
     5. Universal: 'property only Class'
     6. Cardinality: 'property min n Class', 'property max n Class', 'property exactly n Class'
     7. Has Value: 'property value Individual' or 'property value "literal"'
+    8. Inverse: 'inverse property'
+
+    Guidelines:
+    - Use the exact Class, Property, and Individual names defined in the Context.
+    - Infer relationships based on Domain, Range, and SubClassOf axioms found in the context.
+    - If asking for "Courses taught by X", and you only have "teaches", use "inverse teaches" or appropriate restrictions.
+    - Keep it concise.
 
     Example Input: "People who teach at least one course"
     Example Output: Person and teaches some Course

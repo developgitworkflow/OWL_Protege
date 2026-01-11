@@ -1,7 +1,8 @@
+
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { Database, User, FileType, ArrowRightLeft, Tag } from 'lucide-react';
+import { Database, User, FileType, ArrowRightLeft, Tag, Info } from 'lucide-react';
 
 const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
   const getIcon = () => {
@@ -15,6 +16,17 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
     }
   };
 
+  const getTooltipText = () => {
+      switch(data.type) {
+          case ElementType.OWL_CLASS: return "Class: A set of individuals sharing common characteristics.";
+          case ElementType.OWL_OBJECT_PROPERTY: return "Object Property: A relationship between two individuals.";
+          case ElementType.OWL_DATA_PROPERTY: return "Data Property: A relationship between an individual and a literal value.";
+          case ElementType.OWL_NAMED_INDIVIDUAL: return "Individual: A specific instance or object.";
+          case ElementType.OWL_DATATYPE: return "Datatype: A set of data values (e.g., integers, strings).";
+          default: return "";
+      }
+  };
+
   const getHeaderStyle = () => {
       if (data.type === ElementType.OWL_CLASS) return 'bg-purple-900/30 text-purple-200 border-purple-800/50';
       if (data.type === ElementType.OWL_OBJECT_PROPERTY) return 'bg-blue-900/30 text-blue-200 border-blue-800/50';
@@ -25,8 +37,9 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
   }
 
   // Visual state for selection and search match
+  // Removed overflow-hidden to allow tooltip to pop out
   const containerClasses = `
-    group w-64 bg-slate-800 rounded-md text-xs font-sans overflow-hidden transition-all duration-300
+    group w-64 bg-slate-800 rounded-md text-xs font-sans transition-all duration-300
     ${selected 
         ? 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] ring-1 ring-blue-500' 
         : data.isSearchMatch
@@ -67,7 +80,15 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
       />
       
       {/* Header */}
-      <div className={`px-3 py-2 border-b flex flex-col items-center justify-center backdrop-blur-sm ${getHeaderStyle()}`}>
+      <div className={`relative px-3 py-2 border-b flex flex-col items-center justify-center backdrop-blur-sm rounded-t-md group/header ${getHeaderStyle()}`}>
+        
+        {/* Tooltip */}
+        <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-2 bg-slate-900 text-slate-200 text-[10px] rounded shadow-xl border border-slate-700 opacity-0 group-hover/header:opacity-100 transition-opacity pointer-events-none z-50 w-max max-w-[200px] text-center">
+            {getTooltipText()}
+            {/* Arrow */}
+            <div className="absolute left-1/2 -bottom-1 w-2 h-2 bg-slate-900 border-r border-b border-slate-700 transform rotate-45 -translate-x-1/2"></div>
+        </div>
+
         <div className="flex items-center font-bold">
             {getIcon()}
             <span className="truncate">{data.label}</span>
@@ -123,7 +144,7 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
       </div>
 
       {/* Section 2: Axioms */}
-      <div className="px-3 py-2 min-h-[20px] bg-slate-800/50">
+      <div className="px-3 py-2 min-h-[20px] bg-slate-800/50 rounded-b-md">
         <div className="text-[9px] text-slate-500 uppercase font-semibold mb-1 tracking-wider">{section2Label}</div>
         {data.methods && data.methods.length > 0 ? (
           data.methods.map((method) => (

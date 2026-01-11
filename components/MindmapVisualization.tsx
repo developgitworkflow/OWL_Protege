@@ -30,7 +30,7 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
     useEffect(() => {
         if (nodes.length === 0) return;
 
-        const nodeMap = new Map(nodes.map(n => [n.id, n]));
+        const nodeMap = new Map<string, Node<UMLNodeData>>(nodes.map(n => [n.id, n]));
         const childrenMap = new Map<string, string[]>();
         const parentSet = new Set<string>();
 

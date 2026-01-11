@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
@@ -27,6 +28,7 @@ interface D3Node extends d3.SimulationNodeDatum {
 interface D3Link extends d3.SimulationLinkDatum<D3Node> {
     id: string;
     label: string;
+    isInferred: boolean;
 }
 
 const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, searchTerm = '' }) => {
@@ -119,7 +121,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
             id: e.id,
             source: e.source,
             target: e.target,
-            label: (typeof e.label === 'string' ? e.label : '').replace('owl:', '').replace('rdf:', '')
+            label: (typeof e.label === 'string' ? e.label : '').replace('owl:', '').replace('rdf:', ''),
+            isInferred: e.data?.isInferred || false
         }));
 
         // Build Adjacency List for fast neighbor lookup
@@ -153,6 +156,19 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
             .append("path")
             .attr("d", "M0,-5L10,0L0,5")
             .attr("fill", "#64748b");
+            
+        // Inferred Marker (Amber)
+        defs.append("marker")
+            .attr("id", "arrowhead-inferred")
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 28)
+            .attr("refY", 0)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("d", "M0,-5L10,0L0,5")
+            .attr("fill", "#fbbf24");
 
         // Main Group
         const g = svg.append("g");
@@ -186,10 +202,11 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
 
         const linkPath = link.append("path")
             .attr("class", "edge-path")
-            .attr("stroke", "#475569")
-            .attr("stroke-width", 2)
+            .attr("stroke", d => d.isInferred ? "#fbbf24" : "#475569")
+            .attr("stroke-width", d => d.isInferred ? 1.5 : 2)
+            .attr("stroke-dasharray", d => d.isInferred ? "5,5" : "none")
             .attr("fill", "none")
-            .attr("marker-end", "url(#arrowhead)");
+            .attr("marker-end", d => d.isInferred ? "url(#arrowhead-inferred)" : "url(#arrowhead)");
 
         const linkLabelGroup = link.append("g").attr("class", "edge-label");
         
@@ -197,13 +214,13 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
             .attr("rx", 4)
             .attr("ry", 4)
             .attr("fill", "#1e293b")
-            .attr("stroke", "#475569")
+            .attr("stroke", d => d.isInferred ? "#fbbf24" : "#475569")
             .attr("stroke-width", 1);
 
         linkLabelGroup.append("text")
             .attr("text-anchor", "middle")
             .attr("dy", "0.3em")
-            .attr("fill", "#cbd5e1")
+            .attr("fill", d => d.isInferred ? "#fbbf24" : "#cbd5e1")
             .attr("font-size", "9px")
             .text(d => d.label)
             .each(function() {
@@ -390,9 +407,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
     return (
         <div ref={containerRef} className="relative w-full h-full bg-slate-950 overflow-hidden group/canvas">
             
-            {/* Top Toolbar: Search Hint or Legend */}
+            {/* Top Toolbar: Legend */}
             <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 pointer-events-none">
-                {/* Right: Legend */}
                 <div className="bg-slate-900/80 backdrop-blur border border-slate-800 p-3 rounded-lg text-xs text-slate-300 pointer-events-auto shadow-xl">
                     <h3 className="font-bold mb-2 text-slate-500 uppercase tracking-wider text-[10px]">Legend</h3>
                     <div className="space-y-2">
@@ -400,6 +416,9 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
                         <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.6)]"></span> Individual</div>
                         <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span> Data Prop</div>
                         <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]"></span> Object Prop</div>
+                        <div className="h-px bg-slate-700 my-1"></div>
+                        <div className="flex items-center gap-2"><span className="w-6 h-0.5 bg-slate-500"></span> Asserted</div>
+                        <div className="flex items-center gap-2"><span className="w-6 h-0.5 border-t-2 border-dashed border-amber-400"></span> Inferred</div>
                     </div>
                 </div>
             </div>

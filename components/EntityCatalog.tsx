@@ -2,11 +2,13 @@
 import React, { useState, useMemo } from 'react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Method } from '../types';
-import { Database, ArrowRightLeft, Tag, User, FileType, Plus, Trash2, Search, Edit3, Settings, ArrowRight, GitMerge, List, BookOpen } from 'lucide-react';
+import { Database, ArrowRightLeft, Tag, User, FileType, Plus, Trash2, Search, Edit3, Settings, ArrowRight, GitMerge, List, BookOpen, Brain, AlertTriangle } from 'lucide-react';
 
 interface EntityCatalogProps {
     nodes: Node<UMLNodeData>[];
     edges: Edge[];
+    isReasonerActive?: boolean;
+    unsatisfiableNodeIds?: string[];
     onAddNode: (type: ElementType, label: string) => void;
     onDeleteNode: (id: string) => void;
     onSelectNode: (id: string) => void;
@@ -14,7 +16,7 @@ interface EntityCatalogProps {
 
 type TabType = 'classes' | 'objectProps' | 'dataProps' | 'individuals' | 'datatypes';
 
-const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, onAddNode, onDeleteNode, onSelectNode }) => {
+const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerActive, unsatisfiableNodeIds = [], onAddNode, onDeleteNode, onSelectNode }) => {
     const [activeTab, setActiveTab] = useState<TabType>('classes');
     const [searchTerm, setSearchTerm] = useState('');
     const [newName, setNewName] = useState('');
@@ -45,19 +47,28 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, onAddNode, 
     };
 
     const getRelationships = (node: Node<UMLNodeData>) => {
-        const rels: { type: string, values: string[] }[] = [];
+        const rels: { type: string, values: { label: string, inferred?: boolean }[] }[] = [];
 
         // 1. Classes
         if (node.data.type === ElementType.OWL_CLASS) {
             // Superclasses from Edges
             const parentEdges = edges.filter(e => e.source === node.id && (e.label === 'subClassOf' || e.label === 'rdfs:subClassOf'));
             if (parentEdges.length > 0) {
-                rels.push({ type: 'Parents', values: parentEdges.map(e => getNodeLabel(e.target)) });
+                rels.push({ 
+                    type: 'Parents', 
+                    values: parentEdges.map(e => ({ 
+                        label: getNodeLabel(e.target), 
+                        inferred: e.data?.isInferred 
+                    })) 
+                });
             }
-            // Disjointness (Implicit from edges or axioms handled by formatAxiom mostly, but explicit disjoint edges here)
+            // Disjointness
             const disjointEdges = edges.filter(e => (e.source === node.id || e.target === node.id) && (e.label === 'owl:disjointWith' || e.label === 'disjointWith'));
             if (disjointEdges.length > 0) {
-                 const disjoints = disjointEdges.map(e => e.source === node.id ? getNodeLabel(e.target) : getNodeLabel(e.source));
+                 const disjoints = disjointEdges.map(e => ({
+                     label: e.source === node.id ? getNodeLabel(e.target) : getNodeLabel(e.source),
+                     inferred: e.data?.isInferred
+                 }));
                  rels.push({ type: 'Disjoint', values: disjoints });
             }
         }
@@ -67,15 +78,28 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, onAddNode, 
             // Types
             const typeEdges = edges.filter(e => e.source === node.id && (e.label === 'rdf:type' || e.label === 'a'));
             if (typeEdges.length > 0) {
-                rels.push({ type: 'Types', values: typeEdges.map(e => getNodeLabel(e.target)) });
+                rels.push({ 
+                    type: 'Types', 
+                    values: typeEdges.map(e => ({
+                        label: getNodeLabel(e.target),
+                        inferred: e.data?.isInferred
+                    })) 
+                });
             }
         }
 
         // 3. Properties
         if (node.data.type === ElementType.OWL_OBJECT_PROPERTY || node.data.type === ElementType.OWL_DATA_PROPERTY) {
             // Characteristics
-            const chars = node.data.attributes.map(a => a.name);
+            const chars = node.data.attributes.map(a => ({ label: a.name, inferred: false }));
             if (chars.length > 0) rels.push({ type: 'Flags', values: chars });
+            
+            // Domains/Ranges (Inferred edges might exist for these if reasoning expanded them, but usually they are axioms)
+            const domains = node.data.methods.filter(m => m.name.toLowerCase() === 'domain').map(m => ({ label: m.returnType, inferred: false }));
+            const ranges = node.data.methods.filter(m => m.name.toLowerCase() === 'range').map(m => ({ label: m.returnType, inferred: false }));
+            
+            if (domains.length > 0) rels.push({ type: 'Domain', values: domains });
+            if (ranges.length > 0) rels.push({ type: 'Range', values: ranges });
         }
 
         return rels;
@@ -115,14 +139,22 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, onAddNode, 
     return (
         <div className="h-full bg-slate-950 flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="px-8 py-6 border-b border-slate-800 bg-slate-900">
-                <h2 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
-                    <Settings className="text-blue-500" />
-                    Entity Catalog
-                </h2>
-                <p className="text-slate-400 mt-1">
-                    Manage ontology vocabulary. Quickly create and organize classes, properties, and individuals.
-                </p>
+            <div className="px-8 py-6 border-b border-slate-800 bg-slate-900 flex justify-between items-start">
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
+                        <Settings className="text-blue-500" />
+                        Entity Catalog
+                    </h2>
+                    <p className="text-slate-400 mt-1">
+                        Manage ontology vocabulary. Quickly create and organize classes, properties, and individuals.
+                    </p>
+                </div>
+                {isReasonerActive && (
+                    <div className="flex items-center gap-2 bg-amber-900/30 border border-amber-700/50 text-amber-400 px-3 py-1.5 rounded-full text-xs font-bold animate-pulse shadow-lg">
+                        <Brain size={14} />
+                        Reasoner Active
+                    </div>
+                )}
             </div>
 
             {/* Main Layout */}
@@ -205,22 +237,24 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, onAddNode, 
                                     {filteredNodes.map(node => {
                                         const rels = getRelationships(node);
                                         const description = getDescription(node);
+                                        const isUnsatisfiable = unsatisfiableNodeIds.includes(node.id);
 
                                         return (
                                             <tr key={node.id} className="group hover:bg-slate-800/30 transition-colors">
                                                 {/* 1. Identity */}
                                                 <td className="p-4 align-top">
                                                     <div className="flex items-start gap-3">
-                                                        <div className={`p-2 rounded-lg bg-slate-950 border border-slate-800 ${currentTabInfo.color.replace('text-', 'text-opacity-80 text-')}`}>
-                                                            <currentTabInfo.icon size={16} />
+                                                        <div className={`p-2 rounded-lg bg-slate-950 border ${isUnsatisfiable ? 'border-red-500 text-red-500' : 'border-slate-800'} ${currentTabInfo.color.replace('text-', 'text-opacity-80 text-')}`}>
+                                                            {isUnsatisfiable ? <AlertTriangle size={16} /> : <currentTabInfo.icon size={16} />}
                                                         </div>
                                                         <div>
-                                                            <div className="text-sm font-bold text-slate-200 group-hover:text-white transition-colors">
+                                                            <div className={`text-sm font-bold group-hover:text-white transition-colors ${isUnsatisfiable ? 'text-red-400 line-through' : 'text-slate-200'}`}>
                                                                 {node.data.label}
                                                             </div>
                                                             <div className="text-[10px] font-mono text-slate-500 truncate max-w-[150px] mt-0.5" title={node.data.iri}>
                                                                 {node.data.iri || 'No explicit IRI'}
                                                             </div>
+                                                            {isUnsatisfiable && <span className="text-[9px] text-red-500 font-bold block mt-1">UNSATISFIABLE</span>}
                                                         </div>
                                                     </div>
                                                 </td>
@@ -233,8 +267,17 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, onAddNode, 
                                                                 <div key={idx} className="flex flex-wrap gap-1 items-baseline">
                                                                     <span className="text-[10px] uppercase font-bold text-slate-500 mr-1">{rel.type}:</span>
                                                                     {rel.values.map((v, vIdx) => (
-                                                                        <span key={vIdx} className="text-[11px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700">
-                                                                            {v}
+                                                                        <span 
+                                                                            key={vIdx} 
+                                                                            className={`text-[11px] px-1.5 py-0.5 rounded border flex items-center gap-1 ${
+                                                                                v.inferred && isReasonerActive
+                                                                                ? 'bg-amber-900/20 text-amber-300 border-amber-800/50' 
+                                                                                : 'bg-slate-800 text-slate-300 border-slate-700'
+                                                                            }`}
+                                                                            title={v.inferred ? 'Inferred by Reasoner' : undefined}
+                                                                        >
+                                                                            {v.label}
+                                                                            {v.inferred && isReasonerActive && <Brain size={8} className="text-amber-500" />}
                                                                         </span>
                                                                     ))}
                                                                 </div>

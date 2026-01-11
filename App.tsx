@@ -64,6 +64,7 @@ const Flow = () => {
   const [isReasonerActive, setIsReasonerActive] = useState(false);
   const [showInferred, setShowInferred] = useState(false);
   const [inferredEdges, setInferredEdges] = useState<Edge[]>([]);
+  const [unsatisfiableIds, setUnsatisfiableIds] = useState<string[]>([]);
   
   // Edge Tooltip State
   const [edgeTooltip, setEdgeTooltip] = useState<{ id: string, x: number, y: number, label: string, type?: string } | null>(null);
@@ -91,6 +92,7 @@ const Flow = () => {
           setIsReasonerActive(false);
           setShowInferred(false);
           setInferredEdges([]);
+          setUnsatisfiableIds([]);
       }
   }, [nodes, edges]);
 
@@ -100,14 +102,27 @@ const Flow = () => {
           setIsReasonerActive(false);
           setShowInferred(false);
           setInferredEdges([]);
+          setUnsatisfiableIds([]);
+          setValidationResult(null);
       } else {
-          // Activate
+          // 1. Consistency Check First
+          const result = validateOntology(nodes, edges, projectMetadata);
+          setValidationResult(result);
+          setUnsatisfiableIds(result.unsatisfiableNodeIds);
+
+          if (!result.isValid) {
+              // Found inconsistencies - Stop and Show Report
+              setIsValidationModalOpen(true);
+              return;
+          }
+
+          // 2. Classification & Inference (Only if Consistent)
           const inferred = computeInferredEdges(nodes, edges);
           setInferredEdges(inferred);
           setIsReasonerActive(true);
           setShowInferred(true);
       }
-  }, [nodes, edges, isReasonerActive]);
+  }, [nodes, edges, isReasonerActive, projectMetadata]);
 
   // Determine which edges to pass to visualizations
   const activeEdges = useMemo(() => {
@@ -444,6 +459,7 @@ const Flow = () => {
   const handleValidate = () => {
       const result = validateOntology(nodes, edges, projectMetadata);
       setValidationResult(result);
+      setUnsatisfiableIds(result.unsatisfiableNodeIds);
       setIsValidationModalOpen(true);
   };
 
@@ -564,7 +580,9 @@ const Flow = () => {
                 <div className="flex-1 overflow-hidden">
                     <EntityCatalog 
                         nodes={nodes}
-                        edges={edges}
+                        edges={activeEdges}
+                        isReasonerActive={isReasonerActive}
+                        unsatisfiableNodeIds={unsatisfiableIds}
                         onAddNode={handleCreateNode}
                         onDeleteNode={deleteNode}
                         onSelectNode={setSelectedNodeId}

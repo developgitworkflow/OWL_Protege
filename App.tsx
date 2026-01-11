@@ -32,6 +32,7 @@ import TreeVisualization from './components/TreeVisualization';
 import UMLVisualization from './components/UMLVisualization';
 import PeirceVisualization from './components/PeirceVisualization';
 import ConceptGraph from './components/ConceptGraph';
+import EntityCatalog from './components/EntityCatalog';
 import SWRLModal from './components/SWRLModal';
 import DLAxiomModal from './components/DLAxiomModal';
 import ExpressivityModal from './components/ExpressivityModal';
@@ -55,7 +56,7 @@ const Flow = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept'>('design');
+  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities'>('design');
   const [showIndividuals, setShowIndividuals] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -254,6 +255,29 @@ const Flow = () => {
       setNodes((nds) => [...nds, newNode]);
       setEdges((eds) => [...eds, newEdge]);
   }, [nodes, setNodes, setEdges]);
+
+  const handleCreateNode = useCallback((type: ElementType, label: string) => {
+      const newId = `node-${Date.now()}`;
+      
+      // Simple logic to prevent complete overlap by randomizing within a viewport range
+      const randomX = Math.random() * 600 + 100;
+      const randomY = Math.random() * 400 + 100;
+
+      const newNode: Node = {
+          id: newId,
+          type: 'umlNode',
+          position: { x: randomX, y: randomY },
+          data: {
+              label: label,
+              type: type,
+              attributes: [],
+              methods: [],
+              // Basic IRI generation based on project metadata or default
+              iri: `${projectMetadata.baseIri || 'http://example.org/ontology#'}${label.replace(/\s+/g, '_')}`
+          }
+      };
+      setNodes((nds) => [...nds, newNode]);
+  }, [setNodes, projectMetadata]);
 
   const onDiagramGenerated = useCallback((newNodes: Node[], newEdges: Edge[]) => {
       const normalizedNodes = normalizeOntology(newNodes);
@@ -533,6 +557,27 @@ const Flow = () => {
                     />
                 )}
             </>
+        )}
+
+        {viewMode === 'entities' && (
+            <div className="flex-1 h-full flex">
+                <div className="flex-1 overflow-hidden">
+                    <EntityCatalog 
+                        nodes={nodes}
+                        onAddNode={handleCreateNode}
+                        onDeleteNode={deleteNode}
+                        onSelectNode={setSelectedNodeId}
+                    />
+                </div>
+                {selectedNodeId && (
+                    <PropertiesPanel 
+                        selectedNode={selectedNode} 
+                        onUpdateNode={updateNodeData} 
+                        onDeleteNode={deleteNode}
+                        onCreateIndividual={handleCreateIndividual}
+                    />
+                )}
+            </div>
         )}
 
         {viewMode === 'code' && (

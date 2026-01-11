@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather, Workflow, Brain, CheckCircle2 } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather, Workflow, Brain, CheckCircle2, List } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -14,8 +14,8 @@ interface TopBarProps {
     onOpenDLAxioms: () => void;
     onOpenExpressivity: () => void;
     onOpenDatalog: () => void;
-    currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept';
-    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept') => void;
+    currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities';
+    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities') => void;
     showIndividuals: boolean;
     onToggleIndividuals: () => void;
     searchTerm: string;
@@ -75,6 +75,14 @@ const TopBar: React.FC<TopBarProps> = ({
             >
                 <Layers size={12} />
                 Design
+            </button>
+            <button 
+                onClick={() => onViewChange('entities')}
+                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'entities' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
+                title="Entity Catalog"
+            >
+                <List size={12} />
+                Catalog
             </button>
             <button 
                 onClick={() => onViewChange('concept')}

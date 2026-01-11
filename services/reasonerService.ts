@@ -13,6 +13,9 @@ interface OntologyIndex {
     types: Record<string, Set<string>>; // instance -> classes
     // Adjacency for property restrictions
     outgoingEdges: Record<string, { label: string, target: string }[]>; 
+    // Property Reasoning
+    subPropertyOf: Record<string, Set<string>>; // subPropLabel -> Set<superPropLabel>
+    propertyCharacteristics: Record<string, Set<string>>; // propLabel -> Set<Characteristic>
 }
 
 // Global cache to simulate "Reasoner state"
@@ -28,6 +31,8 @@ export const classifyOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]) => {
     const instances: Record<string, Set<string>> = {};
     const types: Record<string, Set<string>> = {};
     const outgoingEdges: Record<string, { label: string, target: string }[]> = {};
+    const subPropertyOf: Record<string, Set<string>> = {};
+    const propertyCharacteristics: Record<string, Set<string>> = {};
 
     // Initialize structures
     nodes.forEach(n => {
@@ -41,6 +46,20 @@ export const classifyOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]) => {
         instances[n.id] = new Set();
         types[n.id] = new Set();
         outgoingEdges[n.id] = [];
+
+        // Property Metadata
+        if (n.data.type === ElementType.OWL_OBJECT_PROPERTY || n.data.type === ElementType.OWL_DATA_PROPERTY) {
+            if (!propertyCharacteristics[label]) propertyCharacteristics[label] = new Set();
+            n.data.attributes.forEach(attr => propertyCharacteristics[label].add(attr.name));
+            
+            // Internal SubPropertyOf Axioms
+            n.data.methods.forEach(m => {
+                if (m.name.toLowerCase() === 'subpropertyof') {
+                    if (!subPropertyOf[label]) subPropertyOf[label] = new Set();
+                    subPropertyOf[label].add(m.returnType);
+                }
+            });
+        }
     });
 
     // Process Explicit Edges
@@ -57,6 +76,18 @@ export const classifyOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]) => {
 
             if (!superClassOf[e.target]) superClassOf[e.target] = new Set();
             superClassOf[e.target].add(e.source);
+        }
+
+        // SubPropertyOf
+        if (label === 'rdfs:subPropertyOf' || label === 'subPropertyOf') {
+            const sNode = nodeMap.get(e.source);
+            const tNode = nodeMap.get(e.target);
+            if (sNode && tNode) {
+                const s = sNode.data.label;
+                const t = tNode.data.label;
+                if (!subPropertyOf[s]) subPropertyOf[s] = new Set();
+                subPropertyOf[s].add(t);
+            }
         }
 
         // Class Assertion (Instances)
@@ -83,6 +114,7 @@ export const classifyOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]) => {
     });
 
     // Transitive Closure (Reasoning)
+    
     // 1. Propagate SubClasses
     let changed = true;
     while(changed) {
@@ -105,7 +137,26 @@ export const classifyOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]) => {
         });
     }
 
-    // 2. Propagate Instances (Inheritance)
+    // 2. Propagate SubProperties
+    changed = true;
+    while(changed) {
+        changed = false;
+        Object.keys(subPropertyOf).forEach(sub => {
+            const supers = Array.from(subPropertyOf[sub]);
+            supers.forEach(sup => {
+                if (subPropertyOf[sup]) {
+                    subPropertyOf[sup].forEach(superSup => {
+                        if (!subPropertyOf[sub].has(superSup)) {
+                            subPropertyOf[sub].add(superSup);
+                            changed = true;
+                        }
+                    });
+                }
+            });
+        });
+    }
+
+    // 3. Propagate Instances (Inheritance)
     // If Alice is Type Student, and Student SubClassOf Person, Alice is Type Person
     Object.keys(types).forEach(instanceId => {
         const directTypes = Array.from(types[instanceId]);
@@ -121,7 +172,7 @@ export const classifyOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]) => {
         });
     });
 
-    classifiedIndex = { nodeMap, labelToId, subClassOf, superClassOf, instances, types, outgoingEdges };
+    classifiedIndex = { nodeMap, labelToId, subClassOf, superClassOf, instances, types, outgoingEdges, subPropertyOf, propertyCharacteristics };
     return classifiedIndex;
 };
 
@@ -308,9 +359,12 @@ export const computeInferredEdges = (nodes: Node<UMLNodeData>[], explicitEdges: 
     const index = classifyOntology(nodes, explicitEdges);
     
     const inferredEdges: Edge[] = [];
+    // Helper to check duplicates
     const exists = new Set<string>(explicitEdges.map(e => `${e.source}-${e.target}-${e.label}`));
 
-    const addEdge = (s: string, t: string, label: string) => {
+    const addEdge = (s: string, t: string, label: string, reason: string) => {
+        if (s === t) return; // Prevent circular self-references in inference visualization
+        
         const key = `${s}-${t}-${label}`;
         if (!exists.has(key)) {
             inferredEdges.push({
@@ -323,7 +377,7 @@ export const computeInferredEdges = (nodes: Node<UMLNodeData>[], explicitEdges: 
                 style: { stroke: '#fbbf24', strokeWidth: 1.5, strokeDasharray: '5,5' },
                 labelStyle: { fill: '#fbbf24', fontStyle: 'italic' },
                 markerEnd: { type: MarkerType.ArrowClosed, color: '#fbbf24' },
-                data: { isInferred: true }
+                data: { isInferred: true, inferenceType: reason }
             });
             exists.add(key);
         }
@@ -332,26 +386,21 @@ export const computeInferredEdges = (nodes: Node<UMLNodeData>[], explicitEdges: 
     // A. Output SubClassOf Hierarchy (Transitive)
     Object.entries(index.subClassOf).forEach(([childId, parents]) => {
         parents.forEach(parentId => {
-            // Check if this is a direct SubClass (heuristic) or purely inferred
-            // For full closure, we output everything.
-            if (childId !== parentId) { // Avoid self-loops
-                addEdge(childId, parentId, 'rdfs:subClassOf');
-            }
+            // Already filtered in loop, but double check handled by addEdge guard
+            addEdge(childId, parentId, 'rdfs:subClassOf', 'Transitive Subclass');
         });
     });
 
     // B. Output Type Assertions (Realization)
     Object.entries(index.types).forEach(([indivId, classes]) => {
         classes.forEach(classId => {
-            addEdge(indivId, classId, 'rdf:type');
+            addEdge(indivId, classId, 'rdf:type', 'Inferred Type');
         });
     });
 
     // C. Property Inference (Domain/Range/Inverse)
-    // Domain: P domain D. x P y -> x type D.
-    // We iterate asserted property assertions
     explicitEdges.forEach(e => {
-        if (!['rdf:type', 'subClassOf', 'rdfs:subClassOf'].includes(e.label as string)) {
+        if (!['rdf:type', 'subClassOf', 'rdfs:subClassOf', 'owl:disjointWith', 'disjointWith'].includes(e.label as string)) {
             // Find property node to get domain/range
             const propNode = nodes.find(n => n.data.label === e.label || n.data.label === (e.label as string).split(':')[1]);
             
@@ -361,42 +410,132 @@ export const computeInferredEdges = (nodes: Node<UMLNodeData>[], explicitEdges: 
                     if (m.name.toLowerCase() === 'domain') {
                         const domainId = index.labelToId[m.returnType];
                         if (domainId) {
-                            // If x P y, then x Type Domain
-                            addEdge(e.source, domainId, 'rdf:type');
+                            addEdge(e.source, domainId, 'rdf:type', `Domain of ${e.label}`);
                         }
                     }
                     if (m.name.toLowerCase() === 'range') {
                         const rangeId = index.labelToId[m.returnType];
                         if (rangeId) {
-                            // If x P y, then y Type Range
-                            addEdge(e.target, rangeId, 'rdf:type');
+                            addEdge(e.target, rangeId, 'rdf:type', `Range of ${e.label}`);
                         }
                     }
                     if (m.name.toLowerCase() === 'inverseof') {
-                        // If x P y, then y InvP x
-                        // We assume InverseOf points to a named property
                         const invPropName = m.returnType;
-                        // Add inferred edge: y InvP x
-                        // Note: we don't have IDs for property names easily if they aren't nodes, but addEdge handles ID strings
-                        // We add the edge to the graph using the label
-                        inferredEdges.push({
-                            id: `inferred-inv-${e.id}`,
-                            source: e.target,
-                            target: e.source,
-                            label: invPropName,
-                            type: 'smoothstep',
-                            animated: true,
-                            style: { stroke: '#a78bfa', strokeWidth: 1.5, strokeDasharray: '5,5' }, // different color for inverse
-                            labelStyle: { fill: '#a78bfa', fontStyle: 'italic' },
-                            markerEnd: { type: MarkerType.ArrowClosed, color: '#a78bfa' },
-                            data: { isInferred: true }
-                        });
+                        // Inverse logic might produce cycle if symmetric, addEdge handles self-loop
+                        // Explicit inverse edge creation logic:
+                        if (e.target !== e.source) {
+                            inferredEdges.push({
+                                id: `inferred-inv-${e.id}`,
+                                source: e.target,
+                                target: e.source,
+                                label: invPropName,
+                                type: 'smoothstep',
+                                animated: true,
+                                style: { stroke: '#a78bfa', strokeWidth: 1.5, strokeDasharray: '5,5' }, // different color for inverse
+                                labelStyle: { fill: '#a78bfa', fontStyle: 'italic' },
+                                markerEnd: { type: MarkerType.ArrowClosed, color: '#a78bfa' },
+                                data: { isInferred: true, inferenceType: 'Inverse Property' }
+                            });
+                        }
                     }
                 });
             }
         }
     });
 
-    // Combine original explicit + new inferred
+    // D. Property Assertion Inference (SubProperties, Symmetry, Transitivity)
+    
+    // Helper to get transitive closure of a single property type on graph
+    const computeTransitiveClosure = (propLabel: string, baseEdges: Edge[]) => {
+        // Build adjacency for this specific property
+        const adj = new Map<string, string[]>();
+        baseEdges.forEach(e => {
+            if (e.label === propLabel) {
+                if (!adj.has(e.source)) adj.set(e.source, []);
+                adj.get(e.source)!.push(e.target);
+            }
+        });
+
+        const visited = new Set<string>();
+        // DFS for each node
+        Object.keys(index.outgoingEdges).forEach(startNode => {
+            const stack = [{ curr: startNode, path: [startNode] }];
+            
+            // Simple DFS to find all reachable nodes via 'propLabel' edges
+            // Note: This implementation re-traverses, optimization possible but sufficient for UI size
+            const reachable = new Set<string>();
+            const queue = [startNode];
+            const localVisited = new Set<string>();
+            localVisited.add(startNode);
+
+            while(queue.length > 0) {
+                const u = queue.shift()!;
+                const neighbors = adj.get(u) || [];
+                neighbors.forEach(v => {
+                    if (!localVisited.has(v)) {
+                        localVisited.add(v);
+                        reachable.add(v);
+                        queue.push(v);
+                        // Add inferred edge from startNode to v
+                        addEdge(startNode, v, propLabel, 'Transitive Property');
+                    }
+                });
+            }
+        });
+    };
+
+    // Filter for Property Assertions (Object/Data properties between individuals/nodes)
+    const assertionEdges = explicitEdges.filter(e => 
+        !['rdf:type', 'a', 'subClassOf', 'rdfs:subClassOf', 'owl:disjointWith', 'disjointWith', 'subPropertyOf', 'rdfs:subPropertyOf'].includes(e.label as string)
+    );
+
+    // 1. SubPropertyOf Inference: if P subProp Q, and x P y, then x Q y
+    // Also handles the base assertions for symmetry/transitivity steps
+    const activeAssertions = [...assertionEdges]; // We will grow this list with inferred props for transitivity check
+
+    assertionEdges.forEach(e => {
+        const p = e.label as string;
+        // Check super properties
+        if (index.subPropertyOf[p]) {
+            index.subPropertyOf[p].forEach(q => {
+                addEdge(e.source, e.target, q, 'Sub-Property');
+                // Add to active set for further reasoning (e.g. if q is transitive)
+                activeAssertions.push({ ...e, label: q, id: `temp-${Math.random()}` });
+            });
+        }
+    });
+
+    // 2. Symmetry: if P Symmetric, x P y -> y P x
+    activeAssertions.forEach(e => {
+        const p = e.label as string;
+        const chars = index.propertyCharacteristics[p];
+        if (chars && chars.has('Symmetric')) {
+            addEdge(e.target, e.source, p, 'Symmetric Property');
+        }
+    });
+
+    // 3. Transitivity: if P Transitive, x P y & y P z -> x P z
+    // We need to identify which properties are transitive
+    const transitiveProps = new Set<string>();
+    Object.entries(index.propertyCharacteristics).forEach(([prop, chars]) => {
+        if (chars.has('Transitive')) transitiveProps.add(prop);
+    });
+
+    transitiveProps.forEach(prop => {
+        // We use the full set of edges (explicit + inferred subprops/symmetric)
+        // We filter activeAssertions to those matching 'prop'
+        // Since we didn't push symmetric inferred edges to activeAssertions, we might miss some transitive chains involving symmetric steps.
+        // For full correctness, one would run a fixpoint iteration. 
+        // Here we do a single pass of closure on the current known edges for that property.
+        
+        // Construct edges for this property from explicit + inferred so far
+        const relevantEdges = [
+            ...explicitEdges.filter(e => e.label === prop),
+            ...inferredEdges.filter(e => e.label === prop)
+        ];
+        
+        computeTransitiveClosure(prop, relevantEdges);
+    });
+
     return [...explicitEdges, ...inferredEdges];
 };

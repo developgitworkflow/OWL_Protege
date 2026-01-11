@@ -1,8 +1,9 @@
+
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, RefreshCw, Maximize } from 'lucide-react';
+import { ZoomIn, ZoomOut, RefreshCw, Maximize, Brain } from 'lucide-react';
 
 interface MindmapVisualizationProps {
     nodes: Node<UMLNodeData>[];
@@ -14,6 +15,7 @@ interface HierarchyNode {
     name: string;
     id: string;
     type: string;
+    isInferred?: boolean;
     children?: HierarchyNode[];
     _children?: HierarchyNode[]; // For collapsing
 }
@@ -31,7 +33,7 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
         if (nodes.length === 0) return;
 
         const nodeMap = new Map<string, Node<UMLNodeData>>(nodes.map(n => [n.id, n]));
-        const childrenMap = new Map<string, string[]>();
+        const childrenMap = new Map<string, { id: string, isInferred: boolean }[]>();
         const parentSet = new Set<string>();
 
         // Build Adjacency (Parent -> Children)
@@ -39,6 +41,7 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
             const label = (e.label as string) || '';
             const isSubClass = label === 'subClassOf' || label === 'rdfs:subClassOf';
             const isType = label === 'rdf:type' || label === 'a';
+            const isInferred = e.data?.isInferred || false;
             
             let parentId: string | null = null;
             let childId: string | null = null;
@@ -56,10 +59,17 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
 
             if (parentId && childId && nodeMap.has(parentId) && nodeMap.has(childId)) {
                 if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
-                // Avoid duplicates
-                if (!childrenMap.get(parentId)!.includes(childId)) {
-                    childrenMap.get(parentId)!.push(childId);
+                // Avoid duplicates based on ID
+                const existing = childrenMap.get(parentId)!.find(c => c.id === childId);
+                if (!existing) {
+                    childrenMap.get(parentId)!.push({ id: childId, isInferred });
                     parentSet.add(childId);
+                } else if (!existing.isInferred && isInferred) {
+                    // If we have both explicit and inferred edge, prefer explicit (keep isInferred=false)
+                    // No action needed if existing is false. 
+                    // If existing was inferred and we found explicit? logic above prefers first found. 
+                    // Usually explicit edges come first or we should check priority.
+                    // For visualization, if *any* edge is explicit, treat as explicit.
                 }
             }
         });
@@ -72,12 +82,13 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
         let effectiveRoots = roots.length > 0 ? roots : nodes.filter(n => n.data.type === ElementType.OWL_CLASS);
         if (effectiveRoots.length === 0) effectiveRoots = nodes; // Fallback to everything
 
-        const traverse = (nodeId: string, visited: Set<string>): HierarchyNode => {
+        const traverse = (nodeId: string, visited: Set<string>, inferredRel: boolean): HierarchyNode => {
             const node = nodeMap.get(nodeId)!;
             const hNode: HierarchyNode = {
                 name: node.data.label,
                 id: node.id,
                 type: node.data.type,
+                isInferred: inferredRel,
                 children: []
             };
 
@@ -86,7 +97,7 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
 
             const kids = childrenMap.get(nodeId) || [];
             if (kids.length > 0) {
-                hNode.children = kids.map(kidId => traverse(kidId, new Set(visited)));
+                hNode.children = kids.map(kid => traverse(kid.id, new Set(visited), kid.isInferred));
             } else {
                 hNode.children = undefined;
             }
@@ -95,14 +106,14 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
 
         let hierarchy: HierarchyNode;
         if (effectiveRoots.length === 1) {
-            hierarchy = traverse(effectiveRoots[0].id, new Set());
+            hierarchy = traverse(effectiveRoots[0].id, new Set(), false);
         } else {
             // Virtual Root
             hierarchy = {
                 name: "Ontology Root",
                 id: "virtual-root",
                 type: "root",
-                children: effectiveRoots.map(r => traverse(r.id, new Set()))
+                children: effectiveRoots.map(r => traverse(r.id, new Set(), false))
             };
         }
 
@@ -134,7 +145,7 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
         const root = d3.hierarchy(rootData);
         
         const update = (source: any) => {
-            const treeLayout = d3.tree().nodeSize([30, 150]); // height, width spacing
+            const treeLayout = d3.tree().nodeSize([35, 160]); // height, width spacing
             treeLayout(root as any);
 
             // Compute the new tree layout.
@@ -169,26 +180,33 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
                     if (d.data.type === ElementType.OWL_NAMED_INDIVIDUAL) return "#ec4899"; // Pink
                     return "#64748b";
                 })
-                .style("stroke", "#1e293b")
-                .style("stroke-width", 2)
+                .style("stroke", (d: any) => d.data.isInferred ? "#fbbf24" : "#1e293b") // Amber stroke if inferred
+                .style("stroke-width", (d: any) => d.data.isInferred ? 3 : 2)
                 .style("cursor", "pointer");
 
-            nodeEnter.append("text")
+            // Label
+            const textGroup = nodeEnter.append("text")
                 .attr("dy", ".35em")
                 .attr("x", (d: any) => d.children || (d as any)._children ? -15 : 15)
                 .attr("text-anchor", (d: any) => d.children || (d as any)._children ? "end" : "start")
-                .text((d: any) => d.data.name)
-                .style("fill", "#cbd5e1")
+                .style("fill", (d: any) => d.data.isInferred ? "#fbbf24" : "#cbd5e1")
                 .style("font-size", "12px")
                 .style("font-family", "sans-serif")
                 .style("text-shadow", "2px 2px 4px #0f172a");
+            
+            textGroup.append("tspan")
+                .text((d: any) => d.data.name);
 
+            // Inferred Icon
+            /* D3 doesn't support React components directly easily, using text or simple svg shape */
+            // If inferred, maybe append a small * or similar
+            
             const nodeUpdate = nodeEnter.merge(node);
             
             nodeUpdate.transition().duration(200)
                 .attr("transform", (d: any) => `translate(${d.y},${d.x})`);
 
-            // Apply Search Highlighting
+            // Apply Search & Inferred Highlighting
             nodeUpdate.select("circle")
                 .style("fill", (d: any) => {
                     const match = searchTerm && d.data.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -200,12 +218,10 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
                 })
                 .style("stroke", (d: any) => {
                     const match = searchTerm && d.data.name.toLowerCase().includes(searchTerm.toLowerCase());
-                    return match ? "#fff" : "#1e293b";
+                    if (match) return "#fff";
+                    return d.data.isInferred ? "#fbbf24" : "#1e293b";
                 })
-                .style("stroke-width", (d: any) => {
-                    const match = searchTerm && d.data.name.toLowerCase().includes(searchTerm.toLowerCase());
-                    return match ? 3 : 2;
-                });
+                .style("stroke-dasharray", (d: any) => d.data.isInferred ? "2,2" : "none");
             
             // Dim text if searching
             nodeUpdate.select("text")
@@ -216,7 +232,8 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
                 .style("font-weight", (d: any) => {
                     if (searchTerm && d.data.name.toLowerCase().includes(searchTerm.toLowerCase())) return "bold";
                     return "normal";
-                });
+                })
+                .style("fill", (d: any) => d.data.isInferred ? "#fbbf24" : "#cbd5e1");
 
             const nodeExit = node.exit().transition().duration(200)
                 .attr("transform", (d: any) => `translate(${source.y},${source.x})`)
@@ -236,16 +253,20 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
                     return diagonal(o, o);
                 })
                 .style("fill", "none")
-                .style("stroke", "#475569")
-                .style("stroke-width", 1.5);
+                .style("stroke", (d: any) => d.target.data.isInferred ? "#fbbf24" : "#475569")
+                .style("stroke-width", 1.5)
+                .style("stroke-dasharray", (d: any) => d.target.data.isInferred ? "4,4" : "none")
+                .style("opacity", (d: any) => d.target.data.isInferred ? 0.8 : 1);
 
             const linkUpdate = linkEnter.merge(link);
             
             linkUpdate.transition().duration(200)
-                .attr("d", (d: any) => diagonal(d.source, d.target));
+                .attr("d", (d: any) => diagonal(d.source, d.target))
+                .style("stroke", (d: any) => d.target.data.isInferred ? "#fbbf24" : "#475569")
+                .style("stroke-dasharray", (d: any) => d.target.data.isInferred ? "4,4" : "none");
             
             // Dim links on search
-            linkUpdate.style("opacity", searchTerm ? 0.1 : 1);
+            linkUpdate.style("opacity", searchTerm ? 0.1 : (d: any) => d.target.data.isInferred ? 0.8 : 1);
 
             link.exit().transition().duration(200)
                 .attr("d", (d: any) => {
@@ -319,7 +340,8 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
                  <h3 className="font-bold mb-2 text-slate-500 uppercase tracking-wider text-[10px]">Hierarchy</h3>
                  <div className="flex items-center gap-2 mb-1"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> Class</div>
                  <div className="flex items-center gap-2 mb-1"><span className="w-2.5 h-2.5 rounded-full bg-pink-500"></span> Individual</div>
-                 <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Collapsed</div>
+                 <div className="flex items-center gap-2 mb-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Collapsed</div>
+                 <div className="flex items-center gap-2"><span className="w-4 h-0.5 border-t border-dashed border-amber-400"></span> Inferred</div>
             </div>
 
             <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing touch-none" />

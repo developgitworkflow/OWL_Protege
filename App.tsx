@@ -15,6 +15,7 @@ import ReactFlow, {
   BackgroundVariant,
   MarkerType
 } from 'reactflow';
+import { Brain, CheckCircle2 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import PropertiesPanel from './components/PropertiesPanel';
 import TopBar from './components/TopBar';
@@ -62,6 +63,9 @@ const Flow = () => {
   const [isReasonerActive, setIsReasonerActive] = useState(false);
   const [showInferred, setShowInferred] = useState(false);
   const [inferredEdges, setInferredEdges] = useState<Edge[]>([]);
+  
+  // Edge Tooltip State
+  const [edgeTooltip, setEdgeTooltip] = useState<{ id: string, x: number, y: number, label: string, type?: string } | null>(null);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -150,6 +154,22 @@ const Flow = () => {
           markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' }
       }, eds));
   }, [setEdges]);
+
+  const onEdgeMouseEnter = useCallback((event: React.MouseEvent, edge: Edge) => {
+      if (edge.data?.isInferred) {
+          setEdgeTooltip({
+              id: edge.id,
+              x: event.clientX,
+              y: event.clientY,
+              label: edge.label as string,
+              type: edge.data.inferenceType
+          });
+      }
+  }, []);
+
+  const onEdgeMouseLeave = useCallback(() => {
+      setEdgeTooltip(null);
+  }, []);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -414,6 +434,8 @@ const Flow = () => {
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
                         onConnect={onConnect}
+                        onEdgeMouseEnter={onEdgeMouseEnter}
+                        onEdgeMouseLeave={onEdgeMouseLeave}
                         nodeTypes={nodeTypes}
                         onNodeClick={onNodeClick}
                         onPaneClick={onPaneClick}
@@ -450,6 +472,22 @@ const Flow = () => {
                             {showInferred && <span className="ml-2 text-amber-400 font-bold">• Inferred View</span>}
                         </Panel>
                     </ReactFlow>
+                    
+                    {/* Edge Tooltip */}
+                    {edgeTooltip && (
+                        <div 
+                            className="fixed z-50 pointer-events-none bg-slate-900 border border-amber-500/50 text-slate-200 text-xs px-3 py-2 rounded-lg shadow-xl animate-in fade-in zoom-in-95 duration-100 flex flex-col gap-1"
+                            style={{ top: edgeTooltip.y - 60, left: edgeTooltip.x - 20 }}
+                        >
+                            <div className="flex items-center gap-2 font-bold text-amber-400">
+                                <Brain size={14} />
+                                {edgeTooltip.type || 'Inferred by Reasoner'}
+                            </div>
+                            <div className="text-slate-400 italic font-mono text-[10px]">{edgeTooltip.label}</div>
+                            {/* Arrow */}
+                            <div className="absolute left-6 -bottom-1.5 w-3 h-3 bg-slate-900 border-r border-b border-amber-500/50 transform rotate-45"></div>
+                        </div>
+                    )}
                 </div>
                 {selectedNodeId && (
                     <PropertiesPanel 

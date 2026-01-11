@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, Maximize, Scroll, RefreshCw, Feather } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize, Scroll, RefreshCw, Feather, Brain } from 'lucide-react';
 
 interface PeirceVisualizationProps {
     nodes: Node<UMLNodeData>[];
@@ -20,16 +20,22 @@ const THEME = {
     individual: '#ec4899', // pink-500
     classBorder: '#6366f1', // indigo-500
     cutStroke: '#cbd5e1', // slate-300
+    inferredStroke: '#fbbf24', // amber-400
     sidebarBg: '#0f172a', // slate-900
     sidebarBorder: '#334155' // slate-700
 };
 
 // --- 1. Logic Visualization (The Scrolls) ---
 
-const ScrollRenderer: React.FC<{ s: string, p: string, o: string, type: 'subclass' | 'disjoint' }> = ({ s, p, o, type }) => {
+const ScrollRenderer: React.FC<{ s: string, p: string, o: string, type: 'subclass' | 'disjoint', isInferred?: boolean }> = ({ s, p, o, type, isInferred }) => {
     // Renders the specific "Cut" geometry for simple axioms
     return (
-        <div className="flex flex-col items-center mb-6 group">
+        <div className="flex flex-col items-center mb-6 group relative">
+            {isInferred && (
+                <div className="absolute top-0 right-4 bg-slate-900 border border-amber-500/50 text-amber-400 rounded-full p-1 shadow-lg z-10" title="Inferred Axiom">
+                    <Brain size={12} />
+                </div>
+            )}
             <svg width="200" height="120" className="overflow-visible">
                 <defs>
                     <filter id="scribble">
@@ -42,13 +48,13 @@ const ScrollRenderer: React.FC<{ s: string, p: string, o: string, type: 'subclas
                     // SubClassOf(A, B) -> If A then B -> Cut( A Cut( B ) )
                     <g filter="url(#scribble)">
                         {/* Outer Cut (Negation of A...) */}
-                        <ellipse cx="100" cy="60" rx="95" ry="55" fill="none" stroke={THEME.cutStroke} strokeWidth="2" />
+                        <ellipse cx="100" cy="60" rx="95" ry="55" fill="none" stroke={isInferred ? THEME.inferredStroke : THEME.cutStroke} strokeWidth={isInferred ? "2.5" : "2"} strokeDasharray={isInferred ? "5,3" : ""} />
                         
                         {/* A (Antecedent) */}
                         <text x="40" y="65" textAnchor="middle" fontFamily="sans-serif" fontSize="12" fill={THEME.nodeText} fontWeight="bold">{s}</text>
                         
                         {/* Inner Cut ( ... and Not B) */}
-                        <ellipse cx="140" cy="60" rx="40" ry="30" fill="none" stroke={THEME.cutStroke} strokeWidth="2" />
+                        <ellipse cx="140" cy="60" rx="40" ry="30" fill="none" stroke={isInferred ? THEME.inferredStroke : THEME.cutStroke} strokeWidth={isInferred ? "2.5" : "2"} strokeDasharray={isInferred ? "5,3" : ""} />
                         
                         {/* B (Consequent) */}
                         <text x="140" y="65" textAnchor="middle" fontFamily="sans-serif" fontSize="12" fill={THEME.nodeText} fontWeight="bold">{o}</text>
@@ -56,14 +62,16 @@ const ScrollRenderer: React.FC<{ s: string, p: string, o: string, type: 'subclas
                 ) : (
                     // DisjointWith(A, B) -> Not(A and B) -> Cut( A B )
                     <g filter="url(#scribble)">
-                        <ellipse cx="100" cy="60" rx="90" ry="50" fill="none" stroke={THEME.cutStroke} strokeWidth="2" />
+                        <ellipse cx="100" cy="60" rx="90" ry="50" fill="none" stroke={isInferred ? THEME.inferredStroke : THEME.cutStroke} strokeWidth={isInferred ? "2.5" : "2"} strokeDasharray={isInferred ? "5,3" : ""} />
                         <text x="60" y="65" textAnchor="middle" fontFamily="sans-serif" fontSize="12" fill={THEME.nodeText} fontWeight="bold">{s}</text>
                         <text x="140" y="65" textAnchor="middle" fontFamily="sans-serif" fontSize="12" fill={THEME.nodeText} fontWeight="bold">{o}</text>
                     </g>
                 )}
             </svg>
             <div className="text-[10px] font-mono text-slate-500 mt-2 flex gap-2 justify-center opacity-50 group-hover:opacity-100 transition-opacity">
-                <span className="bg-slate-800 px-1 rounded">{type === 'subclass' ? 'Implication' : 'Exclusion'}</span>
+                <span className={`px-1 rounded ${isInferred ? 'bg-amber-900/30 text-amber-400' : 'bg-slate-800'}`}>
+                    {type === 'subclass' ? 'Implication' : 'Exclusion'}
+                </span>
                 <span className="italic">{type === 'subclass' ? `If ${s} then ${o}` : `Not (${s} and ${o})`}</span>
             </div>
         </div>
@@ -79,7 +87,7 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges 
 
     // Extract TBox Axioms for the Scroll View
     const axioms = useMemo(() => {
-        const list: { id: string, s: string, p: string, o: string, type: 'subclass' | 'disjoint' }[] = [];
+        const list: { id: string, s: string, p: string, o: string, type: 'subclass' | 'disjoint', isInferred: boolean }[] = [];
         
         // From Edges
         edges.forEach(e => {
@@ -87,22 +95,24 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges 
             const tNode = nodes.find(n => n.id === e.target);
             if (!sNode || !tNode) return;
             
+            const isInferred = e.data?.isInferred || false;
+
             if (e.label === 'subClassOf' || e.label === 'rdfs:subClassOf') {
-                list.push({ id: e.id, s: sNode.data.label, p: 'is a', o: tNode.data.label, type: 'subclass' });
+                list.push({ id: e.id, s: sNode.data.label, p: 'is a', o: tNode.data.label, type: 'subclass', isInferred });
             } else if (e.label === 'owl:disjointWith' || e.label === 'disjointWith') {
-                list.push({ id: e.id, s: sNode.data.label, p: '!=', o: tNode.data.label, type: 'disjoint' });
+                list.push({ id: e.id, s: sNode.data.label, p: '!=', o: tNode.data.label, type: 'disjoint', isInferred });
             }
         });
 
-        // From Internal Methods
+        // From Internal Methods (Always Explicit usually, unless we start generating methods from inference)
         nodes.forEach(n => {
             n.data.methods.forEach(m => {
                 const name = m.name.toLowerCase();
                 if (name === 'subclassof') {
-                    list.push({ id: `${n.id}-${m.id}`, s: n.data.label, p: 'is a', o: m.returnType, type: 'subclass' });
+                    list.push({ id: `${n.id}-${m.id}`, s: n.data.label, p: 'is a', o: m.returnType, type: 'subclass', isInferred: false });
                 }
                 if (name === 'disjointwith') {
-                    list.push({ id: `${n.id}-${m.id}`, s: n.data.label, p: '!=', o: m.returnType, type: 'disjoint' });
+                    list.push({ id: `${n.id}-${m.id}`, s: n.data.label, p: '!=', o: m.returnType, type: 'disjoint', isInferred: false });
                 }
             });
         });
@@ -141,7 +151,8 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges 
         const simLinks = edges.map(e => ({
             source: e.source,
             target: e.target,
-            label: (typeof e.label === 'string' ? e.label : '')
+            label: (typeof e.label === 'string' ? e.label : ''),
+            isInferred: e.data?.isInferred || false
         })).filter(l => !['subClassOf', 'rdfs:subClassOf', 'owl:disjointWith'].includes(l.label)); // Filter logic edges
 
         const simulation = d3.forceSimulation(simNodes as any)
@@ -160,8 +171,9 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges 
 
         // Thick line for identity/relation
         link.append("line")
-            .attr("stroke", THEME.line) 
-            .attr("stroke-width", 2)
+            .attr("stroke", d => d.isInferred ? THEME.inferredStroke : THEME.line) 
+            .attr("stroke-width", d => d.isInferred ? 2.5 : 2)
+            .attr("stroke-dasharray", d => d.isInferred ? "5,5" : "")
             .attr("opacity", 0.6);
 
         // Predicate Label on the line (The "Spot")
@@ -170,7 +182,7 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges 
             .attr("rx", 6)
             .attr("ry", 6)
             .attr("fill", THEME.lineTextBg)
-            .attr("stroke", THEME.line)
+            .attr("stroke", d => d.isInferred ? THEME.inferredStroke : THEME.line)
             .attr("stroke-width", 1);
             
         link.append("text")
@@ -179,7 +191,7 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges 
             .attr("dy", "0.35em")
             .attr("font-family", "ui-monospace, monospace")
             .attr("font-size", "10px")
-            .attr("fill", THEME.lineText);
+            .attr("fill", d => d.isInferred ? THEME.inferredStroke : THEME.lineText);
 
         // 2. Terminals (Nodes)
         const node = g.append("g")
@@ -318,6 +330,7 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges 
                             <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-pink-500"></span> Individual</div>
                             <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full border border-indigo-500 border-dashed"></span> Class</div>
                             <div className="flex items-center gap-2"><span className="w-4 h-0.5 bg-slate-600"></span> Line of Identity</div>
+                            <div className="flex items-center gap-2"><span className="w-4 h-0.5 border-t-2 border-amber-400 border-dotted"></span> Inferred Line</div>
                         </div>
                     </div>
                 </div>
@@ -332,6 +345,8 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges 
                     <p className="text-xs text-slate-400 mb-6 leading-relaxed bg-slate-950/50 p-3 rounded border border-slate-800">
                         Peirce logic visualizes implication via inclusion. A "Cut" (oval) represents negation. 
                         Nested cuts represent <span className="font-mono text-amber-400">If...Then</span>.
+                        <br/><br/>
+                        <span className="flex items-center gap-1"><Brain size={10} className="text-amber-400"/> Inferred axioms are dashed.</span>
                     </p>
                     
                     <div className="space-y-4">

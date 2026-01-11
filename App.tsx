@@ -328,7 +328,7 @@ function App() {
   }, [nodes, showIndividuals]);
 
   // Helper for derived edges (with inferences if enabled)
-  // Must filter edges to ensuring both source and target exist in visibleNodes
+  // Must filter edges to ensuring both source and target exist in visibleNodes to prevent "node not found" errors
   const displayEdges = useMemo(() => {
       let currentEdges = edges;
       if (isReasonerActive && showInferred) {
@@ -436,7 +436,7 @@ function App() {
                 {viewMode === 'entities' && (
                     <EntityCatalog 
                         nodes={nodes} 
-                        edges={displayEdges} // Pass displayEdges to show inferred relationships
+                        edges={displayEdges} // Use displayEdges to show inferred relations
                         isReasonerActive={isReasonerActive}
                         onAddNode={handleAddNode}
                         onDeleteNode={handleDeleteNode}
@@ -486,7 +486,7 @@ function App() {
                 {viewMode === 'concept' && (
                     <ConceptGraph 
                         nodes={visibleNodes} 
-                        edges={displayEdges} // Pass displayEdges for ConceptGraph reasoning view
+                        edges={displayEdges} // Use displayEdges for reasoning view
                         searchTerm={searchTerm}
                         selectedNodeId={selectedNodeId}
                         onNavigate={handleNavigate}
@@ -496,7 +496,7 @@ function App() {
                 {viewMode === 'owlviz' && (
                     <OWLVizVisualization 
                         nodes={visibleNodes} 
-                        edges={displayEdges} // Pass displayEdges for OWLViz reasoning view
+                        edges={displayEdges} // Use displayEdges for reasoning view
                         searchTerm={searchTerm} 
                         selectedNodeId={selectedNodeId} 
                     />

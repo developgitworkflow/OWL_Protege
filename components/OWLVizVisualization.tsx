@@ -113,6 +113,7 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
         });
 
         // 2. Internal Axioms (SubClassOf only for map structure)
+        // Only if edge doesn't already exist (some internal axioms are redundant with edges)
         relevantNodes.forEach(n => {
             n.data.methods.forEach(m => {
                 if (m.name.toLowerCase() === 'subclassof') {
@@ -481,6 +482,10 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
                         <div className="flex items-center gap-2">
                             <span className="w-3 h-3 rounded-full border-2 border-pink-500 bg-slate-800"></span>
                             <span>Individual (ABox)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="w-3 h-0 border-t-2 border-amber-400 border-dashed"></span>
+                            <span>Inferred</span>
                         </div>
                     </div>
                 </div>

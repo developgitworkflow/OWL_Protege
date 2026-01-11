@@ -207,10 +207,22 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges 
             });
             
         labelGroup.select("rect")
-            .attr("width", function() { return ((this.parentNode as any).querySelector('text')._bbox.width || 0) + 12; })
-            .attr("height", function() { return ((this.parentNode as any).querySelector('text')._bbox.height || 0) + 6; })
-            .attr("x", function() { return -(((this.parentNode as any).querySelector('text')._bbox.width || 0) + 12) / 2; })
-            .attr("y", function() { return -(((this.parentNode as any).querySelector('text')._bbox.height || 0) + 6) / 2; });
+            .attr("width", function() { 
+                const parent = (this as unknown as Element).parentNode as Element;
+                return ((parent.querySelector('text') as any)._bbox.width || 0) + 12; 
+            })
+            .attr("height", function() { 
+                const parent = (this as unknown as Element).parentNode as Element;
+                return ((parent.querySelector('text') as any)._bbox.height || 0) + 6; 
+            })
+            .attr("x", function() { 
+                const parent = (this as unknown as Element).parentNode as Element;
+                return -(((parent.querySelector('text') as any)._bbox.width || 0) + 12) / 2; 
+            })
+            .attr("y", function() { 
+                const parent = (this as unknown as Element).parentNode as Element;
+                return -(((parent.querySelector('text') as any)._bbox.height || 0) + 6) / 2; 
+            });
 
         // Nodes (Terminals)
         const node = g.append("g")

@@ -328,7 +328,7 @@ function App() {
   }, [nodes, showIndividuals]);
 
   // Helper for derived edges (with inferences if enabled)
-  // Must filter edges to ensuring both source and target exist in visibleNodes to prevent "node not found" errors
+  // Must filter edges to ensuring both source and target exist in visibleNodes
   const displayEdges = useMemo(() => {
       let currentEdges = edges;
       if (isReasonerActive && showInferred) {
@@ -336,6 +336,8 @@ function App() {
       }
       
       const visibleIds = new Set(visibleNodes.map(n => n.id));
+      // Strict filtering: Source AND Target must be in visibleIds
+      // This prevents ReactFlow crashing with "node not found" when edges point to hidden/filtered nodes
       return currentEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
   }, [nodes, edges, isReasonerActive, showInferred, visibleNodes]);
 
@@ -551,6 +553,7 @@ function App() {
             onExportJSON={() => {}} // Todo: Implement logic similar to previous versions if needed or rely on code viewer
             onExportTurtle={() => {}}
             onImportJSON={(e) => { if (e.target.files?.[0]) handleImportFile(e.target.files[0]); }}
+            onOpenImportUrl={() => setIsImportUrlOpen(true)}
             onValidate={handleValidate}
             onOpenDLQuery={() => setIsDLQueryOpen(true)}
             onOpenSWRL={() => setIsSWRLOpen(true)}

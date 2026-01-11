@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { X, Settings, Download, Upload, Save, Globe, Plus, Trash2, Link as LinkIcon, FilePlus, Wrench, ShieldCheck, Calculator, Search, ScrollText, Sigma, Terminal, Activity } from 'lucide-react';
+import { X, Settings, Download, Upload, Save, Globe, Plus, Trash2, Link as LinkIcon, FilePlus, Wrench, ShieldCheck, Calculator, Search, ScrollText, Sigma, Terminal, Activity, CloudDownload } from 'lucide-react';
 import { ProjectData } from '../types';
 import AnnotationManager from './AnnotationManager';
 
@@ -13,6 +13,7 @@ interface SettingsModalProps {
   onExportJSON: () => void;
   onExportTurtle: () => void;
   onImportJSON: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onOpenImportUrl: () => void;
   // Tools
   onValidate: () => void;
   onOpenDLQuery: () => void;
@@ -32,6 +33,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onExportJSON,
   onExportTurtle,
   onImportJSON,
+  onOpenImportUrl,
   onValidate,
   onOpenDLQuery,
   onOpenSWRL,
@@ -333,29 +335,49 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             <h3 className="text-md font-medium text-white mb-3 flex items-center gap-2">
                                 <Upload size={18} /> Import Data
                             </h3>
-                            <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 text-center">
-                                <input 
-                                    type="file" 
-                                    ref={fileInputRef}
-                                    onChange={onImportJSON}
-                                    accept=".json,.ttl,.rdf,.nt,.owl,.ofn,.xml"
-                                    className="hidden"
-                                />
-                                <div className="mb-3">
-                                    <div className="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center mx-auto text-slate-400">
-                                        <Upload size={24} />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 text-center hover:border-blue-500/30 transition-all">
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef}
+                                        onChange={onImportJSON}
+                                        accept=".json,.ttl,.rdf,.nt,.owl,.ofn,.xml"
+                                        className="hidden"
+                                    />
+                                    <div className="mb-3">
+                                        <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center mx-auto text-slate-400">
+                                            <Upload size={20} />
+                                        </div>
                                     </div>
+                                    <h4 className="text-sm font-medium text-slate-200 mb-1">Local File</h4>
+                                    <p className="text-[10px] text-slate-500 mb-4 max-w-[150px] mx-auto">
+                                        Upload JSON, Turtle, RDF/XML, or OWL files.
+                                    </p>
+                                    <button 
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-md transition-colors"
+                                    >
+                                        Select File
+                                    </button>
                                 </div>
-                                <h4 className="text-sm font-medium text-slate-200 mb-1">Import Ontology / Project</h4>
-                                <p className="text-xs text-slate-500 mb-4 max-w-xs mx-auto">
-                                    Supported formats: JSON, Turtle (.ttl), RDF/XML (.rdf, .xml), OWL Functional (.ofn).
-                                </p>
-                                <button 
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-md transition-colors"
-                                >
-                                    Select File
-                                </button>
+
+                                <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 text-center hover:border-blue-500/30 transition-all">
+                                    <div className="mb-3">
+                                        <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center mx-auto text-slate-400">
+                                            <CloudDownload size={20} />
+                                        </div>
+                                    </div>
+                                    <h4 className="text-sm font-medium text-slate-200 mb-1">From URL</h4>
+                                    <p className="text-[10px] text-slate-500 mb-4 max-w-[150px] mx-auto">
+                                        Import an ontology directly from a web address.
+                                    </p>
+                                    <button 
+                                        onClick={() => { onOpenImportUrl(); onClose(); }}
+                                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium rounded-md transition-colors border border-slate-600"
+                                    >
+                                        Enter URL
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

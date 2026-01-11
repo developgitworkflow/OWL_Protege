@@ -68,6 +68,7 @@ function App() {
   
   const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz' | 'workflow'>('design');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
@@ -126,19 +127,33 @@ function App() {
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
+    setSelectedEdgeId(null);
+  }, []);
+
+  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    setSelectedEdgeId(edge.id);
+    setSelectedNodeId(null);
   }, []);
 
   const onPaneClick = useCallback(() => {
     setSelectedNodeId(null);
+    setSelectedEdgeId(null);
   }, []);
 
   const handleNavigate = (view: string, id?: string) => {
     setViewMode(view as any);
-    if (id) setSelectedNodeId(id);
+    if (id) {
+        setSelectedNodeId(id);
+        setSelectedEdgeId(null);
+    }
   };
 
   const handleUpdateNode = (id: string, data: UMLNodeData) => {
     setNodes(nds => nds.map(n => n.id === id ? { ...n, data } : n));
+  };
+
+  const handleUpdateEdge = (id: string, label: string) => {
+    setEdges(eds => eds.map(e => e.id === id ? { ...e, label } : e));
   };
 
   const handleDeleteNode = (id: string) => {
@@ -156,6 +171,19 @@ function App() {
     });
   };
 
+  const handleDeleteEdge = (id: string) => {
+    setConfirmConfig({
+        title: "Delete Relation?",
+        message: "Are you sure you want to remove this relationship?",
+        onConfirm: () => {
+            setEdges(eds => eds.filter(e => e.id !== id));
+            setSelectedEdgeId(null);
+            setConfirmConfig(null);
+            addToast('Relation deleted', 'success');
+        }
+    });
+  };
+
   // --- Keyboard Navigation ---
   useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -167,14 +195,18 @@ function App() {
           // Delete Shortcut
           if (e.key === 'Delete' || e.key === 'Backspace') {
               if (selectedNodeId) {
-                  e.preventDefault(); // Prevent browser back
+                  e.preventDefault(); 
                   handleDeleteNode(selectedNodeId);
+              } else if (selectedEdgeId) {
+                  e.preventDefault();
+                  handleDeleteEdge(selectedEdgeId);
               }
           }
 
           // Escape Shortcut
           if (e.key === 'Escape') {
               setSelectedNodeId(null);
+              setSelectedEdgeId(null);
           }
 
           // Spatial Navigation (Alt + Arrows)
@@ -220,7 +252,7 @@ function App() {
 
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNodeId, nodes]);
+  }, [selectedNodeId, selectedEdgeId, nodes]);
 
   const handleAddNode = (type: ElementType, label: string) => {
       const newNode: Node<UMLNodeData> = {
@@ -236,6 +268,7 @@ function App() {
       };
       setNodes(nds => [...nds, newNode]);
       setSelectedNodeId(newNode.id);
+      setSelectedEdgeId(null);
       addToast(`Created ${label}`, 'success');
       if (viewMode !== 'design' && viewMode !== 'entities') {
           setViewMode('design'); // Switch to view where we can see it usually
@@ -270,9 +303,8 @@ function App() {
           if (lowerName.endsWith('.json')) {
               result = JSON.parse(content);
               if (result.nodes && result.edges) {
-                  setNodes(result.nodes);
-                  setEdges(result.edges);
-                  if (result.metadata) setProjectData(result.metadata);
+                  // Apply sanitization if reusing ReactFlow structure
+                  // But for raw imports we trust logic below
               }
           } else if (lowerName.endsWith('.ttl') || lowerName.endsWith('.nt')) {
               result = await parseTurtle(content);
@@ -288,8 +320,16 @@ function App() {
           }
 
           if (result && result.nodes) {
+              // CRITICAL: Sanitize edges to prevent "node not found" crashes in ReactFlow
+              // Ensure every edge connects to an existing node ID
+              const validNodeIds = new Set(result.nodes.map((n: any) => n.id));
+              const validEdges = (result.edges || []).filter((e: any) => 
+                  validNodeIds.has(e.source) && validNodeIds.has(e.target)
+              );
+
               setNodes(result.nodes);
-              setEdges(result.edges || []);
+              setEdges(validEdges);
+              
               if (result.metadata) setProjectData(prev => ({ ...prev, ...result.metadata }));
               addToast(`Imported ${result.nodes.length} entities.`, 'success');
           }
@@ -310,13 +350,31 @@ function App() {
 
   const handleLoadUrl = async (url: string) => {
       try {
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          addToast("Fetching ontology...", "info");
+          // Use Accept headers for Linked Data support (e.g. BioPortal, DBpedia)
+          const response = await fetch(url, {
+              headers: {
+                  'Accept': 'text/turtle, application/x-turtle, text/n3, application/rdf+xml, application/xml, application/ld+json, application/json'
+              }
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
           const content = await response.text();
-          const filename = url.split('/').pop() || 'download.ttl';
+          
+          // Infer type from content-type or extension
+          const contentType = response.headers.get('content-type') || '';
+          let filename = url.split('/').pop() || 'download';
+          
+          // Basic extension inference if missing
+          if (!filename.includes('.')) {
+              if (contentType.includes('xml')) filename += '.rdf';
+              else if (contentType.includes('json')) filename += '.json';
+              else filename += '.ttl'; // Default assumption for semantic web
+          }
+
           await handleLoadContent(content, filename);
       } catch (e) {
-          throw e; // Modal handles error display
+          // Toast handles UI, but we throw to let the modal know
+          throw e; 
       }
   };
 
@@ -342,6 +400,7 @@ function App() {
   }, [nodes, edges, isReasonerActive, showInferred, visibleNodes]);
 
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [selectedNodeId, nodes]);
+  const selectedEdge = useMemo(() => edges.find(e => e.id === selectedEdgeId) || null, [selectedEdgeId, edges]);
 
   // Sync sidebar visibility with view mode
   useEffect(() => {
@@ -396,6 +455,7 @@ function App() {
                         onEdgesChange={onEdgesChange}
                         onConnect={onConnect}
                         onNodeClick={onNodeClick}
+                        onEdgeClick={onEdgeClick}
                         onPaneClick={onPaneClick}
                         nodeTypes={nodeTypes}
                         fitView
@@ -522,11 +582,14 @@ function App() {
             </div>
 
             {/* Properties Panel Sliding Container */}
-            <div className={`transition-all duration-300 ease-in-out border-l border-slate-800 bg-slate-900 overflow-hidden ${selectedNode ? 'w-80 translate-x-0' : 'w-0 translate-x-full border-none'}`}>
+            <div className={`transition-all duration-300 ease-in-out border-l border-slate-800 bg-slate-900 overflow-hidden ${selectedNode || selectedEdge ? 'w-80 translate-x-0' : 'w-0 translate-x-full border-none'}`}>
                 <PropertiesPanel 
                     selectedNode={selectedNode}
+                    selectedEdge={selectedEdge}
                     onUpdateNode={handleUpdateNode}
+                    onUpdateEdge={handleUpdateEdge}
                     onDeleteNode={handleDeleteNode}
+                    onDeleteEdge={handleDeleteEdge}
                     onCreateIndividual={(clsId, name) => {
                         const newIndiv: Node<UMLNodeData> = {
                             id: `indiv-${Date.now()}`,
@@ -538,7 +601,7 @@ function App() {
                         setEdges(eds => addEdge({ id: `e-${Date.now()}`, source: newIndiv.id, target: clsId, label: 'rdf:type', type: 'smoothstep' }, eds));
                         addToast(`Created Individual ${name}`, 'success');
                     }}
-                    onClose={() => setSelectedNodeId(null)}
+                    onClose={() => { setSelectedNodeId(null); setSelectedEdgeId(null); }}
                 />
             </div>
         </div>

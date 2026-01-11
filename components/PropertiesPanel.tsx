@@ -1,14 +1,17 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Node as FlowNode } from 'reactflow';
+import { Node as FlowNode, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Annotation, Method } from '../types';
-import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag } from 'lucide-react';
+import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag, ArrowRightLeft } from 'lucide-react';
 import AnnotationManager from './AnnotationManager';
 
 interface PropertiesPanelProps {
   selectedNode: FlowNode<UMLNodeData> | null;
+  selectedEdge?: Edge | null;
   onUpdateNode: (id: string, data: UMLNodeData) => void;
+  onUpdateEdge?: (id: string, label: string) => void;
   onDeleteNode: (id: string) => void;
+  onDeleteEdge?: (id: string) => void;
   onCreateIndividual?: (classId: string, name: string) => void;
   onClose: () => void;
 }
@@ -25,8 +28,6 @@ const CHARACTERISTICS = [
     'Functional', 'InverseFunctional', 'Transitive', 'Symmetric', 
     'Asymmetric', 'Reflexive', 'Irreflexive'
 ];
-
-const QUANTIFIERS = ['some', 'only', 'min', 'max', 'exactly', 'value', 'self'];
 
 const VISIBILITY_OPTIONS = [
     { value: '+', label: 'Public', icon: Globe, color: 'text-emerald-400', desc: 'Visible to all' },
@@ -98,11 +99,12 @@ const VisibilitySelector: React.FC<{ value: string; onChange: (val: string) => v
     );
 };
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdateNode, onDeleteNode, onCreateIndividual, onClose }) => {
+const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selectedEdge, onUpdateNode, onUpdateEdge, onDeleteNode, onDeleteEdge, onCreateIndividual, onClose }) => {
   const [localData, setLocalData] = useState<UMLNodeData | null>(null);
+  const [edgeLabel, setEdgeLabel] = useState('');
   const [activeAttrType, setActiveAttrType] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [showSyntaxHelp, setShowSyntaxHelp] = useState<string | null>(null); // ID of method being edited
+  const [showSyntaxHelp, setShowSyntaxHelp] = useState<string | null>(null);
   const [newIndivName, setNewIndivName] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -114,15 +116,97 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
       setNewIndivName('');
     } else {
       setLocalData(null);
-      setExpandedId(null);
-      setShowSyntaxHelp(null);
     }
-  }, [selectedNode]);
 
-  // If no selection, we render null because the container in App.tsx handles the sliding animation/width
+    if (selectedEdge) {
+        setEdgeLabel(typeof selectedEdge.label === 'string' ? selectedEdge.label : '');
+    } else {
+        setEdgeLabel('');
+    }
+  }, [selectedNode, selectedEdge]);
+
+  // Handle Edge Editing View
+  if (selectedEdge) {
+      return (
+        <div ref={panelRef} className="w-full h-full overflow-y-auto flex flex-col font-sans text-sm text-slate-200">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/90 backdrop-blur-sm sticky top-0 z-20">
+                <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider text-blue-400 font-bold flex items-center gap-1">
+                        <ArrowRightLeft size={14} /> Relation
+                    </span>
+                    <div className="font-bold text-lg text-white truncate max-w-[200px]">Edge Properties</div>
+                </div>
+                <button 
+                    onClick={onClose}
+                    className="text-slate-500 hover:text-white hover:bg-slate-800 p-2 rounded-full transition-all"
+                    title="Hide Panel"
+                >
+                    <X size={20} />
+                </button>
+            </div>
+
+            <div className="p-5 space-y-8 flex-1">
+                <div className="space-y-3">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        Predicate
+                    </h3>
+                    <div className="space-y-1">
+                        <label className="text-xs text-slate-500">Label (IRI)</label>
+                        <input
+                            type="text"
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
+                            value={edgeLabel}
+                            onChange={(e) => {
+                                setEdgeLabel(e.target.value);
+                                if (onUpdateEdge) onUpdateEdge(selectedEdge.id, e.target.value);
+                            }}
+                            placeholder="e.g., rdfs:subClassOf, hasPart"
+                        />
+                        <p className="text-[10px] text-slate-500">
+                            The property linking the source to the target. Use standard prefixes (rdf, rdfs, owl) or custom names.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="space-y-3 pt-4 border-t border-slate-800">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Common Predicates</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                        {['rdfs:subClassOf', 'rdf:type', 'owl:disjointWith', 'owl:sameAs', 'rdfs:domain', 'rdfs:range'].map(p => (
+                            <button
+                                key={p}
+                                onClick={() => {
+                                    setEdgeLabel(p);
+                                    if (onUpdateEdge) onUpdateEdge(selectedEdge.id, p);
+                                }}
+                                className="px-3 py-2 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded text-[10px] font-mono text-slate-400 hover:text-blue-300 transition-colors text-left"
+                            >
+                                {p}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-slate-800 px-5 pb-5">
+                <button 
+                    onClick={() => onDeleteEdge && onDeleteEdge(selectedEdge.id)}
+                    className="w-full flex items-center justify-center gap-2 bg-red-950/30 hover:bg-red-900/50 text-red-400 border border-red-900/50 rounded-lg p-2 text-xs font-bold transition-colors"
+                >
+                    <AlertOctagon size={14} />
+                    Delete Relation
+                </button>
+            </div>
+        </div>
+      );
+  }
+
+  // If no node selection (and no edge selection handled above), render null
   if (!selectedNode || !localData) {
     return null;
   }
+
+  // --- Node Editing Logic ---
 
   const isPropertyNode = localData.type === ElementType.OWL_OBJECT_PROPERTY || localData.type === ElementType.OWL_DATA_PROPERTY;
   const isObjectProperty = localData.type === ElementType.OWL_OBJECT_PROPERTY;

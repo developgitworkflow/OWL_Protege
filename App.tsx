@@ -564,6 +564,7 @@ const Flow = () => {
                 <div className="flex-1 overflow-hidden">
                     <EntityCatalog 
                         nodes={nodes}
+                        edges={edges}
                         onAddNode={handleCreateNode}
                         onDeleteNode={deleteNode}
                         onSelectNode={setSelectedNodeId}

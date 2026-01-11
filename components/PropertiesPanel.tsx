@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Node as FlowNode } from 'reactflow';
 import { UMLNodeData, ElementType, Annotation, Method } from '../types';
-import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User } from 'lucide-react';
+import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon } from 'lucide-react';
 import AnnotationManager from './AnnotationManager';
 
 interface PropertiesPanelProps {
@@ -10,6 +10,7 @@ interface PropertiesPanelProps {
   onUpdateNode: (id: string, data: UMLNodeData) => void;
   onDeleteNode: (id: string) => void;
   onCreateIndividual?: (classId: string, name: string) => void;
+  onClose: () => void;
 }
 
 const XSD_TYPES = [
@@ -97,7 +98,7 @@ const VisibilitySelector: React.FC<{ value: string; onChange: (val: string) => v
     );
 };
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdateNode, onDeleteNode, onCreateIndividual }) => {
+const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdateNode, onDeleteNode, onCreateIndividual, onClose }) => {
   const [localData, setLocalData] = useState<UMLNodeData | null>(null);
   const [activeAttrType, setActiveAttrType] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -309,15 +310,15 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
             <div className="font-bold text-lg text-white truncate max-w-[200px]" title={localData.label}>{localData.label}</div>
         </div>
         <button 
-            onClick={() => onDeleteNode(selectedNode.id)}
-            className="text-slate-500 hover:text-red-400 hover:bg-slate-800 p-2 rounded-full transition-all"
-            title="Delete Entity"
+            onClick={onClose}
+            className="text-slate-500 hover:text-white hover:bg-slate-800 p-2 rounded-full transition-all"
+            title="Close Panel"
         >
-            <Trash2 size={18} />
+            <X size={20} />
         </button>
       </div>
 
-      <div className="p-5 space-y-8">
+      <div className="p-5 space-y-8 flex-1">
         
         {/* Identity Section */}
         <div className="space-y-3">
@@ -599,6 +600,20 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
             </>
         )}
 
+      </div>
+
+      {/* Danger Zone */}
+      <div className="mt-4 pt-4 border-t border-slate-800 px-5 pb-5">
+          <button 
+              onClick={() => onDeleteNode(selectedNode.id)}
+              className="w-full flex items-center justify-center gap-2 bg-red-950/30 hover:bg-red-900/50 text-red-400 border border-red-900/50 rounded-lg p-2 text-xs font-bold transition-colors"
+          >
+              <AlertOctagon size={14} />
+              Delete {displayType}
+          </button>
+          <p className="text-[10px] text-slate-600 text-center mt-2">
+              Warning: Deleting this entity will remove it and all connected relations from the ontology.
+          </p>
       </div>
     </div>
   );

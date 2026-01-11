@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather, Workflow, Brain, CheckCircle2, List, Activity, Map, GitBranch } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather, Workflow, Brain, CheckCircle2, List, Activity, Map, GitBranch, Undo2, Redo2 } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -26,6 +26,11 @@ interface TopBarProps {
     onRunReasoner: () => void;
     showInferred: boolean;
     onToggleInferred: () => void;
+    // Undo/Redo
+    onUndo: () => void;
+    onRedo: () => void;
+    canUndo: boolean;
+    canRedo: boolean;
 }
 
 const TopBar: React.FC<TopBarProps> = ({ 
@@ -50,7 +55,11 @@ const TopBar: React.FC<TopBarProps> = ({
     isReasonerActive,
     onRunReasoner,
     showInferred,
-    onToggleInferred
+    onToggleInferred,
+    onUndo,
+    onRedo,
+    canUndo,
+    canRedo
 }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
 
@@ -155,8 +164,29 @@ const TopBar: React.FC<TopBarProps> = ({
 
          <div className="h-6 w-px bg-slate-700 mx-1"></div>
 
-         {/* Group 2: Reasoner */}
+         {/* Group 2: Undo/Redo & Reasoner */}
          <div className="flex items-center gap-2">
+             <div className="flex gap-1">
+                 <button 
+                    onClick={onUndo} 
+                    disabled={!canUndo}
+                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    title="Undo (Ctrl+Z)"
+                 >
+                     <Undo2 size={16} />
+                 </button>
+                 <button 
+                    onClick={onRedo} 
+                    disabled={!canRedo}
+                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    title="Redo (Ctrl+Y)"
+                 >
+                     <Redo2 size={16} />
+                 </button>
+             </div>
+
+             <div className="w-px h-6 bg-slate-700 mx-1"></div>
+
              <button 
                 onClick={onRunReasoner}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all border ${

@@ -13,7 +13,9 @@ import ReactFlow, {
   ReactFlowProvider,
   Panel,
   BackgroundVariant,
-  MarkerType
+  MarkerType,
+  NodeChange,
+  EdgeChange
 } from 'reactflow';
 import { Brain, CheckCircle2 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
@@ -65,6 +67,10 @@ const Flow = () => {
   const [showIndividuals, setShowIndividuals] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // History State
+  const [past, setPast] = useState<{ nodes: Node[]; edges: Edge[] }[]>([]);
+  const [future, setFuture] = useState<{ nodes: Node[]; edges: Edge[] }[]>([]);
+
   // Reasoner State
   const [isReasonerActive, setIsReasonerActive] = useState(false);
   const [showInferred, setShowInferred] = useState(false);
@@ -91,6 +97,81 @@ const Flow = () => {
       defaultPrefix: 'ex',
       rules: []
   });
+
+  // --- History Management ---
+
+  const saveHistory = useCallback(() => {
+      setPast(p => {
+          const newPast = [...p, { nodes, edges }];
+          // Limit history to 50 steps
+          if (newPast.length > 50) newPast.shift();
+          return newPast;
+      });
+      setFuture([]); // Clear future on new action
+  }, [nodes, edges]);
+
+  const undo = useCallback(() => {
+      if (past.length === 0) return;
+      const previous = past[past.length - 1];
+      const newPast = past.slice(0, -1);
+      
+      setFuture(f => [...f, { nodes, edges }]);
+      setPast(newPast);
+      setNodes(previous.nodes);
+      setEdges(previous.edges);
+  }, [past, nodes, edges, setNodes, setEdges]);
+
+  const redo = useCallback(() => {
+      if (future.length === 0) return;
+      const next = future[future.length - 1];
+      const newFuture = future.slice(0, -1);
+
+      setPast(p => [...p, { nodes, edges }]);
+      setFuture(newFuture);
+      setNodes(next.nodes);
+      setEdges(next.edges);
+  }, [future, nodes, edges, setNodes, setEdges]);
+
+  // Keyboard Shortcuts for Undo/Redo
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+              if (e.shiftKey) {
+                  redo();
+              } else {
+                  undo();
+              }
+              e.preventDefault();
+          } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+              redo();
+              e.preventDefault();
+          }
+      };
+      
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
+
+  // Wrapped Change Handlers to capture History on Deletion
+  const onNodesChangeWrapped = useCallback((changes: NodeChange[]) => {
+      // Capture history only on 'remove' from keyboard or interaction, ignoring drag updates here
+      if (changes.some(c => c.type === 'remove')) {
+          saveHistory();
+      }
+      onNodesChange(changes);
+  }, [onNodesChange, saveHistory]);
+
+  const onEdgesChangeWrapped = useCallback((changes: EdgeChange[]) => {
+      if (changes.some(c => c.type === 'remove')) {
+          saveHistory();
+      }
+      onEdgesChange(changes);
+  }, [onEdgesChange, saveHistory]);
+
+  const onNodeDragStart = useCallback(() => {
+      // Save state before move begins
+      saveHistory();
+  }, [saveHistory]);
 
   // When model changes, invalidate inferred state
   useEffect(() => {
@@ -167,6 +248,7 @@ const Flow = () => {
   }, [activeEdges, visibleNodes, showIndividuals]);
 
   const onConnect = useCallback((params: Connection) => {
+      saveHistory();
       setEdges((eds) => addEdge({ 
           ...params, 
           type: 'smoothstep', 
@@ -175,7 +257,7 @@ const Flow = () => {
           labelStyle: { fill: '#cbd5e1', fontWeight: 500 },
           markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' }
       }, eds));
-  }, [setEdges]);
+  }, [setEdges, saveHistory]);
 
   const onEdgeMouseEnter = useCallback((event: React.MouseEvent, edge: Edge) => {
       if (edge.data?.isInferred) {
@@ -204,6 +286,8 @@ const Flow = () => {
       const elementType = event.dataTransfer.getData('application/elementType');
       if (typeof type === 'undefined' || !type) return;
 
+      saveHistory();
+
       const position = {
         x: event.clientX - 300, 
         y: event.clientY - 100, 
@@ -222,7 +306,7 @@ const Flow = () => {
       };
 
       setNodes((nds) => nds.concat(newNode));
-    }, [setNodes]);
+    }, [setNodes, saveHistory]);
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
@@ -233,18 +317,23 @@ const Flow = () => {
   }, []);
 
   const updateNodeData = useCallback((id: string, newData: UMLNodeData) => {
+    // Note: We do NOT save history here to avoid flooding it with every keystroke in PropertiesPanel.
+    // Major structural changes should use dedicated handlers.
     setNodes((nds) => nds.map((node) => node.id === id ? { ...node, data: newData } : node));
   }, [setNodes]);
 
   const deleteNode = useCallback((id: string) => {
+      saveHistory();
       setNodes((nds) => nds.filter(n => n.id !== id));
       setEdges((eds) => eds.filter(e => e.source !== id && e.target !== id));
       setSelectedNodeId(null);
-  }, [setNodes, setEdges]);
+  }, [setNodes, setEdges, saveHistory]);
 
   const handleCreateIndividual = useCallback((classNodeId: string, name: string) => {
       const classNode = nodes.find(n => n.id === classNodeId);
       if (!classNode) return;
+
+      saveHistory();
 
       const newId = `node-${Date.now()}`;
       const newNode: Node = {
@@ -275,9 +364,10 @@ const Flow = () => {
 
       setNodes((nds) => [...nds, newNode]);
       setEdges((eds) => [...eds, newEdge]);
-  }, [nodes, setNodes, setEdges]);
+  }, [nodes, setNodes, setEdges, saveHistory]);
 
   const handleCreateNode = useCallback((type: ElementType, label: string) => {
+      saveHistory();
       const newId = `node-${Date.now()}`;
       
       const randomX = Math.random() * 600 + 100;
@@ -297,9 +387,10 @@ const Flow = () => {
       };
       setNodes((nds) => [...nds, newNode]);
       return newId; // Return ID for selection
-  }, [setNodes, projectMetadata]);
+  }, [setNodes, projectMetadata, saveHistory]);
 
   const onDiagramGenerated = useCallback((newNodes: Node[], newEdges: Edge[]) => {
+      saveHistory();
       const normalizedNodes = normalizeOntology(newNodes);
       setNodes(normalizedNodes);
       setEdges(newEdges.map(e => ({ 
@@ -308,7 +399,7 @@ const Flow = () => {
           labelStyle: { fill: '#cbd5e1' },
           markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' }
       })));
-  }, [setNodes, setEdges]);
+  }, [setNodes, setEdges, saveHistory]);
 
   const handleSaveJSON = () => {
       const data = JSON.stringify({ metadata: projectMetadata, nodes, edges });
@@ -342,6 +433,7 @@ const Flow = () => {
           }
 
           if (result.nodes.length > 0) {
+              saveHistory();
               const normalizedNodes = normalizeOntology(result.nodes);
               setNodes(normalizedNodes);
               setEdges(result.edges);
@@ -357,6 +449,7 @@ const Flow = () => {
 
   const handleLoadContent = async (content: string, fileName: string) => {
       try {
+          saveHistory();
           // 1. Try JSON Project Format
           try {
               const flow = JSON.parse(content);
@@ -430,6 +523,7 @@ const Flow = () => {
   };
 
   const handleCreateProject = (data: ProjectData) => {
+    saveHistory();
     setProjectMetadata({
         ...data,
         baseIri: data.baseIri || 'http://example.org/ontology#',
@@ -460,9 +554,10 @@ const Flow = () => {
   };
 
   const handleOntologyUpdate = useCallback((newNodes: Node<UMLNodeData>[], newEdges: Edge[]) => {
+      saveHistory();
       setNodes(newNodes);
       setEdges(newEdges);
-  }, [setNodes, setEdges]);
+  }, [setNodes, setEdges, saveHistory]);
 
   const selectedNode = useMemo(() => {
       return nodes.find(n => n.id === selectedNodeId) || null;
@@ -499,6 +594,10 @@ const Flow = () => {
         onRunReasoner={handleRunReasoner}
         showInferred={showInferred}
         onToggleInferred={() => setShowInferred(!showInferred)}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={past.length > 0}
+        canRedo={future.length > 0}
       />
       
       <div className="flex flex-1 overflow-hidden">
@@ -509,9 +608,10 @@ const Flow = () => {
                     <ReactFlow
                         nodes={visibleNodes}
                         edges={visibleEdges} 
-                        onNodesChange={onNodesChange}
-                        onEdgesChange={onEdgesChange}
+                        onNodesChange={onNodesChangeWrapped}
+                        onEdgesChange={onEdgesChangeWrapped}
                         onConnect={onConnect}
+                        onNodeDragStart={onNodeDragStart}
                         onEdgeMouseEnter={onEdgeMouseEnter}
                         onEdgeMouseLeave={onEdgeMouseLeave}
                         nodeTypes={nodeTypes}
@@ -571,6 +671,7 @@ const Flow = () => {
                         onUpdateNode={updateNodeData} 
                         onDeleteNode={deleteNode}
                         onCreateIndividual={handleCreateIndividual}
+                        onClose={() => setSelectedNodeId(null)}
                     />
                 )}
             </>
@@ -597,6 +698,7 @@ const Flow = () => {
                         onUpdateNode={updateNodeData} 
                         onDeleteNode={deleteNode}
                         onCreateIndividual={handleCreateIndividual}
+                        onClose={() => setSelectedNodeId(null)}
                     />
                 )}
             </div>

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather, Workflow, Brain, CheckCircle2, List } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather, Workflow, Brain, CheckCircle2, List, Activity } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -14,6 +14,7 @@ interface TopBarProps {
     onOpenDLAxioms: () => void;
     onOpenExpressivity: () => void;
     onOpenDatalog: () => void;
+    onOpenMetrics: () => void;
     currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities';
     onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities') => void;
     showIndividuals: boolean;
@@ -39,6 +40,7 @@ const TopBar: React.FC<TopBarProps> = ({
     onOpenDLAxioms,
     onOpenExpressivity,
     onOpenDatalog,
+    onOpenMetrics,
     currentView,
     onViewChange,
     showIndividuals,
@@ -190,6 +192,14 @@ const TopBar: React.FC<TopBarProps> = ({
              </button>
 
              <button 
+                onClick={onOpenMetrics}
+                className="flex items-center gap-2 text-sm font-medium text-cyan-400 hover:text-cyan-300 transition-colors"
+                title="Ontology Metrics"
+             >
+                <Activity size={16} />
+             </button>
+
+             <button 
                 onClick={onOpenExpressivity}
                 className="flex items-center gap-2 text-sm font-medium text-pink-400 hover:text-pink-300 transition-colors"
                 title="Calculate DL Expressivity"
@@ -219,6 +229,14 @@ const TopBar: React.FC<TopBarProps> = ({
                 title="Description Logic Axioms"
              >
                 <Sigma size={16} />
+             </button>
+
+             <button 
+                onClick={onOpenDatalog}
+                className="flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+                title="Datalog Translation"
+             >
+                <Terminal size={16} />
              </button>
          </div>
 

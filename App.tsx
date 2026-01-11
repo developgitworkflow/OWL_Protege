@@ -37,6 +37,7 @@ import SWRLModal from './components/SWRLModal';
 import DLAxiomModal from './components/DLAxiomModal';
 import ExpressivityModal from './components/ExpressivityModal';
 import DatalogModal from './components/DatalogModal';
+import OntoMetricsModal from './components/OntoMetricsModal';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
 import { generateTurtle } from './services/owlMapper';
@@ -77,6 +78,7 @@ const Flow = () => {
   const [isDLAxiomModalOpen, setIsDLAxiomModalOpen] = useState(false);
   const [isExpressivityModalOpen, setIsExpressivityModalOpen] = useState(false);
   const [isDatalogModalOpen, setIsDatalogModalOpen] = useState(false);
+  const [isMetricsModalOpen, setIsMetricsModalOpen] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
 
   const [projectMetadata, setProjectMetadata] = useState<ProjectData>({ 
@@ -486,6 +488,7 @@ const Flow = () => {
         onOpenDLAxioms={() => setIsDLAxiomModalOpen(true)}
         onOpenExpressivity={() => setIsExpressivityModalOpen(true)}
         onOpenDatalog={() => setIsDatalogModalOpen(true)}
+        onOpenMetrics={() => setIsMetricsModalOpen(true)}
         currentView={viewMode}
         onViewChange={setViewMode}
         showIndividuals={showIndividuals}
@@ -735,6 +738,13 @@ const Flow = () => {
       <DatalogModal 
         isOpen={isDatalogModalOpen}
         onClose={() => setIsDatalogModalOpen(false)}
+        nodes={nodes}
+        edges={edges}
+      />
+
+      <OntoMetricsModal 
+        isOpen={isMetricsModalOpen}
+        onClose={() => setIsMetricsModalOpen(false)}
         nodes={nodes}
         edges={edges}
       />

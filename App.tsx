@@ -337,7 +337,7 @@ function App() {
       
       const visibleIds = new Set(visibleNodes.map(n => n.id));
       // Strict filtering: Source AND Target must be in visibleIds
-      // This prevents ReactFlow crashing with "node not found" when edges point to hidden/filtered nodes
+      // This prevents "node not found" crashes in ReactFlow
       return currentEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
   }, [nodes, edges, isReasonerActive, showInferred, visibleNodes]);
 

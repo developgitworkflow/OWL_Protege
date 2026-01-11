@@ -33,6 +33,7 @@ import UMLVisualization from './components/UMLVisualization';
 import PeirceVisualization from './components/PeirceVisualization';
 import ConceptGraph from './components/ConceptGraph';
 import EntityCatalog from './components/EntityCatalog';
+import WorkflowView from './components/WorkflowView';
 import SWRLModal from './components/SWRLModal';
 import DLAxiomModal from './components/DLAxiomModal';
 import ExpressivityModal from './components/ExpressivityModal';
@@ -54,7 +55,7 @@ const nodeTypes = {
   umlNode: UMLNode,
 };
 
-type ViewMode = 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz';
+type ViewMode = 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz' | 'workflow';
 
 const Flow = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
@@ -295,6 +296,7 @@ const Flow = () => {
           }
       };
       setNodes((nds) => [...nds, newNode]);
+      return newId; // Return ID for selection
   }, [setNodes, projectMetadata]);
 
   const onDiagramGenerated = useCallback((newNodes: Node[], newEdges: Edge[]) => {
@@ -467,8 +469,8 @@ const Flow = () => {
   }, [nodes, selectedNodeId]);
 
   // Generic Navigation Handler
-  const handleNavigate = useCallback((targetView: string, nodeId: string) => {
-      setSelectedNodeId(nodeId);
+  const handleNavigate = useCallback((targetView: string, nodeId?: string) => {
+      if (nodeId) setSelectedNodeId(nodeId);
       setViewMode(targetView as ViewMode);
   }, []);
 
@@ -597,6 +599,25 @@ const Flow = () => {
                         onCreateIndividual={handleCreateIndividual}
                     />
                 )}
+            </div>
+        )}
+
+        {viewMode === 'workflow' && (
+            <div className="flex-1 h-full">
+                <WorkflowView 
+                    nodes={nodes}
+                    edges={edges}
+                    isReasonerActive={isReasonerActive}
+                    validationStatus={validationResult?.isValid ? 'valid' : (validationResult ? 'invalid' : 'unknown')}
+                    onNavigate={handleNavigate}
+                    onRunReasoner={handleRunReasoner}
+                    onValidate={handleValidate}
+                    onExport={() => setIsSettingsModalOpen(true)}
+                    onCreateClass={() => {
+                        handleCreateNode(ElementType.OWL_CLASS, 'NewClass');
+                        handleNavigate('entities');
+                    }}
+                />
             </div>
         )}
 

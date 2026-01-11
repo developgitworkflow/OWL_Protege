@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, Layers, X, Brain, ArrowRight, Tag, Info } from 'lucide-react';
+import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, Layers, X, Brain, ArrowRight, Tag, Info, BookOpen, Quote } from 'lucide-react';
 
 interface ConceptGraphProps {
     nodes: Node<UMLNodeData>[];
@@ -586,6 +586,28 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                             </div>
                         )}
 
+                        {/* Axioms / Formal Definitions */}
+                        {selectedDetails?.node?.data.methods && selectedDetails.node.data.methods.length > 0 && (
+                            <div>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <BookOpen size={12} /> Axioms
+                                </h3>
+                                <div className="space-y-1">
+                                    {selectedDetails.node.data.methods.map(method => (
+                                        <div key={method.id} className="text-xs bg-slate-800/50 p-2 rounded border border-slate-800">
+                                            <div className="flex items-baseline gap-2 mb-0.5">
+                                                <span className="text-purple-400 font-bold text-[10px] uppercase">{method.name}</span>
+                                                {method.isOrdered && <span className="text-[8px] text-slate-500 bg-slate-900 px-1 rounded">Ordered</span>}
+                                            </div>
+                                            <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">
+                                                {method.returnType}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Annotations */}
                         {selectedDetails?.node?.data.annotations && selectedDetails.node.data.annotations.length > 0 && (
                             <div>
@@ -627,17 +649,24 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                             </div>
                         )}
 
-                        {/* Attributes/Properties */}
+                        {/* Data Properties / Values */}
                         {selectedDetails?.node?.data.attributes && selectedDetails.node.data.attributes.length > 0 && (
                             <div>
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                    <Tag size={12} /> Characteristics / Data
+                                    <Tag size={12} /> 
+                                    {selectedDetails.node.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'Data Assertions' : 'Data Properties'}
                                 </h3>
-                                <div className="flex flex-wrap gap-1">
+                                <div className="space-y-1">
                                     {selectedDetails.node.data.attributes.map(attr => (
-                                        <span key={attr.id} className="px-2 py-1 bg-slate-800 rounded text-[10px] text-slate-300 border border-slate-700">
-                                            {attr.name} {attr.type ? `(${attr.type})` : ''}
-                                        </span>
+                                        <div key={attr.id} className="flex items-center justify-between text-xs bg-slate-800/50 p-2 rounded border border-slate-800">
+                                            <span className="text-green-400 font-medium">{attr.name}</span>
+                                            <span className="text-slate-400 font-mono text-[10px] bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700">
+                                                {selectedDetails.node?.data.type === ElementType.OWL_NAMED_INDIVIDUAL 
+                                                    ? (attr.type || '"value"') // For individuals, type field holds value
+                                                    : (attr.type || 'Literal') // For classes, type field holds range (e.g. xsd:int)
+                                                }
+                                            </span>
+                                        </div>
                                     ))}
                                 </div>
                             </div>

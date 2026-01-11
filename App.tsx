@@ -220,6 +220,41 @@ const Flow = () => {
       setSelectedNodeId(null);
   }, [setNodes, setEdges]);
 
+  const handleCreateIndividual = useCallback((classNodeId: string, name: string) => {
+      const classNode = nodes.find(n => n.id === classNodeId);
+      if (!classNode) return;
+
+      const newId = `node-${Date.now()}`;
+      const newNode: Node = {
+          id: newId,
+          type: 'umlNode',
+          position: { 
+              x: classNode.position.x + (Math.random() * 100 - 50), 
+              y: classNode.position.y + 150 + (Math.random() * 50)
+          },
+          data: {
+              label: name,
+              type: ElementType.OWL_NAMED_INDIVIDUAL,
+              attributes: [],
+              methods: []
+          }
+      };
+
+      const newEdge: Edge = {
+          id: `e-${newId}-${classNodeId}`,
+          source: newId,
+          target: classNodeId,
+          label: 'rdf:type',
+          type: 'smoothstep',
+          style: { stroke: '#64748b', strokeWidth: 1.5 },
+          labelStyle: { fill: '#cbd5e1', fontSize: 11 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' }
+      };
+
+      setNodes((nds) => [...nds, newNode]);
+      setEdges((eds) => [...eds, newEdge]);
+  }, [nodes, setNodes, setEdges]);
+
   const onDiagramGenerated = useCallback((newNodes: Node[], newEdges: Edge[]) => {
       const normalizedNodes = normalizeOntology(newNodes);
       setNodes(normalizedNodes);
@@ -494,6 +529,7 @@ const Flow = () => {
                         selectedNode={selectedNode} 
                         onUpdateNode={updateNodeData} 
                         onDeleteNode={deleteNode}
+                        onCreateIndividual={handleCreateIndividual}
                     />
                 )}
             </>

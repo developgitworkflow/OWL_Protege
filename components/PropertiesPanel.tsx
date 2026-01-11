@@ -2,13 +2,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Node as FlowNode } from 'reactflow';
 import { UMLNodeData, ElementType, Annotation, Method } from '../types';
-import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check } from 'lucide-react';
+import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User } from 'lucide-react';
 import AnnotationManager from './AnnotationManager';
 
 interface PropertiesPanelProps {
   selectedNode: FlowNode<UMLNodeData> | null;
   onUpdateNode: (id: string, data: UMLNodeData) => void;
   onDeleteNode: (id: string) => void;
+  onCreateIndividual?: (classId: string, name: string) => void;
 }
 
 const XSD_TYPES = [
@@ -96,11 +97,12 @@ const VisibilitySelector: React.FC<{ value: string; onChange: (val: string) => v
     );
 };
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdateNode, onDeleteNode }) => {
+const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdateNode, onDeleteNode, onCreateIndividual }) => {
   const [localData, setLocalData] = useState<UMLNodeData | null>(null);
   const [activeAttrType, setActiveAttrType] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showSyntaxHelp, setShowSyntaxHelp] = useState<string | null>(null); // ID of method being edited
+  const [newIndivName, setNewIndivName] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -108,6 +110,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
       setLocalData({ ...selectedNode.data });
       setExpandedId(null);
       setShowSyntaxHelp(null);
+      setNewIndivName('');
     } else {
       setLocalData(null);
       setExpandedId(null);
@@ -143,6 +146,13 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
 
   const toggleExpand = (id: string) => {
       setExpandedId(expandedId === id ? null : id);
+  };
+
+  const handleCreateIndiv = () => {
+      if (newIndivName.trim() && onCreateIndividual) {
+          onCreateIndividual(selectedNode.id, newIndivName.trim());
+          setNewIndivName('');
+      }
   };
 
   // --- Attributes (Characteristics / Data Properties) ---
@@ -323,17 +333,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                     onChange={(e) => handleChange('label', e.target.value)}
                 />
             </div>
-            
-            <div className="space-y-1">
-                 <label className="text-xs text-slate-500">Stereotype (4+1 View Tag)</label>
-                 <input
-                    type="text"
-                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
-                    placeholder="e.g. Component, Process, Node"
-                    value={localData.stereotype || ''}
-                    onChange={(e) => handleChange('stereotype', e.target.value)}
-                />
-            </div>
 
             <div className="space-y-1">
                  <label className="text-xs text-slate-500">IRI (Unique Identifier)</label>
@@ -345,6 +344,35 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                 />
             </div>
         </div>
+
+        {/* Instances Quick Create */}
+        {isClassNode && (
+            <div className="space-y-3 pt-4 border-t border-slate-800">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                    <User size={12} /> Instances
+                </h3>
+                <div className="flex gap-2">
+                    <input 
+                        className="flex-1 bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder-slate-600"
+                        placeholder="New Individual Name..."
+                        value={newIndivName}
+                        onChange={(e) => setNewIndivName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleCreateIndiv()}
+                    />
+                    <button 
+                        onClick={handleCreateIndiv}
+                        disabled={!newIndivName.trim()}
+                        className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white p-2 rounded transition-colors"
+                        title="Add Individual"
+                    >
+                        <Plus size={14} />
+                    </button>
+                </div>
+                <p className="text-[10px] text-slate-500 italic">
+                    Creates a new NamedIndividual and links it to {localData.label}.
+                </p>
+            </div>
+        )}
 
         {/* Annotations */}
         <AnnotationManager 

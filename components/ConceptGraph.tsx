@@ -1,9 +1,9 @@
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, Layers } from 'lucide-react';
+import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, Layers, X, Brain, ArrowRight, Tag, Info } from 'lucide-react';
 
 interface ConceptGraphProps {
     nodes: Node<UMLNodeData>[];
@@ -30,6 +30,7 @@ interface SimLink extends d3.SimulationLinkDatum<SimNode> {
     source: string | SimNode;
     target: string | SimNode;
     isArrow: boolean; // Only draw arrow on the second half of the link
+    role?: 'domain' | 'range' | 'attribute' | 'value' | 'subclass'; // Semantic role of the link
 }
 
 const THEME = {
@@ -49,6 +50,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
     const containerRef = useRef<HTMLDivElement>(null);
     const [tooltip, setTooltip] = useState<{x: number, y: number, content: string} | null>(null);
     const [showAttributes, setShowAttributes] = useState(false);
+    const [selectedEntity, setSelectedEntity] = useState<SimNode | null>(null);
 
     const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
 
@@ -133,8 +135,8 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                     simNodes.push(valNode);
 
                     // 3. Links
-                    simLinks.push({ source: sNode.id, target: attrId, isArrow: false });
-                    simLinks.push({ source: attrId, target: valId, isArrow: true });
+                    simLinks.push({ source: sNode.id, target: attrId, isArrow: false, role: 'attribute' });
+                    simLinks.push({ source: attrId, target: valId, isArrow: true, role: 'value' });
                 });
             }
         });
@@ -154,7 +156,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
             if (isSubClass) {
                 // Direct link for SubClass to keep hierarchy clear, but distinct style
-                simLinks.push({ source: source.id, target: target.id, isArrow: true });
+                simLinks.push({ source: source.id, target: target.id, isArrow: true, role: 'subclass' });
                 return; // Skip creating a property node for inheritance
             }
 
@@ -186,10 +188,10 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
             simNodes.push(propNode);
 
-            // Link Source -> Prop
-            simLinks.push({ source: source.id, target: propId, isArrow: false });
-            // Link Prop -> Target (Arrow here)
-            simLinks.push({ source: propId, target: target.id, isArrow: true });
+            // Link Source -> Prop (Domain)
+            simLinks.push({ source: source.id, target: propId, isArrow: false, role: 'domain' });
+            // Link Prop -> Target (Range)
+            simLinks.push({ source: propId, target: target.id, isArrow: true, role: 'range' });
         });
 
         // --- 2. D3 Setup ---
@@ -239,7 +241,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         const simulation = d3.forceSimulation(simNodes)
             .force("link", d3.forceLink(simLinks).id((d: any) => d.id).distance((d: any) => {
                 // Short distance for properties, longer for hierarchy
-                if (d.target.isProperty || d.source.isProperty) return 60;
+                if (d.target.isProperty || d.source.isProperty) return 70;
                 return 150;
             }))
             .force("charge", d3.forceManyBody().strength(-500))
@@ -250,11 +252,12 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
         // --- 3. Rendering ---
 
-        // Links
-        const link = g.append("g")
-            .selectAll("path")
+        // Links Group
+        const linkGroup = g.append("g").selectAll("g")
             .data(simLinks)
-            .join("path")
+            .join("g");
+
+        const linkPath = linkGroup.append("path")
             .attr("stroke", "#475569")
             .attr("stroke-width", 1.5)
             .attr("fill", "none")
@@ -268,6 +271,32 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             })
             // Dashed line for pure structural links (Source -> Prop) to indicate they are part of one edge
             .attr("stroke-dasharray", d => !d.isArrow ? "3,3" : "");
+
+        // Set Notation Labels (dom/rng)
+        const linkLabels = linkGroup.append("g")
+            .style("display", d => (d.role === 'domain' || d.role === 'range') ? "block" : "none");
+
+        // Background pill for label
+        linkLabels.append("rect")
+            .attr("rx", 3)
+            .attr("ry", 3)
+            .attr("width", 22)
+            .attr("height", 12)
+            .attr("x", -11)
+            .attr("y", -6)
+            .attr("fill", THEME.bg)
+            .attr("stroke", "#475569")
+            .attr("stroke-width", 0.5)
+            .attr("fill-opacity", 0.8);
+
+        linkLabels.append("text")
+            .text(d => d.role === 'domain' ? 'dom' : (d.role === 'range' ? 'rng' : ''))
+            .attr("dy", "0.25em") // Centering vertically
+            .attr("text-anchor", "middle")
+            .attr("font-size", "8px")
+            .attr("font-family", "serif") // Serif to look like math notation
+            .attr("font-style", "italic")
+            .attr("fill", "#cbd5e1");
 
         // Nodes Group
         const node = g.append("g")
@@ -290,6 +319,12 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                     d.fy = null;
                 })
             );
+
+        // Click Handler for Details
+        node.on('click', (event, d) => {
+            event.stopPropagation();
+            setSelectedEntity(d);
+        });
 
         // Draw Shapes based on Type
         node.each(function(d) {
@@ -385,17 +420,21 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         if (searchTerm) {
             const lower = searchTerm.toLowerCase();
             node.style('opacity', d => d.label.toLowerCase().includes(lower) ? 1 : 0.1);
-            link.style('opacity', 0.1);
+            linkGroup.style('opacity', 0.1);
         }
 
         // Tick
         simulation.on("tick", () => {
-            link.attr("d", (d: any) => {
-                const srcR = d.source.isProperty ? 0 : (d.source.radius || 20); // Property is rect, handled by marker logic partly, but simple math here
-                const tgtR = d.target.isProperty ? 0 : (d.target.radius || 20);
-                
+            linkPath.attr("d", (d: any) => {
                 // Simple line for now, markers handle endpoint visuals
                 return `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`;
+            });
+
+            // Update Label Positions (Midpoint)
+            linkLabels.attr("transform", (d: any) => {
+                const x = (d.source.x + d.target.x) / 2;
+                const y = (d.source.y + d.target.y) / 2;
+                return `translate(${x},${y})`;
             });
 
             node.attr("transform", d => `translate(${d.x},${d.y})`);
@@ -425,9 +464,43 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         }
     };
 
+    // Calculate details for selected entity
+    const selectedDetails = useMemo(() => {
+        if (!selectedEntity) return null;
+        
+        let originalNode = nodes.find(n => n.id === selectedEntity.originalId);
+        
+        // If we clicked a reified property node, try to find the actual Property Node if it exists in the graph
+        if (!originalNode && selectedEntity.isProperty) {
+            originalNode = nodes.find(n => n.data.label === selectedEntity.label && (n.data.type === ElementType.OWL_OBJECT_PROPERTY || n.data.type === ElementType.OWL_DATA_PROPERTY));
+        }
+
+        // Gather Connections
+        const connectedEdges = edges.filter(e => {
+            if (originalNode) {
+                return e.source === originalNode.id || e.target === originalNode.id;
+            }
+            return false;
+        });
+
+        // Filter Inferred
+        const inferred = connectedEdges.filter(e => e.data?.isInferred);
+        
+        return {
+            node: originalNode,
+            simNode: selectedEntity,
+            inferredEdges: inferred,
+            assertedEdges: connectedEdges.filter(e => !e.data?.isInferred)
+        };
+    }, [selectedEntity, nodes, edges]);
+
+    const getNodeLabel = (id: string) => {
+        return nodes.find(n => n.id === id)?.data.label || id;
+    };
+
     return (
         <div ref={containerRef} className="relative w-full h-full bg-slate-950 overflow-hidden">
-            <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+            <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing" onClick={() => setSelectedEntity(null)} />
             
             {/* Legend */}
             <div className="absolute top-4 right-4 bg-slate-900/80 backdrop-blur border border-slate-800 p-3 rounded-lg text-xs text-slate-300 shadow-xl pointer-events-none">
@@ -439,6 +512,13 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                     <div className="flex items-center gap-2"><span className="w-3 h-2 rounded-sm bg-blue-500 border border-white/20"></span> Object Prop</div>
                     <div className="flex items-center gap-2"><span className="w-3 h-2 rounded-sm bg-emerald-500 border border-white/20"></span> Data Prop</div>
                     {showAttributes && <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-400 border border-white/20"></span> Value/Literal</div>}
+                    <div className="h-px bg-slate-700 my-1"></div>
+                    <div className="flex items-center gap-2 text-[9px] font-serif italic text-slate-400">
+                        <span className="bg-slate-900 border border-slate-700 px-1 rounded">dom</span> 
+                        <span>/</span>
+                        <span className="bg-slate-900 border border-slate-700 px-1 rounded">rng</span> 
+                        <span className="ml-1">Set Notation</span>
+                    </div>
                 </div>
             </div>
 
@@ -463,8 +543,117 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                 </div>
             </div>
 
+            {/* Entity Details Overlay */}
+            {selectedEntity && (
+                <div className="absolute top-4 right-44 w-80 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in slide-in-from-right-10 fade-in duration-200 z-30">
+                    <div className="p-4 border-b border-slate-800 flex justify-between items-start bg-slate-900">
+                        <div>
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                                {selectedDetails?.node?.data.type ? selectedDetails.node.data.type.replace('owl_', '') : selectedEntity.type}
+                            </div>
+                            <h2 className="text-xl font-bold text-white break-words">{selectedEntity.label}</h2>
+                            {selectedDetails?.node?.data.iri && (
+                                <div className="text-[10px] text-slate-500 font-mono mt-1 break-all">
+                                    {selectedDetails.node.data.iri}
+                                </div>
+                            )}
+                        </div>
+                        <button onClick={() => setSelectedEntity(null)} className="text-slate-500 hover:text-white transition-colors">
+                            <X size={18} />
+                        </button>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                        {/* Reasoner Execution Report */}
+                        {selectedDetails && selectedDetails.inferredEdges.length > 0 && (
+                            <div className="bg-amber-950/20 border border-amber-900/50 rounded-lg p-3">
+                                <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <Brain size={14} /> Reasoner Execution
+                                </h3>
+                                <div className="space-y-2">
+                                    {selectedDetails.inferredEdges.map((edge) => (
+                                        <div key={edge.id} className="flex flex-col gap-0.5 bg-amber-900/10 p-2 rounded border border-amber-900/30">
+                                            <div className="flex justify-between text-xs text-amber-200">
+                                                <span className="font-bold">{edge.label}</span>
+                                                <span className="opacity-70">{edge.source === selectedEntity.id ? '->' : '<-'} {getNodeLabel(edge.source === selectedEntity.id ? edge.target : edge.source)}</span>
+                                            </div>
+                                            <div className="text-[10px] text-amber-500/80 italic">
+                                                {edge.data?.inferenceType || 'Inferred Axiom'}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Annotations */}
+                        {selectedDetails?.node?.data.annotations && selectedDetails.node.data.annotations.length > 0 && (
+                            <div>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <Info size={12} /> Annotations
+                                </h3>
+                                <div className="space-y-1">
+                                    {selectedDetails.node.data.annotations.map(ann => (
+                                        <div key={ann.id} className="text-xs bg-slate-800/50 p-2 rounded border border-slate-800">
+                                            <span className="text-blue-400 font-mono text-[10px] block mb-0.5">{ann.property}</span>
+                                            <span className="text-slate-300">{ann.value.replace(/"/g, '')}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Relationships (Asserted) */}
+                        {selectedDetails && selectedDetails.assertedEdges.length > 0 && (
+                            <div>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <ArrowRight size={12} /> Direct Relations
+                                </h3>
+                                <div className="space-y-1">
+                                    {selectedDetails.assertedEdges.map(edge => {
+                                        const isOutgoing = edge.source === selectedEntity.id;
+                                        const otherId = isOutgoing ? edge.target : edge.source;
+                                        return (
+                                            <div key={edge.id} className="flex items-center justify-between text-xs bg-slate-800/50 p-2 rounded border border-slate-800">
+                                                <span className="text-blue-300 font-medium">{edge.label || 'related'}</span>
+                                                <div className="flex items-center gap-1 text-slate-400">
+                                                    {isOutgoing ? <ArrowRight size={10} /> : <ArrowRight size={10} className="rotate-180" />}
+                                                    <span>{getNodeLabel(otherId)}</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Attributes/Properties */}
+                        {selectedDetails?.node?.data.attributes && selectedDetails.node.data.attributes.length > 0 && (
+                            <div>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <Tag size={12} /> Characteristics / Data
+                                </h3>
+                                <div className="flex flex-wrap gap-1">
+                                    {selectedDetails.node.data.attributes.map(attr => (
+                                        <span key={attr.id} className="px-2 py-1 bg-slate-800 rounded text-[10px] text-slate-300 border border-slate-700">
+                                            {attr.name} {attr.type ? `(${attr.type})` : ''}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {!selectedDetails?.node && (
+                            <div className="text-center py-8 text-slate-600 text-xs italic">
+                                Use the entity catalog or canvas tools to define detailed properties for this node.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Tooltip */}
-            {tooltip && (
+            {tooltip && !selectedEntity && (
                 <div className="absolute px-2 py-1 bg-slate-800 text-white text-xs rounded border border-slate-700 pointer-events-none z-50 transform -translate-x-1/2 -translate-y-full mt-[-10px]"
                      style={{ left: tooltip.x, top: tooltip.y }}>
                     {tooltip.content}

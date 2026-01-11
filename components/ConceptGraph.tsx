@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, RefreshCw, Maximize } from 'lucide-react';
+import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, Layers } from 'lucide-react';
 
 interface ConceptGraphProps {
     nodes: Node<UMLNodeData>[];
@@ -15,7 +15,7 @@ interface ConceptGraphProps {
 interface SimNode extends d3.SimulationNodeDatum {
     id: string;
     label: string;
-    type: 'class' | 'individual' | 'datatype' | 'property_object' | 'property_data' | 'subclass';
+    type: 'class' | 'individual' | 'datatype' | 'property_object' | 'property_data' | 'subclass' | 'literal';
     originalId?: string; // For linking back to ReactFlow nodes
     radius: number;
     width?: number; // For property rects
@@ -38,6 +38,7 @@ const THEME = {
     datatype: '#f59e0b', // Amber
     objProp: '#3b82f6', // Blue
     dataProp: '#10b981', // Green
+    literal: '#94a3b8', // Slate (Values)
     subclass: '#94a3b8', // Slate
     text: '#f8fafc',
     bg: '#0f172a'
@@ -47,6 +48,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [tooltip, setTooltip] = useState<{x: number, y: number, content: string} | null>(null);
+    const [showAttributes, setShowAttributes] = useState(false);
 
     const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
 
@@ -92,6 +94,49 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             
             simNodes.push(sNode);
             nodeMap.set(n.id, sNode);
+
+            // A.1 Attributes (Data Properties) - VISUALIZE AS NODES IF ENABLED
+            if (showAttributes && n.data.attributes) {
+                n.data.attributes.forEach((attr, idx) => {
+                    const attrId = `${n.id}_attr_${idx}`;
+                    const valId = `${n.id}_val_${idx}`;
+                    
+                    // 1. The Property Node (The Link Badge)
+                    const propNode: SimNode = {
+                        id: attrId,
+                        label: attr.name,
+                        type: 'property_data',
+                        radius: 12,
+                        width: attr.name.length * 6 + 12,
+                        height: 18,
+                        color: THEME.dataProp,
+                        isProperty: true,
+                        x: sNode.x! + (Math.random() - 0.5) * 50,
+                        y: sNode.y! + (Math.random() - 0.5) * 50
+                    };
+                    simNodes.push(propNode);
+
+                    // 2. The Value/Type Node (Leaf)
+                    const isType = n.data.type === ElementType.OWL_CLASS;
+                    const valLabel = attr.type || (isType ? 'Literal' : 'Value');
+                    
+                    const valNode: SimNode = {
+                        id: valId,
+                        label: valLabel,
+                        type: isType ? 'datatype' : 'literal', // Class -> Datatype, Indiv -> Literal
+                        radius: 15,
+                        color: isType ? THEME.datatype : THEME.literal,
+                        isProperty: false, // It's a terminal node
+                        x: sNode.x! + (Math.random() - 0.5) * 100,
+                        y: sNode.y! + (Math.random() - 0.5) * 100
+                    };
+                    simNodes.push(valNode);
+
+                    // 3. Links
+                    simLinks.push({ source: sNode.id, target: attrId, isArrow: false });
+                    simLinks.push({ source: attrId, target: valId, isArrow: true });
+                });
+            }
         });
 
         // B. Transform Relations (Reification)
@@ -275,14 +320,18 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                     .attr("font-weight", "bold")
                     .style("pointer-events", "none");
             } 
-            // B. Datatype (Rectangle)
-            else if (d.type === 'datatype') {
+            // B. Datatype / Literal (Rectangle)
+            else if (d.type === 'datatype' || d.type === 'literal') {
+                // Adjust width based on text
+                const charW = 6;
+                const w = Math.max(60, d.label.length * charW + 10);
+                
                 el.append("rect")
-                    .attr("x", -30)
-                    .attr("y", -20)
-                    .attr("width", 60)
-                    .attr("height", 40)
-                    .attr("fill", THEME.datatype)
+                    .attr("x", -w/2)
+                    .attr("y", -15)
+                    .attr("width", w)
+                    .attr("height", 30)
+                    .attr("fill", d.color)
                     .attr("stroke", "#fff")
                     .attr("stroke-width", 2);
                 
@@ -356,7 +405,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             simulation.stop();
         };
 
-    }, [nodes, edges, searchTerm]);
+    }, [nodes, edges, searchTerm, showAttributes]);
 
     const handleZoomIn = () => {
         if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 1.3);
@@ -389,10 +438,22 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                     <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-amber-500 border border-white/20"></span> Datatype</div>
                     <div className="flex items-center gap-2"><span className="w-3 h-2 rounded-sm bg-blue-500 border border-white/20"></span> Object Prop</div>
                     <div className="flex items-center gap-2"><span className="w-3 h-2 rounded-sm bg-emerald-500 border border-white/20"></span> Data Prop</div>
+                    {showAttributes && <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-400 border border-white/20"></span> Value/Literal</div>}
                 </div>
             </div>
 
-            {/* Controls */}
+            {/* Top Left Controls: Detail Toggle */}
+            <div className="absolute top-4 left-6 flex bg-slate-800 rounded-lg p-1 border border-slate-700 shadow-xl z-20">
+                <button 
+                    onClick={() => setShowAttributes(!showAttributes)}
+                    className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded transition-all ${showAttributes ? 'bg-green-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                    title="Toggle Data Properties/Attributes"
+                >
+                    <Database size={14} /> {showAttributes ? 'Hide' : 'Show'} Attributes
+                </button>
+            </div>
+
+            {/* Zoom Controls */}
             <div className="absolute bottom-6 left-6 flex flex-col gap-2">
                 <div className="bg-slate-800/90 backdrop-blur border border-slate-700 rounded-lg p-1 shadow-lg flex flex-col gap-1">
                     <button onClick={handleZoomIn} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"><ZoomIn size={20}/></button>

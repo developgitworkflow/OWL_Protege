@@ -29,7 +29,14 @@ export const generateFunctionalSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
     }
     
     lines.push('');
-    lines.push(`Ontology( <${baseIRI.replace('#', '')}>`);
+    
+    // Ontology Header with Version IRI support
+    const ontIri = metadata.ontologyIri || baseIRI.replace(/#$/, '');
+    let header = `Ontology( <${ontIri}>`;
+    if (metadata.versionIri) {
+        header += ` <${metadata.versionIri}>`;
+    }
+    lines.push(header);
     
     // Helper to format IRIs
     const fmt = (str: string) => {

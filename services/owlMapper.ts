@@ -50,8 +50,16 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
   add('');
 
   // Ontology Header (Table 1: Ontology(...))
-  const ontologyId = `${userPrefix}:${metadata.name.replace(/\s+/g, '_')}`;
+  // Determine Ontology IRI: explicit > baseIRI sans fragment > default
+  const ontologyIriString = metadata.ontologyIri || userIRI.replace(/#$/, '');
+  const ontologyId = `<${ontologyIriString}>`;
+  
   add(`${ontologyId} rdf:type owl:Ontology .`);
+  
+  if (metadata.versionIri) {
+      add(`${ontologyId} owl:versionIRI <${metadata.versionIri}> .`);
+  }
+  
   if (metadata.description) {
       add(`${ontologyId} skos:definition "${metadata.description}"@en .`);
   }

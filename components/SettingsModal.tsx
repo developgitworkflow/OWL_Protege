@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { X, Settings, Download, Upload, Save, Globe, Plus, Trash2 } from 'lucide-react';
+import { X, Settings, Download, Upload, Save, Globe, Plus, Trash2, Link as LinkIcon } from 'lucide-react';
 import { ProjectData } from '../types';
 import AnnotationManager from './AnnotationManager';
 
@@ -116,28 +116,58 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                         className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500"
                                     />
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-400 mb-1">Base IRI</label>
-                                    <input 
-                                        type="text" 
-                                        value={projectData.baseIri || 'http://example.org/ontology#'}
-                                        onChange={(e) => handleChange('baseIri', e.target.value)}
-                                        placeholder="http://example.org/ontology#"
-                                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
-                                    />
-                                    <p className="text-[10px] text-slate-500 mt-1">The default namespace for entities without an absolute IRI.</p>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-400 mb-1">Base Namespace IRI</label>
+                                        <input 
+                                            type="text" 
+                                            value={projectData.baseIri || 'http://example.org/ontology#'}
+                                            onChange={(e) => handleChange('baseIri', e.target.value)}
+                                            placeholder="http://example.org/ontology#"
+                                            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
+                                        />
+                                        <p className="text-[10px] text-slate-500 mt-1">Default namespace for entities.</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-400 mb-1">Default Prefix</label>
+                                        <input 
+                                            type="text" 
+                                            value={projectData.defaultPrefix || 'ex'}
+                                            onChange={(e) => handleChange('defaultPrefix', e.target.value)}
+                                            placeholder="ex"
+                                            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
+                                        />
+                                        <p className="text-[10px] text-slate-500 mt-1">Prefix for generated Turtle/Manchester.</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-400 mb-1">Default Prefix</label>
-                                    <input 
-                                        type="text" 
-                                        value={projectData.defaultPrefix || 'ex'}
-                                        onChange={(e) => handleChange('defaultPrefix', e.target.value)}
-                                        placeholder="ex"
-                                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
-                                    />
-                                    <p className="text-[10px] text-slate-500 mt-1">The prefix used in the generated Turtle output (e.g., <code>ex:MyClass</code>).</p>
+
+                                <div className="p-3 bg-slate-950/50 border border-slate-800 rounded-lg space-y-3">
+                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-300 uppercase tracking-wider">
+                                        <LinkIcon size={12} /> Ontology Identity
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Ontology IRI (rdf:about)</label>
+                                        <input 
+                                            type="text" 
+                                            value={projectData.ontologyIri || projectData.baseIri?.replace(/#$/, '') || ''}
+                                            onChange={(e) => handleChange('ontologyIri', e.target.value)}
+                                            placeholder="http://example.org/ontology"
+                                            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Version IRI (owl:versionIRI)</label>
+                                        <input 
+                                            type="text" 
+                                            value={projectData.versionIri || ''}
+                                            onChange={(e) => handleChange('versionIri', e.target.value)}
+                                            placeholder="http://example.org/ontology/1.0.0"
+                                            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
+                                        />
+                                    </div>
                                 </div>
+
                                 <div>
                                     <label className="block text-sm font-medium text-slate-400 mb-1">Description</label>
                                     <textarea 

@@ -44,6 +44,7 @@ import OntoMetricsModal from './components/OntoMetricsModal';
 import OWLVizVisualization from './components/OWLVizVisualization';
 import Toast, { ToastMessage, ToastType } from './components/Toast';
 import ConfirmDialog from './components/ConfirmDialog';
+import ImportUrlModal from './components/ImportUrlModal';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
 import { generateTurtle } from './services/owlMapper';
@@ -68,6 +69,7 @@ const Flow = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('design');
   const [showIndividuals, setShowIndividuals] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // History State
   const [past, setPast] = useState<{ nodes: Node[]; edges: Edge[] }[]>([]);
@@ -93,6 +95,7 @@ const Flow = () => {
   const [isExpressivityModalOpen, setIsExpressivityModalOpen] = useState(false);
   const [isDatalogModalOpen, setIsDatalogModalOpen] = useState(false);
   const [isMetricsModalOpen, setIsMetricsModalOpen] = useState(false);
+  const [isImportUrlModalOpen, setIsImportUrlModalOpen] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
 
   const [projectMetadata, setProjectMetadata] = useState<ProjectData>({ 
@@ -101,6 +104,11 @@ const Flow = () => {
       defaultPrefix: 'ex',
       rules: []
   });
+
+  // Sync sidebar visibility with view mode
+  useEffect(() => {
+      setIsSidebarOpen(viewMode === 'design');
+  }, [viewMode]);
 
   // --- Notifications ---
   const addToast = useCallback((message: string, type: ToastType = 'success') => {
@@ -570,6 +578,19 @@ const Flow = () => {
       event.target.value = '';
   };
 
+  const handleLoadUrl = async (url: string) => {
+      try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const content = await response.text();
+          // Heuristic for filename based on URL to help parser
+          const filename = url.split('/').pop() || 'download';
+          await handleLoadContent(content, filename);
+      } catch (e) {
+          throw e; // Modal handles display
+      }
+  };
+
   const handleCreateProject = (data: ProjectData) => {
     saveHistory();
     setProjectMetadata({
@@ -636,10 +657,17 @@ const Flow = () => {
         onCancel={() => setConfirmConfig(null)}
       />
 
+      <ImportUrlModal 
+        isOpen={isImportUrlModalOpen}
+        onClose={() => setIsImportUrlModalOpen(false)}
+        onImport={handleLoadUrl}
+      />
+
       <TopBar 
         onSaveJSON={handleSaveJSON} 
         onSaveTurtle={handleSaveTurtle}
-        onLoad={handleLoad} 
+        onLoad={handleLoad}
+        onLoadUrl={() => setIsImportUrlModalOpen(true)}
         onNewProject={() => setIsCreateModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onValidate={handleValidate}
@@ -663,233 +691,180 @@ const Flow = () => {
         onRedo={redo}
         canUndo={past.length > 0}
         canRedo={future.length > 0}
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        isSidebarOpen={isSidebarOpen}
+        showSidebarToggle={viewMode === 'design'}
       />
-      
+
       <div className="flex flex-1 overflow-hidden">
-        {viewMode === 'design' && (
-            <>
-                <Sidebar />
-                <div className="flex-1 h-full relative" onDrop={onDrop} onDragOver={onDragOver}>
-                    <ReactFlow
-                        nodes={visibleNodes}
-                        edges={visibleEdges} 
-                        onNodesChange={onNodesChangeWrapped}
-                        onEdgesChange={onEdgesChangeWrapped}
-                        onConnect={onConnect}
-                        onNodeDragStart={onNodeDragStart}
-                        onEdgeMouseEnter={onEdgeMouseEnter}
-                        onEdgeMouseLeave={onEdgeMouseLeave}
-                        nodeTypes={nodeTypes}
-                        onNodeClick={onNodeClick}
-                        onPaneClick={onPaneClick}
-                        fitView
-                        className="bg-slate-950"
-                        snapToGrid={true}
-                        snapGrid={[16, 16]}
-                        defaultEdgeOptions={{
-                            type: 'smoothstep',
-                            style: { stroke: '#64748b', strokeWidth: 2 },
-                            labelStyle: { fill: '#cbd5e1', fontWeight: 500, fontSize: 11 },
-                            markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' }
-                        }}
-                        connectionLineStyle={{ stroke: '#60a5fa', strokeWidth: 2 }}
-                    >
-                        <Background 
-                            color="#334155" 
-                            gap={20} 
-                            size={1.5} 
-                            variant={BackgroundVariant.Dots}
-                            className="opacity-50"
-                        />
-                        <Controls className="!bg-slate-800 !border-slate-700 !shadow-sm !rounded-md" />
-                        <MiniMap 
-                            nodeColor={(n) => {
-                                if (n.type === 'umlNode') return '#6366f1';
-                                return '#334155';
-                            }}
-                            className="!bg-slate-800 !border-slate-700 !shadow-sm !rounded-md"
-                            maskColor="rgba(15, 23, 42, 0.6)"
-                        />
-                        <Panel position="top-right" className="bg-slate-800/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 border border-slate-700/50 shadow-sm pointer-events-none select-none">
-                            {projectMetadata.name} • {projectMetadata.defaultPrefix || 'ex'}
-                            {showInferred && <span className="ml-2 text-amber-400 font-bold">• Inferred View</span>}
-                        </Panel>
-                    </ReactFlow>
-                    
-                    {edgeTooltip && (
-                        <div 
-                            className="fixed z-50 pointer-events-none bg-slate-900 border border-amber-500/50 text-slate-200 text-xs px-3 py-2 rounded-lg shadow-xl animate-in fade-in zoom-in-95 duration-100 flex flex-col gap-1"
-                            style={{ top: edgeTooltip.y - 60, left: edgeTooltip.x - 20 }}
-                        >
-                            <div className="flex items-center gap-2 font-bold text-amber-400">
-                                <Brain size={14} />
-                                {edgeTooltip.type || 'Inferred by Reasoner'}
-                            </div>
-                            <div className="text-slate-400 italic font-mono text-[10px]">{edgeTooltip.label}</div>
-                            <div className="absolute left-6 -bottom-1.5 w-3 h-3 bg-slate-900 border-r border-b border-amber-500/50 transform rotate-45"></div>
-                        </div>
-                    )}
-                </div>
-                {selectedNodeId && (
-                    <PropertiesPanel 
-                        selectedNode={selectedNode} 
-                        onUpdateNode={updateNodeData} 
-                        onDeleteNode={deleteNode}
-                        onCreateIndividual={handleCreateIndividual}
-                        onClose={() => setSelectedNodeId(null)}
-                    />
-                )}
-            </>
+        {/* Sidebar restricted to design mode */}
+        {isSidebarOpen && viewMode === 'design' && (
+            <Sidebar selectedNode={selectedNode} />
         )}
+        
+        <div className="flex-1 relative h-full bg-slate-900" onDrop={onDrop} onDragOver={onDragOver}>
+          {viewMode === 'design' && (
+            <ReactFlow
+              nodes={visibleNodes}
+              edges={visibleEdges}
+              onNodesChange={onNodesChangeWrapped}
+              onEdgesChange={onEdgesChangeWrapped}
+              onConnect={onConnect}
+              onNodeDragStart={onNodeDragStart}
+              nodeTypes={nodeTypes}
+              onNodeClick={onNodeClick}
+              onPaneClick={onPaneClick}
+              onEdgeMouseEnter={onEdgeMouseEnter}
+              onEdgeMouseLeave={onEdgeMouseLeave}
+              fitView
+              className="bg-slate-950"
+              minZoom={0.1}
+            >
+              <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#334155" />
+              <Controls className="bg-slate-800 border-slate-700 fill-slate-400 text-slate-400" />
+              <MiniMap 
+                nodeColor={(n) => {
+                  switch(n.data.type) {
+                    case ElementType.OWL_CLASS: return '#6366f1';
+                    case ElementType.OWL_NAMED_INDIVIDUAL: return '#ec4899';
+                    case ElementType.OWL_OBJECT_PROPERTY: return '#3b82f6';
+                    case ElementType.OWL_DATA_PROPERTY: return '#10b981';
+                    default: return '#64748b';
+                  }
+                }}
+                className="bg-slate-900 border-slate-800" 
+                maskColor="rgba(15, 23, 42, 0.7)"
+              />
+              {edgeTooltip && (
+                  <div 
+                      className="absolute z-50 px-2 py-1 bg-amber-900/90 text-amber-200 text-xs rounded border border-amber-700/50 pointer-events-none transform -translate-x-1/2 -translate-y-full mt-[-10px]"
+                      style={{ top: edgeTooltip.y, left: edgeTooltip.x }}
+                  >
+                      <div className="font-bold">{edgeTooltip.label}</div>
+                      <div className="text-[10px] italic">{edgeTooltip.type}</div>
+                  </div>
+              )}
+            </ReactFlow>
+          )}
 
-        {viewMode === 'entities' && (
-            <div className="flex-1 h-full flex">
-                <div className="flex-1 overflow-hidden">
-                    <EntityCatalog 
-                        nodes={nodes}
-                        edges={activeEdges}
-                        isReasonerActive={isReasonerActive}
-                        unsatisfiableNodeIds={unsatisfiableIds}
-                        onAddNode={handleCreateNode}
-                        onDeleteNode={deleteNode}
-                        onSelectNode={setSelectedNodeId}
-                        onViewInGraph={(id) => handleNavigate('concept', id)}
-                        selectedNodeId={selectedNodeId}
-                    />
-                </div>
-                {selectedNodeId && (
-                    <PropertiesPanel 
-                        selectedNode={selectedNode} 
-                        onUpdateNode={updateNodeData} 
-                        onDeleteNode={deleteNode}
-                        onCreateIndividual={handleCreateIndividual}
-                        onClose={() => setSelectedNodeId(null)}
-                    />
-                )}
-            </div>
-        )}
+          {viewMode === 'code' && (
+              <CodeViewer 
+                  nodes={nodes} 
+                  edges={edges} 
+                  metadata={projectMetadata} 
+                  onImportCode={handleCodeUpdate}
+                  searchTerm={searchTerm}
+              />
+          )}
 
-        {viewMode === 'workflow' && (
-            <div className="flex-1 h-full">
-                <WorkflowView 
-                    nodes={nodes}
-                    edges={edges}
-                    isReasonerActive={isReasonerActive}
-                    validationStatus={validationResult?.isValid ? 'valid' : (validationResult ? 'invalid' : 'unknown')}
-                    onNavigate={handleNavigate}
-                    onRunReasoner={handleRunReasoner}
-                    onValidate={handleValidate}
-                    onExport={() => setIsSettingsModalOpen(true)}
-                    onCreateClass={() => {
-                        handleCreateNode(ElementType.OWL_CLASS, 'NewClass');
-                        handleNavigate('entities');
-                    }}
-                />
-            </div>
-        )}
+          {viewMode === 'graph' && (
+              <GraphVisualization 
+                  nodes={nodes} 
+                  edges={edges} 
+                  searchTerm={searchTerm}
+                  selectedNodeId={selectedNodeId}
+                  onNavigate={handleNavigate}
+              />
+          )}
 
-        {viewMode === 'code' && (
-            <div className="flex-1 h-full">
-                <CodeViewer 
-                    nodes={nodes} 
-                    edges={edges} 
-                    metadata={projectMetadata} 
-                    onImportCode={handleCodeUpdate}
-                    searchTerm={searchTerm}
-                />
-            </div>
-        )}
+          {viewMode === 'mindmap' && (
+              <MindmapVisualization 
+                  nodes={nodes} 
+                  edges={edges} 
+                  searchTerm={searchTerm}
+                  selectedNodeId={selectedNodeId}
+              />
+          )}
 
-        {viewMode === 'graph' && (
-            <div className="flex-1 h-full">
-                <GraphVisualization 
-                    nodes={visibleNodes} 
-                    edges={visibleEdges}
-                    searchTerm={searchTerm}
-                    selectedNodeId={selectedNodeId}
-                    onNavigate={handleNavigate}
-                />
-            </div>
-        )}
+          {viewMode === 'tree' && (
+              <TreeVisualization 
+                  nodes={nodes} 
+                  edges={edges} 
+                  searchTerm={searchTerm}
+                  selectedNodeId={selectedNodeId}
+                  onNavigate={handleNavigate}
+              />
+          )}
 
-        {viewMode === 'concept' && (
-            <div className="flex-1 h-full">
-                <ConceptGraph 
-                    nodes={visibleNodes} 
-                    edges={visibleEdges} 
-                    searchTerm={searchTerm}
-                    selectedNodeId={selectedNodeId}
-                    onNavigate={handleNavigate}
-                />
-            </div>
-        )}
+          {viewMode === 'uml' && (
+              <UMLVisualization nodes={nodes} edges={edges} searchTerm={searchTerm} />
+          )}
 
-        {viewMode === 'mindmap' && (
-            <div className="flex-1 h-full">
-                <MindmapVisualization 
-                    nodes={visibleNodes} 
-                    edges={visibleEdges}
-                    searchTerm={searchTerm}
-                    selectedNodeId={selectedNodeId}
-                />
-            </div>
-        )}
+          {viewMode === 'peirce' && (
+              <PeirceVisualization nodes={nodes} edges={edges} />
+          )}
 
-        {viewMode === 'tree' && (
-            <div className="flex-1 h-full">
-                <TreeVisualization 
-                    nodes={visibleNodes} 
-                    edges={visibleEdges}
-                    searchTerm={searchTerm}
-                    selectedNodeId={selectedNodeId}
-                    onNavigate={handleNavigate}
-                />
-            </div>
-        )}
+          {viewMode === 'concept' && (
+              <ConceptGraph 
+                  nodes={nodes} 
+                  edges={edges} 
+                  searchTerm={searchTerm}
+                  selectedNodeId={selectedNodeId}
+                  onNavigate={handleNavigate}
+              />
+          )}
 
-        {viewMode === 'uml' && (
-            <div className="flex-1 h-full">
-                <UMLVisualization 
-                    nodes={visibleNodes} 
-                    edges={visibleEdges}
-                    searchTerm={searchTerm}
-                />
-            </div>
-        )}
+          {viewMode === 'entities' && (
+              <EntityCatalog 
+                  nodes={nodes} 
+                  edges={edges}
+                  isReasonerActive={isReasonerActive}
+                  unsatisfiableNodeIds={unsatisfiableIds}
+                  onAddNode={handleCreateNode}
+                  onDeleteNode={deleteNode}
+                  onSelectNode={setSelectedNodeId}
+                  onViewInGraph={(id) => handleNavigate('concept', id)}
+                  selectedNodeId={selectedNodeId}
+              />
+          )}
 
-        {viewMode === 'owlviz' && (
-            <div className="flex-1 h-full">
-                <OWLVizVisualization 
-                    nodes={visibleNodes} 
-                    edges={visibleEdges}
-                    searchTerm={searchTerm}
-                    selectedNodeId={selectedNodeId}
-                />
-            </div>
-        )}
+          {viewMode === 'workflow' && (
+              <WorkflowView 
+                  nodes={nodes}
+                  edges={edges}
+                  isReasonerActive={isReasonerActive}
+                  validationStatus={validationResult?.isValid ? 'valid' : (validationResult ? 'invalid' : 'unknown')}
+                  onNavigate={handleNavigate}
+                  onRunReasoner={handleRunReasoner}
+                  onValidate={handleValidate}
+                  onExport={handleSaveTurtle}
+                  onCreateClass={() => { handleNavigate('design'); handleCreateNode(ElementType.OWL_CLASS, 'NewClass'); }}
+              />
+          )}
 
-        {viewMode === 'peirce' && (
-            <div className="flex-1 h-full">
-                <PeirceVisualization 
-                    nodes={visibleNodes} 
-                    edges={visibleEdges}
-                />
-            </div>
-        )}
+          {viewMode === 'owlviz' && (
+              <OWLVizVisualization 
+                  nodes={nodes} 
+                  edges={edges} 
+                  searchTerm={searchTerm}
+                  selectedNodeId={selectedNodeId}
+              />
+          )}
+
+          <AIAssistant 
+              onDiagramGenerated={onDiagramGenerated} 
+              currentNodes={nodes} 
+              currentEdges={edges} 
+          />
+        </div>
+
+        {/* Properties Panel Sliding Container */}
+        <div className={`transition-all duration-300 ease-in-out border-l border-slate-800 bg-slate-900 overflow-hidden ${selectedNode ? 'w-96 translate-x-0' : 'w-0 translate-x-full border-none'}`}>
+            <PropertiesPanel 
+              selectedNode={selectedNode} 
+              onUpdateNode={updateNodeData} 
+              onDeleteNode={deleteNode}
+              onCreateIndividual={handleCreateIndividual}
+              onClose={() => setSelectedNodeId(null)}
+            />
+        </div>
       </div>
 
-      {viewMode === 'design' && (
-        <AIAssistant 
-            onDiagramGenerated={onDiagramGenerated} 
-            currentNodes={nodes}
-            currentEdges={edges}
-        />
-      )}
-
+      {/* Modals */}
       <CreateProjectModal 
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onCreate={handleCreateProject}
+        isOpen={isCreateModalOpen} 
+        onClose={() => setIsCreateModalOpen(false)} 
+        onCreate={handleCreateProject} 
       />
 
       <SettingsModal 
@@ -912,20 +887,20 @@ const Flow = () => {
         isOpen={isDLQueryModalOpen}
         onClose={() => setIsDLQueryModalOpen(false)}
         nodes={nodes}
-        edges={edges}
+        edges={activeEdges}
         onNavigate={handleNavigate}
       />
 
-      <SWRLModal 
+      <SWRLModal
         isOpen={isSWRLModalOpen}
         onClose={() => setIsSWRLModalOpen(false)}
         projectData={projectMetadata}
-        onUpdateProjectData={setProjectMetadata}
+        onUpdateProjectData={(data) => { saveHistory(); setProjectMetadata(data); }}
         nodes={nodes}
         edges={edges}
       />
 
-      <DLAxiomModal 
+      <DLAxiomModal
         isOpen={isDLAxiomModalOpen}
         onClose={() => setIsDLAxiomModalOpen(false)}
         nodes={nodes}
@@ -933,34 +908,29 @@ const Flow = () => {
         onUpdateOntology={handleOntologyUpdate}
       />
 
-      <ExpressivityModal 
+      <ExpressivityModal
         isOpen={isExpressivityModalOpen}
         onClose={() => setIsExpressivityModalOpen(false)}
         nodes={nodes}
         edges={edges}
       />
 
-      <DatalogModal 
+      <DatalogModal
         isOpen={isDatalogModalOpen}
         onClose={() => setIsDatalogModalOpen(false)}
         nodes={nodes}
         edges={edges}
       />
 
-      <OntoMetricsModal 
+      <OntoMetricsModal
         isOpen={isMetricsModalOpen}
         onClose={() => setIsMetricsModalOpen(false)}
         nodes={nodes}
         edges={edges}
       />
+
     </div>
   );
 };
 
-export default function App() {
-  return (
-    <ReactFlowProvider>
-      <Flow />
-    </ReactFlowProvider>
-  );
-}
+export default Flow;

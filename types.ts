@@ -76,6 +76,8 @@ export interface ProjectData {
   language?: string;
   description?: string;
   baseIri?: string;
+  ontologyIri?: string; // Specific IRI for the ontology (owl:Ontology rdf:about="...")
+  versionIri?: string; // owl:versionIRI
   defaultPrefix?: string;
   namespaces?: Record<string, string>; // Custom namespace prefixes
   file?: File;

@@ -83,7 +83,11 @@ export const generateManchesterSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
     }
 
     lines.push('');
-    lines.push(`Ontology: <${baseIRI.replace('#', '')}>`);
+    const ontIri = metadata.ontologyIri || baseIRI.replace(/#$/, '');
+    lines.push(`Ontology: <${ontIri}>`);
+    if (metadata.versionIri) {
+        lines.push(`${indent}<${metadata.versionIri}>`);
+    }
     
     // Ontology Annotations
     if (metadata.description || (metadata.annotations && metadata.annotations.length > 0)) {

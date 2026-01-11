@@ -1,11 +1,12 @@
 
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather, Workflow, Brain, CheckCircle2, List, Activity, Map, GitBranch, Undo2, Redo2 } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather, Workflow, Brain, CheckCircle2, List, Activity, Map, GitBranch, Undo2, Redo2, Globe, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
     onSaveTurtle: () => void;
     onLoad: (event: React.ChangeEvent<HTMLInputElement>) => void;
+    onLoadUrl: () => void;
     onNewProject: () => void;
     onOpenSettings: () => void;
     onValidate: () => void;
@@ -31,12 +32,17 @@ interface TopBarProps {
     onRedo: () => void;
     canUndo: boolean;
     canRedo: boolean;
+    // Sidebar Control
+    onToggleSidebar: () => void;
+    isSidebarOpen: boolean;
+    showSidebarToggle: boolean;
 }
 
 const TopBar: React.FC<TopBarProps> = ({ 
     onSaveJSON, 
     onSaveTurtle, 
-    onLoad, 
+    onLoad,
+    onLoadUrl, 
     onNewProject, 
     onOpenSettings, 
     onValidate,
@@ -59,13 +65,26 @@ const TopBar: React.FC<TopBarProps> = ({
     onUndo,
     onRedo,
     canUndo,
-    canRedo
+    canRedo,
+    onToggleSidebar,
+    isSidebarOpen,
+    showSidebarToggle
 }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showImportMenu, setShowImportMenu] = useState(false);
 
   return (
     <div className="h-16 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-6 shadow-md z-20 text-white">
       <div className="flex items-center gap-3">
+        {showSidebarToggle && (
+            <button 
+                onClick={onToggleSidebar}
+                className="text-slate-400 hover:text-white transition-colors mr-2"
+                title={isSidebarOpen ? "Hide Toolbox" : "Show Toolbox"}
+            >
+                {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+            </button>
+        )}
         <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg">
             <Layers className="text-white w-5 h-5" />
         </div>
@@ -299,10 +318,34 @@ const TopBar: React.FC<TopBarProps> = ({
                 <FilePlus size={16} />
              </button>
 
-             <label className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition-colors cursor-pointer" title="Import File">
-                <Upload size={16} />
-                <input type="file" className="hidden" accept=".json,.ttl,.rdf,.nt,.owl,.ofn,.xml" onChange={onLoad} />
-             </label>
+             {/* Import Menu */}
+             <div className="relative">
+                 <button 
+                    onClick={() => setShowImportMenu(!showImportMenu)}
+                    className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition-colors focus:outline-none"
+                    title="Import Ontology"
+                 >
+                    <Upload size={16} />
+                    <ChevronDown size={14} className="opacity-50" />
+                 </button>
+                 {showImportMenu && (
+                     <div className="absolute top-full right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-md shadow-xl z-50">
+                         <label className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700 first:rounded-t-md cursor-pointer flex items-center gap-2">
+                            <Upload size={12} />
+                            <span>Upload File</span>
+                            <input type="file" className="hidden" accept=".json,.ttl,.rdf,.nt,.owl,.ofn,.xml" onChange={(e) => { onLoad(e); setShowImportMenu(false); }} />
+                         </label>
+                         <button 
+                            onClick={() => { onLoadUrl(); setShowImportMenu(false); }}
+                            className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700 last:rounded-b-md flex items-center gap-2"
+                         >
+                            <Globe size={12} />
+                            <span>From URL</span>
+                         </button>
+                     </div>
+                 )}
+                 {showImportMenu && <div className="fixed inset-0 z-40" onClick={() => setShowImportMenu(false)} />}
+             </div>
 
              {/* Export Dropdown */}
              <div className="relative">

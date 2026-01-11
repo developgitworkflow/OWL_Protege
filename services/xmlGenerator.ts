@@ -1,3 +1,4 @@
+
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, ProjectData } from '../types';
 
@@ -18,7 +19,13 @@ export const generateRdfXml = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
   lines.push(`${indent(1)}xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">`);
   
   // Ontology Declaration
-  lines.push(`${indent(1)}<owl:Ontology rdf:about="${baseIri.replace('#', '')}">`);
+  const ontIri = metadata.ontologyIri || baseIri.replace(/#$/, '');
+  lines.push(`${indent(1)}<owl:Ontology rdf:about="${ontIri}">`);
+  
+  if (metadata.versionIri) {
+      lines.push(`${indent(2)}<owl:versionIRI rdf:resource="${metadata.versionIri}"/>`);
+  }
+
   if (metadata.description) {
       lines.push(`${indent(2)}<rdfs:comment>${metadata.description}</rdfs:comment>`);
   }

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Node as FlowNode } from 'reactflow';
 import { UMLNodeData, ElementType, Annotation, Method } from '../types';
-import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon } from 'lucide-react';
+import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag } from 'lucide-react';
 import AnnotationManager from './AnnotationManager';
 
 interface PropertiesPanelProps {
@@ -119,16 +119,9 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
     }
   }, [selectedNode]);
 
+  // If no selection, we render null because the container in App.tsx handles the sliding animation/width
   if (!selectedNode || !localData) {
-    return (
-      <div className="w-96 bg-slate-900 border-l border-slate-800 p-6 flex flex-col items-center justify-center text-center h-full">
-        <div className="bg-slate-800 p-6 rounded-full mb-6 border border-slate-700 shadow-xl">
-            <Box className="w-10 h-10 text-slate-500" />
-        </div>
-        <h3 className="text-slate-200 font-semibold text-lg mb-2">No Selection</h3>
-        <p className="text-slate-500 text-sm max-w-[200px]">Select a class, individual, property or datatype from the canvas to edit its properties.</p>
-      </div>
-    );
+    return null;
   }
 
   const isPropertyNode = localData.type === ElementType.OWL_OBJECT_PROPERTY || localData.type === ElementType.OWL_DATA_PROPERTY;
@@ -301,18 +294,20 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
   const displayType = localData.type.replace('owl_', '').replace(/_/g, ' ');
 
   return (
-    <div ref={panelRef} className="w-96 bg-slate-900 border-l border-slate-800 h-full overflow-y-auto flex flex-col font-sans text-sm text-slate-200">
+    <div ref={panelRef} className="w-full h-full overflow-y-auto flex flex-col font-sans text-sm text-slate-200">
       
       {/* Header */}
-      <div className="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50 backdrop-blur-sm sticky top-0 z-20">
+      <div className="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/90 backdrop-blur-sm sticky top-0 z-20">
         <div className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">{displayType}</span>
+            <span className="text-[10px] uppercase tracking-wider text-blue-400 font-bold flex items-center gap-1">
+                {isClassifiedIcon(localData.type)} {displayType}
+            </span>
             <div className="font-bold text-lg text-white truncate max-w-[200px]" title={localData.label}>{localData.label}</div>
         </div>
         <button 
             onClick={onClose}
             className="text-slate-500 hover:text-white hover:bg-slate-800 p-2 rounded-full transition-all"
-            title="Close Panel"
+            title="Hide Panel"
         >
             <X size={20} />
         </button>
@@ -618,5 +613,16 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
     </div>
   );
 };
+
+// Helper for header icon
+const isClassifiedIcon = (type: ElementType) => {
+    switch (type) {
+        case ElementType.OWL_CLASS: return <Box size={14} />;
+        case ElementType.OWL_OBJECT_PROPERTY: return <GitMerge size={14} />;
+        case ElementType.OWL_DATA_PROPERTY: return <Tag size={14} />;
+        case ElementType.OWL_NAMED_INDIVIDUAL: return <User size={14} />;
+        default: return <Box size={14} />;
+    }
+}
 
 export default PropertiesPanel;

@@ -1,5 +1,6 @@
+
 import React, { useState, useMemo, useRef } from 'react';
-import { X, Sigma, BookOpen, Database, User, ArrowRightLeft, Info, Plus, Check } from 'lucide-react';
+import { X, Sigma, BookOpen, Database, User, ArrowRightLeft, Info, Plus, Check, ListFilter } from 'lucide-react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
 
@@ -242,14 +243,14 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
       const createRow = (key: string, content: React.ReactNode, label: string, explanation: string) => (
           <div 
             key={key} 
-            className="py-2 px-3 -mx-3 border-b border-slate-800 flex items-center justify-between group hover:bg-slate-800/50 transition-colors cursor-help rounded"
+            className="py-2.5 px-3 border-b border-slate-800 flex items-center justify-between group hover:bg-slate-800/50 transition-colors cursor-help rounded-md my-0.5"
             onMouseMove={(e) => handleMouseMove(e, explanation)}
             onMouseLeave={handleMouseLeave}
           >
               <div className="font-mono text-sm text-slate-300">
                   {content}
               </div>
-              <span className="text-[10px] text-slate-600 uppercase group-hover:text-slate-400">{label}</span>
+              <span className="text-[9px] bg-slate-950 text-slate-500 px-1.5 py-0.5 rounded border border-slate-800 uppercase tracking-tight group-hover:border-slate-700 transition-colors">{label}</span>
           </div>
       );
 
@@ -365,7 +366,12 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                  <Sigma size={20} />
              </div>
              <div>
-                <h2 className="text-lg font-bold text-slate-100">Description Logic Axioms</h2>
+                <div className="flex items-center gap-3">
+                    <h2 className="text-lg font-bold text-slate-100">Description Logic Axioms</h2>
+                    <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700">
+                        Total: {axioms.tbox.length + axioms.rbox.length + axioms.abox.length}
+                    </span>
+                </div>
                 <p className="text-xs text-slate-400">Formal definitions (TBox, RBox, ABox)</p>
              </div>
           </div>
@@ -477,21 +483,36 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                 <div className="flex border-b border-slate-800">
                     <button 
                         onClick={() => setActiveTab('tbox')}
-                        className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${activeTab === 'tbox' ? 'border-b-2 border-indigo-500 text-indigo-400 bg-slate-800/50' : 'text-slate-500 hover:text-slate-300'}`}
+                        className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-between px-6 gap-2 ${activeTab === 'tbox' ? 'border-b-2 border-indigo-500 text-indigo-400 bg-slate-800/50' : 'text-slate-500 hover:text-slate-300'}`}
                     >
-                        <Database size={14} /> TBox (Classes)
+                        <div className="flex items-center gap-2">
+                            <Database size={14} /> <span>TBox (Classes)</span>
+                        </div>
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${activeTab === 'tbox' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-800 text-slate-500'}`}>
+                            {axioms.tbox.length}
+                        </span>
                     </button>
                     <button 
                         onClick={() => setActiveTab('rbox')}
-                        className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${activeTab === 'rbox' ? 'border-b-2 border-blue-500 text-blue-400 bg-slate-800/50' : 'text-slate-500 hover:text-slate-300'}`}
+                        className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-between px-6 gap-2 ${activeTab === 'rbox' ? 'border-b-2 border-blue-500 text-blue-400 bg-slate-800/50' : 'text-slate-500 hover:text-slate-300'}`}
                     >
-                        <ArrowRightLeft size={14} /> RBox (Properties)
+                        <div className="flex items-center gap-2">
+                            <ArrowRightLeft size={14} /> <span>RBox (Properties)</span>
+                        </div>
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${activeTab === 'rbox' ? 'bg-blue-500/20 text-blue-300' : 'bg-slate-800 text-slate-500'}`}>
+                            {axioms.rbox.length}
+                        </span>
                     </button>
                     <button 
                         onClick={() => setActiveTab('abox')}
-                        className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${activeTab === 'abox' ? 'border-b-2 border-pink-500 text-pink-400 bg-slate-800/50' : 'text-slate-500 hover:text-slate-300'}`}
+                        className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-between px-6 gap-2 ${activeTab === 'abox' ? 'border-b-2 border-pink-500 text-pink-400 bg-slate-800/50' : 'text-slate-500 hover:text-slate-300'}`}
                     >
-                        <User size={14} /> ABox (Individuals)
+                        <div className="flex items-center gap-2">
+                            <User size={14} /> <span>ABox (Individuals)</span>
+                        </div>
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${activeTab === 'abox' ? 'bg-pink-500/20 text-pink-300' : 'bg-slate-800 text-slate-500'}`}>
+                            {axioms.abox.length}
+                        </span>
                     </button>
                 </div>
 
@@ -499,17 +520,32 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                 <div className="flex-1 overflow-y-auto p-6 relative">
                     {activeTab === 'tbox' && (
                         <div>
-                            {axioms.tbox.length > 0 ? axioms.tbox : <div className="text-center text-slate-600 italic mt-10">No Class axioms defined.</div>}
+                            {axioms.tbox.length > 0 ? axioms.tbox : (
+                                <div className="flex flex-col items-center justify-center py-10 text-slate-600 gap-2">
+                                    <ListFilter size={24} className="opacity-20" />
+                                    <span className="italic text-xs">No Class axioms defined.</span>
+                                </div>
+                            )}
                         </div>
                     )}
                     {activeTab === 'rbox' && (
                         <div>
-                            {axioms.rbox.length > 0 ? axioms.rbox : <div className="text-center text-slate-600 italic mt-10">No Property axioms defined.</div>}
+                            {axioms.rbox.length > 0 ? axioms.rbox : (
+                                <div className="flex flex-col items-center justify-center py-10 text-slate-600 gap-2">
+                                    <ListFilter size={24} className="opacity-20" />
+                                    <span className="italic text-xs">No Property axioms defined.</span>
+                                </div>
+                            )}
                         </div>
                     )}
                     {activeTab === 'abox' && (
                         <div>
-                            {axioms.abox.length > 0 ? axioms.abox : <div className="text-center text-slate-600 italic mt-10">No Individual assertions defined.</div>}
+                            {axioms.abox.length > 0 ? axioms.abox : (
+                                <div className="flex flex-col items-center justify-center py-10 text-slate-600 gap-2">
+                                    <ListFilter size={24} className="opacity-20" />
+                                    <span className="italic text-xs">No Individual assertions defined.</span>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

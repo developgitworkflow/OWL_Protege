@@ -17,12 +17,14 @@ interface ConceptGraphProps {
 interface SimNode extends d3.SimulationNodeDatum {
     id: string;
     label: string;
-    type: 'class' | 'individual' | 'datatype' | 'property_object' | 'property_data' | 'subclass' | 'literal';
+    type: 'class' | 'individual' | 'datatype' | 'property_object' | 'property_data' | 'subclass' | 'literal' | 'disjoint';
     originalId?: string; // For linking back to ReactFlow nodes
     radius: number;
     width?: number; // For property rects
     height?: number;
     color: string;
+    stroke: string;
+    textColor: string;
     isProperty: boolean;
     x?: number;
     y?: number;
@@ -32,19 +34,33 @@ interface SimLink extends d3.SimulationLinkDatum<SimNode> {
     source: string | SimNode;
     target: string | SimNode;
     isArrow: boolean; // Only draw arrow on the second half of the link
-    role?: 'domain' | 'range' | 'attribute' | 'value' | 'subclass'; // Semantic role of the link
+    role?: 'domain' | 'range' | 'attribute' | 'value' | 'subclass' | 'instance' | 'disjoint_link'; 
 }
 
+// VOWL-aligned Theme (Dark Mode Optimized)
 const THEME = {
-    class: '#6366f1', // Indigo
-    individual: '#ec4899', // Pink
-    datatype: '#f59e0b', // Amber
-    objProp: '#3b82f6', // Blue
-    dataProp: '#10b981', // Green
-    literal: '#94a3b8', // Slate (Values)
-    subclass: '#94a3b8', // Slate
-    text: '#f8fafc',
-    bg: '#0f172a'
+    class: '#3b82f6',        // Blue-500
+    classStroke: '#60a5fa',  // Blue-400
+    
+    individual: '#a855f7',   // Purple-500
+    individualStroke: '#c084fc', // Purple-400
+    
+    datatype: '#f59e0b',     // Amber-500
+    datatypeStroke: '#fbbf24', // Amber-400
+    
+    objProp: '#60a5fa',      // Blue-400
+    objPropStroke: '#93c5fd', // Blue-300
+    
+    dataProp: '#10b981',     // Emerald-500
+    dataPropStroke: '#34d399', // Emerald-400
+    
+    literal: '#64748b',      // Slate-500
+    literalStroke: '#94a3b8', // Slate-400
+    
+    disjoint: '#ef4444',     // Red-500
+    
+    text: '#ffffff',         
+    bg: '#0f172a'            // Slate-950
 };
 
 const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = '', selectedNodeId, onNavigate }) => {
@@ -72,16 +88,19 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         nodes.forEach(n => {
             let type: SimNode['type'] = 'class';
             let color = THEME.class;
-            let radius = 35;
+            let stroke = THEME.classStroke;
+            let radius = 35; // Standard Class Radius
 
             if (n.data.type === ElementType.OWL_NAMED_INDIVIDUAL) {
                 type = 'individual';
                 color = THEME.individual;
-                radius = 25;
+                stroke = THEME.individualStroke;
+                radius = 20; // Smaller Individuals
             } else if (n.data.type === ElementType.OWL_DATATYPE) {
                 type = 'datatype';
                 color = THEME.datatype;
-                radius = 25; // Logic handled in renderer for rect shape
+                stroke = THEME.datatypeStroke;
+                radius = 30; 
             }
 
             const sNode: SimNode = {
@@ -91,6 +110,8 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                 originalId: n.id,
                 radius,
                 color,
+                stroke,
+                textColor: THEME.text,
                 isProperty: false,
                 x: n.position.x + 100,
                 y: n.position.y + 100
@@ -99,44 +120,45 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             simNodes.push(sNode);
             nodeMap.set(n.id, sNode);
 
-            // A.1 Attributes (Data Properties) - VISUALIZE AS NODES IF ENABLED
+            // A.1 Attributes (Data Properties)
             if (showAttributes && n.data.attributes) {
                 n.data.attributes.forEach((attr, idx) => {
                     const attrId = `${n.id}_attr_${idx}`;
                     const valId = `${n.id}_val_${idx}`;
                     
-                    // 1. The Property Node (The Link Badge)
                     const propNode: SimNode = {
                         id: attrId,
                         label: attr.name,
                         type: 'property_data',
                         radius: 12,
-                        width: attr.name.length * 6 + 12,
-                        height: 18,
+                        width: attr.name.length * 6 + 20,
+                        height: 20,
                         color: THEME.dataProp,
+                        stroke: THEME.dataPropStroke,
+                        textColor: '#fff',
                         isProperty: true,
                         x: sNode.x! + (Math.random() - 0.5) * 50,
                         y: sNode.y! + (Math.random() - 0.5) * 50
                     };
                     simNodes.push(propNode);
 
-                    // 2. The Value/Type Node (Leaf)
                     const isType = n.data.type === ElementType.OWL_CLASS;
                     const valLabel = attr.type || (isType ? 'Literal' : 'Value');
                     
                     const valNode: SimNode = {
                         id: valId,
                         label: valLabel,
-                        type: isType ? 'datatype' : 'literal', // Class -> Datatype, Indiv -> Literal
-                        radius: 15,
+                        type: isType ? 'datatype' : 'literal',
+                        radius: 20,
                         color: isType ? THEME.datatype : THEME.literal,
-                        isProperty: false, // It's a terminal node
+                        stroke: isType ? THEME.datatypeStroke : THEME.literalStroke,
+                        textColor: isType ? '#000' : '#fff',
+                        isProperty: false,
                         x: sNode.x! + (Math.random() - 0.5) * 100,
                         y: sNode.y! + (Math.random() - 0.5) * 100
                     };
                     simNodes.push(valNode);
 
-                    // 3. Links
                     simLinks.push({ source: sNode.id, target: attrId, isArrow: false, role: 'attribute' });
                     simLinks.push({ source: attrId, target: valId, isArrow: true, role: 'value' });
                 });
@@ -144,45 +166,72 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         });
 
         // B. Transform Relations (Reification)
-        // Instead of A -> B, we do A -> [PropNode] -> B
         edges.forEach(e => {
             const source = nodeMap.get(e.source);
             const target = nodeMap.get(e.target);
             if (!source || !target) return;
 
             const label = (e.label as string) || '';
-            const cleanLabel = label.replace('owl:', '').replace('rdf:', '');
+            const cleanLabel = label.replace(/^owl:/, '').replace(/^rdf:/, '').replace(/^rdfs:/, '');
+            const lowerLabel = cleanLabel.toLowerCase();
             
-            // Determine Property Type
-            const isSubClass = cleanLabel === 'subClassOf' || cleanLabel === 'rdfs:subClassOf';
-
-            if (isSubClass) {
-                // Direct link for SubClass to keep hierarchy clear, but distinct style
+            // 1. SubClass (Solid Line, Hollow Arrow)
+            if (lowerLabel === 'subclassof') {
                 simLinks.push({ source: source.id, target: target.id, isArrow: true, role: 'subclass' });
-                return; // Skip creating a property node for inheritance
+                return;
             }
 
-            // Create Property Node
+            // 2. Instance Of (Dashed Line, Standard Arrow) - DIRECT LINK
+            if (lowerLabel === 'type' || label === 'a') {
+                simLinks.push({ source: source.id, target: target.id, isArrow: true, role: 'instance' });
+                return;
+            }
+
+            // 3. Disjoint (Circular Node)
+            if (lowerLabel.includes('disjoint')) {
+                const disjointId = `disjoint-${e.id}`;
+                const disjointNode: SimNode = {
+                    id: disjointId,
+                    label: '⊥',
+                    type: 'disjoint',
+                    radius: 15,
+                    color: THEME.bg,
+                    stroke: THEME.disjoint,
+                    textColor: THEME.disjoint,
+                    isProperty: false,
+                    x: (source.x! + target.x!) / 2,
+                    y: (source.y! + target.y!) / 2
+                };
+                simNodes.push(disjointNode);
+                simLinks.push({ source: source.id, target: disjointId, isArrow: false, role: 'disjoint_link' });
+                simLinks.push({ source: target.id, target: disjointId, isArrow: false, role: 'disjoint_link' });
+                return;
+            }
+
+            // 4. Object/Data Properties (Rectangular Node)
             const propId = `prop-${e.id}`;
             let propType: SimNode['type'] = 'property_object';
             let propColor = THEME.objProp;
+            let propStroke = THEME.objPropStroke;
 
             if (target.type === 'datatype') {
                 propType = 'property_data';
                 propColor = THEME.dataProp;
+                propStroke = THEME.dataPropStroke;
             }
 
-            // Calculate approximate text width for the rectangle
-            const textWidth = cleanLabel.length * 7 + 16; 
+            const textWidth = cleanLabel.length * 6 + 24; 
 
             const propNode: SimNode = {
                 id: propId,
                 label: cleanLabel,
                 type: propType,
-                radius: 15, // Height mostly
+                radius: 12,
                 width: textWidth,
-                height: 20,
+                height: 22,
                 color: propColor,
+                stroke: propStroke,
+                textColor: '#fff',
                 isProperty: true,
                 x: (source.x! + target.x!) / 2,
                 y: (source.y! + target.y!) / 2
@@ -196,76 +245,57 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             simLinks.push({ source: propId, target: target.id, isArrow: true, role: 'range' });
         });
 
-        // --- Handle External Selection Logic (e.g. from Catalog) ---
+        // --- Handle External Selection ---
         if (selectedNodeId) {
             const found = simNodes.find(n => n.originalId === selectedNodeId);
-            if (found) {
-                setSelectedEntity(found);
-            }
+            if (found) setSelectedEntity(found);
         }
 
         // --- 2. D3 Setup ---
 
         const svg = d3.select(svgRef.current);
-        svg.selectAll("*").remove(); // Clear canvas
+        svg.selectAll("*").remove(); 
 
-        // Defs for Arrows
         const defs = svg.append("defs");
         
-        // Standard Arrow
-        defs.append("marker")
-            .attr("id", "arrow-std")
-            .attr("viewBox", "0 -5 10 10")
-            .attr("refX", 10) 
-            .attr("refY", 0)
-            .attr("markerWidth", 6)
-            .attr("markerHeight", 6)
-            .attr("orient", "auto")
-            .append("path")
-            .attr("d", "M0,-5L10,0L0,5")
-            .attr("fill", "#64748b");
+        // Filter
+        const filter = defs.append("filter").attr("id", "drop-shadow").attr("height", "140%");
+        filter.append("feGaussianBlur").attr("in", "SourceAlpha").attr("stdDeviation", 3).attr("result", "blur");
+        filter.append("feOffset").attr("in", "blur").attr("dx", 2).attr("dy", 2).attr("result", "offsetBlur");
+        const feMerge = filter.append("feMerge");
+        feMerge.append("feMergeNode").attr("in", "offsetBlur");
+        feMerge.append("feMergeNode").attr("in", "SourceGraphic");
 
-        // Subclass Arrow (Hollow Triangle)
-        defs.append("marker")
-            .attr("id", "arrow-sub")
-            .attr("viewBox", "0 -5 10 10")
-            .attr("refX", 38)
-            .attr("refY", 0)
-            .attr("markerWidth", 8)
-            .attr("markerHeight", 8)
-            .attr("orient", "auto")
-            .append("path")
-            .attr("d", "M0,-5L10,0L0,5Z")
-            .attr("fill", "white")
-            .attr("stroke", "#64748b");
+        // Markers
+        defs.append("marker").attr("id", "arrow-std").attr("viewBox", "0 -5 10 10").attr("refX", 8).attr("refY", 0).attr("markerWidth", 5).attr("markerHeight", 5).attr("orient", "auto")
+            .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#94a3b8");
+
+        defs.append("marker").attr("id", "arrow-sub").attr("viewBox", "0 -5 10 10").attr("refX", 38).attr("refY", 0).attr("markerWidth", 8).attr("markerHeight", 8).attr("orient", "auto")
+            .append("path").attr("d", "M0,-5L10,0L0,5Z").attr("fill", "#0f172a").attr("stroke", "#94a3b8");
+
+        defs.append("marker").attr("id", "arrow-inst").attr("viewBox", "0 -5 10 10").attr("refX", 38).attr("refY", 0).attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
+            .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#94a3b8");
 
         const g = svg.append("g");
 
-        // Zoom
-        const zoom = d3.zoom<SVGSVGElement, unknown>()
-            .scaleExtent([0.1, 4])
-            .on("zoom", (e) => g.attr("transform", e.transform));
+        const zoom = d3.zoom<SVGSVGElement, unknown>().scaleExtent([0.1, 4]).on("zoom", (e) => g.attr("transform", e.transform));
         svg.call(zoom);
 
-        // Simulation
         const simulation = d3.forceSimulation(simNodes)
             .force("link", d3.forceLink(simLinks).id((d: any) => d.id).distance((d: any) => {
-                // Short distance for properties, longer for hierarchy
-                if (d.target.isProperty || d.source.isProperty) return 70;
-                return 150;
+                if (d.target.isProperty || d.source.isProperty) return 80;
+                if (d.role === 'instance') return 120;
+                return 180;
             }))
-            .force("charge", d3.forceManyBody().strength(-500))
+            .force("charge", d3.forceManyBody().strength(-600))
             .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collide", d3.forceCollide().radius((d: any) => d.isProperty ? 30 : d.radius + 10).iterations(3));
+            .force("collide", d3.forceCollide().radius((d: any) => d.isProperty ? 40 : d.radius + 20).iterations(3));
 
         simulationRef.current = simulation;
 
         // --- 3. Rendering ---
 
-        // Links Group
-        const linkGroup = g.append("g").selectAll("g")
-            .data(simLinks)
-            .join("g");
+        const linkGroup = g.append("g").selectAll("g").data(simLinks).join("g");
 
         const linkPath = linkGroup.append("path")
             .attr("stroke", "#475569")
@@ -275,113 +305,129 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                 if (!d.isArrow) return null;
                 const src = d.source as SimNode;
                 const tgt = d.target as SimNode;
+                if (d.role === 'instance') return "url(#arrow-inst)";
                 if (!src.isProperty && !tgt.isProperty) return "url(#arrow-sub)";
                 return "url(#arrow-std)";
             })
-            .attr("stroke-dasharray", d => !d.isArrow ? "3,3" : "");
+            .attr("stroke-dasharray", d => (d.role === 'instance' || d.role === 'disjoint_link' || !d.isArrow) ? "4,4" : "");
 
-        const linkLabels = linkGroup.append("g")
-            .style("display", d => (d.role === 'domain' || d.role === 'range') ? "block" : "none");
-
-        linkLabels.append("rect")
-            .attr("rx", 3)
-            .attr("ry", 3)
-            .attr("width", 22)
-            .attr("height", 12)
-            .attr("x", -11)
-            .attr("y", -6)
-            .attr("fill", THEME.bg)
-            .attr("stroke", "#475569")
-            .attr("stroke-width", 0.5)
-            .attr("fill-opacity", 0.8);
-
-        linkLabels.append("text")
-            .text(d => d.role === 'domain' ? 'dom' : (d.role === 'range' ? 'rng' : ''))
-            .attr("dy", "0.25em") 
-            .attr("text-anchor", "middle")
-            .attr("font-size", "8px")
-            .attr("font-family", "serif")
-            .attr("font-style", "italic")
-            .attr("fill", "#cbd5e1");
-
-        const node = g.append("g")
-            .selectAll("g")
-            .data(simNodes)
-            .join("g")
+        const node = g.append("g").selectAll("g").data(simNodes).join("g")
             .call(d3.drag<any, any>()
                 .on("start", (event, d) => {
                     if (!event.active) simulation.alphaTarget(0.3).restart();
-                    d.fx = d.x;
-                    d.fy = d.y;
+                    d.fx = d.x; d.fy = d.y;
                 })
-                .on("drag", (event, d) => {
-                    d.fx = event.x;
-                    d.fy = event.y;
-                })
+                .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
                 .on("end", (event, d) => {
                     if (!event.active) simulation.alphaTarget(0);
-                    d.fx = null;
-                    d.fy = null;
-                })
-            );
+                    d.fx = null; d.fy = null;
+                }));
 
-        node.on('click', (event, d) => {
-            event.stopPropagation();
-            setSelectedEntity(d);
-        });
+        node.on('click', (event, d) => { event.stopPropagation(); setSelectedEntity(d); });
 
         node.each(function(d) {
             const el = d3.select(this);
+            
+            // 1. Property Node (Rectangular "Sticker")
             if (d.isProperty) {
-                const w = d.width || 60;
-                const h = d.height || 20;
-                el.append("rect").attr("x", -w / 2).attr("y", -h / 2).attr("width", w).attr("height", h).attr("rx", 4).attr("fill", d.color).attr("stroke", "#fff").attr("stroke-width", 1.5).attr("class", "shadow-sm cursor-pointer hover:stroke-yellow-400");
-                el.append("text").text(d.label).attr("dy", "0.35em").attr("text-anchor", "middle").attr("font-size", "10px").attr("fill", "#fff").attr("font-weight", "bold").style("pointer-events", "none");
-            } else if (d.type === 'datatype' || d.type === 'literal') {
-                const charW = 6;
-                const w = Math.max(60, d.label.length * charW + 10);
-                el.append("rect").attr("x", -w/2).attr("y", -15).attr("width", w).attr("height", 30).attr("fill", d.color).attr("stroke", "#fff").attr("stroke-width", 2);
-                el.append("text").text(d.label).attr("dy", "0.35em").attr("text-anchor", "middle").attr("font-size", "11px").attr("fill", "#fff").style("pointer-events", "none");
-            } else {
-                el.append("circle").attr("r", d.radius).attr("fill", d.color).attr("stroke", "#fff").attr("stroke-width", d.type === 'class' ? 3 : 2).attr("class", "cursor-pointer hover:stroke-yellow-400 transition-colors");
-                const displayLabel = d.label.length > 10 ? d.label.substring(0, 8) + '..' : d.label;
-                el.append("text").text(displayLabel).attr("dy", "0.35em").attr("text-anchor", "middle").attr("font-size", d.type === 'class' ? "12px" : "10px").attr("font-weight", "bold").attr("fill", "#fff").style("pointer-events", "none").style("text-shadow", "0px 1px 3px rgba(0,0,0,0.5)");
+                const w = d.width || 70;
+                const h = 22;
+                el.append("rect")
+                    .attr("x", -w / 2)
+                    .attr("y", -h / 2)
+                    .attr("width", w)
+                    .attr("height", h)
+                    .attr("rx", 4)
+                    .attr("fill", d.color)
+                    .attr("stroke", "#fff")
+                    .attr("stroke-width", 1.5)
+                    .style("filter", "url(#drop-shadow)")
+                    .attr("class", "cursor-pointer");
+                
+                el.append("text")
+                    .text(d.label)
+                    .attr("dy", "0.35em")
+                    .attr("text-anchor", "middle")
+                    .attr("font-size", "10px")
+                    .attr("fill", "#fff")
+                    .attr("font-weight", "bold")
+                    .style("pointer-events", "none");
+            } 
+            // 2. Disjoint (Small Circle)
+            else if (d.type === 'disjoint') {
+                el.append("circle")
+                    .attr("r", 12)
+                    .attr("fill", THEME.bg)
+                    .attr("stroke", d.stroke)
+                    .attr("stroke-width", 2);
+                
+                el.append("text")
+                    .text("⊥") // Mathematical disjoint
+                    .attr("dy", "0.35em")
+                    .attr("text-anchor", "middle")
+                    .attr("font-size", "14px")
+                    .attr("fill", d.textColor)
+                    .attr("font-weight", "bold");
+            }
+            // 3. Datatype (Rectangle)
+            else if (d.type === 'datatype' || d.type === 'literal') {
+                const w = Math.max(80, d.label.length * 7 + 10);
+                const h = 28;
+                el.append("rect")
+                    .attr("x", -w/2)
+                    .attr("y", -h/2)
+                    .attr("width", w)
+                    .attr("height", h)
+                    .attr("rx", 0) // Sharp corners for data/literals
+                    .attr("fill", d.color)
+                    .attr("stroke", "#fff")
+                    .attr("stroke-width", 2)
+                    .style("filter", "url(#drop-shadow)");
+                
+                el.append("text")
+                    .text(d.label)
+                    .attr("dy", "0.35em")
+                    .attr("text-anchor", "middle")
+                    .attr("font-size", "11px")
+                    .attr("fill", "#000") // Black text on Amber
+                    .attr("font-weight", "600")
+                    .style("pointer-events", "none");
+            }
+            // 4. Class / Individual (Circle)
+            else {
+                el.append("circle")
+                    .attr("r", d.radius)
+                    .attr("fill", d.color)
+                    .attr("stroke", "#fff") // White border
+                    .attr("stroke-width", d.type === 'class' ? 3 : 2)
+                    .style("filter", "url(#drop-shadow)")
+                    .attr("class", "cursor-pointer");
+                
+                const displayLabel = d.label.length > 12 ? d.label.substring(0, 10) + '..' : d.label;
+                
+                el.append("text")
+                    .text(displayLabel)
+                    .attr("dy", "0.35em")
+                    .attr("text-anchor", "middle")
+                    .attr("font-size", d.type === 'class' ? "11px" : "10px")
+                    .attr("font-weight", "600")
+                    .attr("fill", "#fff")
+                    .style("pointer-events", "none")
+                    .style("text-shadow", "0px 1px 2px rgba(0,0,0,0.8)");
             }
         });
 
         node.on('mouseenter', (event, d) => {
             const rect = containerRef.current?.getBoundingClientRect();
-            if (rect) {
-                setTooltip({
-                    x: event.clientX - rect.left,
-                    y: event.clientY - rect.top,
-                    content: d.label
-                });
-            }
-        }).on('mouseleave', () => {
-            setTooltip(null);
-        });
-
-        if (searchTerm) {
-            const lower = searchTerm.toLowerCase();
-            node.style('opacity', d => d.label.toLowerCase().includes(lower) ? 1 : 0.1);
-            linkGroup.style('opacity', 0.1);
-        }
+            if (rect) setTooltip({ x: event.clientX - rect.left, y: event.clientY - rect.top, content: d.label });
+        }).on('mouseleave', () => setTooltip(null));
 
         simulation.on("tick", () => {
             linkPath.attr("d", (d: any) => `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`);
-            linkLabels.attr("transform", (d: any) => {
-                const x = (d.source.x + d.target.x) / 2;
-                const y = (d.source.y + d.target.y) / 2;
-                return `translate(${x},${y})`;
-            });
             node.attr("transform", d => `translate(${d.x},${d.y})`);
         });
 
-        return () => {
-            simulation.stop();
-        };
-
+        return () => { simulation.stop(); };
     }, [nodes, edges, searchTerm, showAttributes, selectedNodeId]);
 
     const handleZoomIn = () => { if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 1.3); };
@@ -465,21 +511,15 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             
             {/* Legend */}
             <div className="absolute top-4 right-4 bg-slate-900/80 backdrop-blur border border-slate-800 p-3 rounded-lg text-xs text-slate-300 shadow-xl pointer-events-none">
-                <h3 className="font-bold mb-2 text-slate-500 uppercase tracking-wider text-[10px]">Concept Map</h3>
-                <div className="space-y-1.5">
-                    <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-indigo-500 border border-white/20"></span> Class</div>
-                    <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-pink-500 border border-white/20"></span> Individual</div>
-                    <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-amber-500 border border-white/20"></span> Datatype</div>
-                    <div className="flex items-center gap-2"><span className="w-3 h-2 rounded-sm bg-blue-500 border border-white/20"></span> Object Prop</div>
-                    <div className="flex items-center gap-2"><span className="w-3 h-2 rounded-sm bg-emerald-500 border border-white/20"></span> Data Prop</div>
-                    {showAttributes && <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-400 border border-white/20"></span> Value/Literal</div>}
-                    <div className="h-px bg-slate-700 my-1"></div>
-                    <div className="flex items-center gap-2 text-[9px] font-serif italic text-slate-400">
-                        <span className="bg-slate-900 border border-slate-700 px-1 rounded">dom</span> 
-                        <span>/</span>
-                        <span className="bg-slate-900 border border-slate-700 px-1 rounded">rng</span> 
-                        <span className="ml-1">Set Notation</span>
-                    </div>
+                <h3 className="font-bold mb-2 text-slate-500 uppercase tracking-wider text-[10px]">VOWL Notation</h3>
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-blue-500 border-2 border-white/80"></span> Class</div>
+                    <div className="flex items-center gap-2"><span className="w-3 h-2 rounded bg-blue-400 border border-white/80"></span> Object Property</div>
+                    <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-amber-500 border border-white/80"></span> Datatype</div>
+                    <div className="flex items-center gap-2"><span className="w-3 h-2 rounded bg-emerald-500 border border-white/80"></span> Data Property</div>
+                    <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-purple-500 border border-white/80"></span> Individual</div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-0 border-t border-dashed border-slate-400"></div> Instantiation</div>
+                    {showAttributes && <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-600 border border-slate-400"></span> Literal</div>}
                 </div>
             </div>
 
@@ -487,7 +527,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             <div className="absolute top-4 left-6 flex bg-slate-800 rounded-lg p-1 border border-slate-700 shadow-xl z-20">
                 <button 
                     onClick={() => setShowAttributes(!showAttributes)}
-                    className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded transition-all ${showAttributes ? 'bg-green-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                    className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded transition-all ${showAttributes ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                 >
                     <Database size={14} /> {showAttributes ? 'Hide' : 'Show'} Attributes
                 </button>

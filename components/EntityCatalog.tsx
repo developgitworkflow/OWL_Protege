@@ -1,8 +1,8 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Method } from '../types';
-import { Database, ArrowRightLeft, Tag, User, FileType, Plus, Trash2, Search, Edit3, Settings, ArrowRight, GitMerge, List, BookOpen, Brain, AlertTriangle, Sigma, Key, Link2, MessageSquare } from 'lucide-react';
+import { Database, ArrowRightLeft, Tag, User, FileType, Plus, Trash2, Search, Edit3, Settings, ArrowRight, GitMerge, List, BookOpen, Brain, AlertTriangle, Sigma, Key, Link2, MessageSquare, Workflow } from 'lucide-react';
 
 interface EntityCatalogProps {
     nodes: Node<UMLNodeData>[];
@@ -12,14 +12,27 @@ interface EntityCatalogProps {
     onAddNode: (type: ElementType, label: string) => void;
     onDeleteNode: (id: string) => void;
     onSelectNode: (id: string) => void;
+    onViewInGraph?: (id: string) => void;
+    selectedNodeId?: string | null;
 }
 
 type TabType = 'classes' | 'objectProps' | 'dataProps' | 'individuals' | 'datatypes';
 
-const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerActive, unsatisfiableNodeIds = [], onAddNode, onDeleteNode, onSelectNode }) => {
+const EntityCatalog: React.FC<EntityCatalogProps> = ({ 
+    nodes, 
+    edges, 
+    isReasonerActive, 
+    unsatisfiableNodeIds = [], 
+    onAddNode, 
+    onDeleteNode, 
+    onSelectNode, 
+    onViewInGraph,
+    selectedNodeId 
+}) => {
     const [activeTab, setActiveTab] = useState<TabType>('classes');
     const [searchTerm, setSearchTerm] = useState('');
     const [newName, setNewName] = useState('');
+    const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
     const tabs = [
         { id: 'classes', label: 'Classes', icon: Database, color: 'text-purple-400', border: 'border-purple-500', type: ElementType.OWL_CLASS },
@@ -31,13 +44,35 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
 
     const currentTabInfo = tabs.find(t => t.id === activeTab)!;
 
+    // Auto-switch tab and scroll when selectedNodeId changes
+    useEffect(() => {
+        if (selectedNodeId) {
+            const node = nodes.find(n => n.id === selectedNodeId);
+            if (node) {
+                // 1. Switch Tab if needed
+                const targetTab = tabs.find(t => t.type === node.data.type);
+                if (targetTab && targetTab.id !== activeTab) {
+                    setActiveTab(targetTab.id as TabType);
+                }
+
+                // 2. Scroll into view (needs a timeout to allow render after tab switch)
+                setTimeout(() => {
+                    const row = rowRefs.current.get(selectedNodeId);
+                    if (row) {
+                        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+            }
+        }
+    }, [selectedNodeId, nodes]);
+
     const filteredNodes = useMemo(() => {
         return nodes.filter(n => {
             if (n.data.type !== currentTabInfo.type) return false;
             if (searchTerm && !n.data.label.toLowerCase().includes(searchTerm.toLowerCase())) return false;
             return true;
         }).sort((a, b) => a.data.label.toLowerCase().localeCompare(b.data.label.toLowerCase()));
-    }, [nodes, activeTab, searchTerm]);
+    }, [nodes, activeTab, searchTerm, currentTabInfo]);
 
     // --- Data Extraction Helpers ---
 
@@ -294,13 +329,14 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                                         {activeTab === 'individuals' && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/5">Type Assertions</th>}
                                         
                                         <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800">Formal Definition & Annotations</th>
-                                        <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 text-right w-24">Actions</th>
+                                        <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 text-right w-32">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-800/50">
                                     {filteredNodes.map(node => {
                                         const rels = getRelationships(node);
                                         const isUnsatisfiable = unsatisfiableNodeIds.includes(node.id);
+                                        const isSelected = selectedNodeId === node.id;
                                         
                                         // Sort axioms alphabetically for display consistency
                                         const sortedMethods = [...node.data.methods].sort((a, b) => {
@@ -310,7 +346,15 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                                         });
 
                                         return (
-                                            <tr key={node.id} className="group hover:bg-slate-800/30 transition-colors">
+                                            <tr 
+                                                key={node.id} 
+                                                ref={el => { if (el) rowRefs.current.set(node.id, el); }}
+                                                className={`group transition-colors ${
+                                                    isSelected 
+                                                    ? 'bg-blue-900/30 border-l-2 border-l-blue-500' 
+                                                    : 'hover:bg-slate-800/30'
+                                                }`}
+                                            >
                                                 {/* 1. Identity */}
                                                 <td className="p-4 align-top">
                                                     <div className="flex items-start gap-3">
@@ -318,7 +362,7 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                                                             {isUnsatisfiable ? <AlertTriangle size={16} /> : <currentTabInfo.icon size={16} />}
                                                         </div>
                                                         <div>
-                                                            <div className={`text-sm font-bold group-hover:text-white transition-colors ${isUnsatisfiable ? 'text-red-400 line-through' : 'text-slate-200'}`}>
+                                                            <div className={`text-sm font-bold group-hover:text-white transition-colors ${isUnsatisfiable ? 'text-red-400 line-through' : (isSelected ? 'text-white' : 'text-slate-200')}`}>
                                                                 {node.data.label}
                                                             </div>
                                                             <div className="text-[10px] font-mono text-slate-500 truncate max-w-[150px] mt-0.5" title={node.data.iri}>
@@ -419,7 +463,14 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
 
                                                 {/* 4. Actions */}
                                                 <td className="p-4 align-top text-right">
-                                                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button 
+                                                            onClick={() => onViewInGraph && onViewInGraph(node.id)}
+                                                            className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded transition-colors"
+                                                            title="Visualize in Concept Map"
+                                                        >
+                                                            <Workflow size={16} />
+                                                        </button>
                                                         <button 
                                                             onClick={() => onSelectNode(node.id)}
                                                             className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors"

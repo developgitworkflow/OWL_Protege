@@ -475,6 +475,16 @@ const Flow = () => {
       return nodes.find(n => n.id === selectedNodeId) || null;
   }, [nodes, selectedNodeId]);
 
+  const handleNavigateToGraph = useCallback((nodeId: string) => {
+      setSelectedNodeId(nodeId);
+      setViewMode('concept');
+  }, []);
+
+  const handleNavigateToCatalog = useCallback((nodeId: string) => {
+      setSelectedNodeId(nodeId);
+      setViewMode('entities');
+  }, []);
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-slate-950 text-slate-200 font-sans">
       <TopBar 
@@ -590,6 +600,8 @@ const Flow = () => {
                         onAddNode={handleCreateNode}
                         onDeleteNode={deleteNode}
                         onSelectNode={setSelectedNodeId}
+                        onViewInGraph={handleNavigateToGraph}
+                        selectedNodeId={selectedNodeId}
                     />
                 </div>
                 {selectedNodeId && (
@@ -631,6 +643,8 @@ const Flow = () => {
                     nodes={visibleNodes} 
                     edges={visibleEdges} // Inferred support
                     searchTerm={searchTerm}
+                    selectedNodeId={selectedNodeId}
+                    onNavigateToCatalog={handleNavigateToCatalog}
                 />
             </div>
         )}

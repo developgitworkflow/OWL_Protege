@@ -3,12 +3,14 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, Layers, X, Brain, ArrowRight, Tag, Info, BookOpen, Quote, Key, GitCommit, Split, Shield, Globe } from 'lucide-react';
+import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, Layers, X, Brain, ArrowRight, Tag, Info, BookOpen, Quote, Key, GitCommit, Split, Shield, Globe, List } from 'lucide-react';
 
 interface ConceptGraphProps {
     nodes: Node<UMLNodeData>[];
     edges: Edge[];
     searchTerm?: string;
+    selectedNodeId?: string | null;
+    onNavigateToCatalog?: (id: string) => void;
 }
 
 // Custom types for the VOWL-like simulation
@@ -45,7 +47,7 @@ const THEME = {
     bg: '#0f172a'
 };
 
-const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = '' }) => {
+const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = '', selectedNodeId, onNavigateToCatalog }) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [tooltip, setTooltip] = useState<{x: number, y: number, content: string} | null>(null);
@@ -193,6 +195,15 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             // Link Prop -> Target (Range)
             simLinks.push({ source: propId, target: target.id, isArrow: true, role: 'range' });
         });
+
+        // --- Handle External Selection Logic (e.g. from Catalog) ---
+        if (selectedNodeId) {
+            const found = simNodes.find(n => n.originalId === selectedNodeId);
+            if (found) {
+                // Defer setting state to avoid render loops, but here it's fine as we are in effect
+                setSelectedEntity(found);
+            }
+        }
 
         // --- 2. D3 Setup ---
 
@@ -444,7 +455,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             simulation.stop();
         };
 
-    }, [nodes, edges, searchTerm, showAttributes]);
+    }, [nodes, edges, searchTerm, showAttributes, selectedNodeId]); // Re-run if selectedNodeId changes, mainly for init mount
 
     const handleZoomIn = () => {
         if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 1.3);
@@ -609,9 +620,20 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                                 </div>
                             )}
                         </div>
-                        <button onClick={() => setSelectedEntity(null)} className="text-slate-500 hover:text-white transition-colors">
-                            <X size={18} />
-                        </button>
+                        <div className="flex gap-1">
+                            {selectedDetails?.node && onNavigateToCatalog && (
+                                <button 
+                                    onClick={() => onNavigateToCatalog(selectedDetails.node!.id)}
+                                    className="text-slate-500 hover:text-indigo-400 p-1 rounded transition-colors"
+                                    title="View in Catalog"
+                                >
+                                    <List size={18} />
+                                </button>
+                            )}
+                            <button onClick={() => setSelectedEntity(null)} className="text-slate-500 hover:text-white transition-colors">
+                                <X size={18} />
+                            </button>
+                        </div>
                     </div>
                     
                     <div className="flex-1 overflow-y-auto p-4 space-y-6">

@@ -35,6 +35,7 @@ interface SimLink extends d3.SimulationLinkDatum<SimNode> {
     target: string | SimNode;
     isArrow: boolean; // Only draw arrow on the second half of the link
     role?: 'domain' | 'range' | 'attribute' | 'value' | 'subclass' | 'instance' | 'disjoint_link'; 
+    isInferred?: boolean;
 }
 
 // VOWL-aligned Theme (Dark Mode Optimized)
@@ -59,6 +60,9 @@ const THEME = {
     
     disjoint: '#ef4444',     // Red-500
     
+    inferred: '#fbbf24',     // Amber-400 (for inferred edges)
+    inferredStroke: '#f59e0b', 
+
     text: '#ffffff',         
     bg: '#0f172a'            // Slate-950
 };
@@ -159,8 +163,8 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                     };
                     simNodes.push(valNode);
 
-                    simLinks.push({ source: sNode.id, target: attrId, isArrow: false, role: 'attribute' });
-                    simLinks.push({ source: attrId, target: valId, isArrow: true, role: 'value' });
+                    simLinks.push({ source: sNode.id, target: attrId, isArrow: false, role: 'attribute', isInferred: false });
+                    simLinks.push({ source: attrId, target: valId, isArrow: true, role: 'value', isInferred: false });
                 });
             }
         });
@@ -174,16 +178,17 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             const label = (e.label as string) || '';
             const cleanLabel = label.replace(/^owl:/, '').replace(/^rdf:/, '').replace(/^rdfs:/, '');
             const lowerLabel = cleanLabel.toLowerCase();
+            const isInferred = e.data?.isInferred || false;
             
             // 1. SubClass (Solid Line, Hollow Arrow)
             if (lowerLabel === 'subclassof') {
-                simLinks.push({ source: source.id, target: target.id, isArrow: true, role: 'subclass' });
+                simLinks.push({ source: source.id, target: target.id, isArrow: true, role: 'subclass', isInferred });
                 return;
             }
 
             // 2. Instance Of (Dashed Line, Standard Arrow) - DIRECT LINK
             if (lowerLabel === 'type' || label === 'a') {
-                simLinks.push({ source: source.id, target: target.id, isArrow: true, role: 'instance' });
+                simLinks.push({ source: source.id, target: target.id, isArrow: true, role: 'instance', isInferred });
                 return;
             }
 
@@ -196,28 +201,28 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                     type: 'disjoint',
                     radius: 15,
                     color: THEME.bg,
-                    stroke: THEME.disjoint,
-                    textColor: THEME.disjoint,
+                    stroke: isInferred ? THEME.inferredStroke : THEME.disjoint,
+                    textColor: isInferred ? THEME.inferred : THEME.disjoint,
                     isProperty: false,
                     x: (source.x! + target.x!) / 2,
                     y: (source.y! + target.y!) / 2
                 };
                 simNodes.push(disjointNode);
-                simLinks.push({ source: source.id, target: disjointId, isArrow: false, role: 'disjoint_link' });
-                simLinks.push({ source: target.id, target: disjointId, isArrow: false, role: 'disjoint_link' });
+                simLinks.push({ source: source.id, target: disjointId, isArrow: false, role: 'disjoint_link', isInferred });
+                simLinks.push({ source: target.id, target: disjointId, isArrow: false, role: 'disjoint_link', isInferred });
                 return;
             }
 
             // 4. Object/Data Properties (Rectangular Node)
             const propId = `prop-${e.id}`;
             let propType: SimNode['type'] = 'property_object';
-            let propColor = THEME.objProp;
-            let propStroke = THEME.objPropStroke;
+            let propColor = isInferred ? THEME.inferred : THEME.objProp;
+            let propStroke = isInferred ? THEME.inferredStroke : THEME.objPropStroke;
 
             if (target.type === 'datatype') {
                 propType = 'property_data';
-                propColor = THEME.dataProp;
-                propStroke = THEME.dataPropStroke;
+                propColor = isInferred ? THEME.inferred : THEME.dataProp;
+                propStroke = isInferred ? THEME.inferredStroke : THEME.dataPropStroke;
             }
 
             const textWidth = cleanLabel.length * 6 + 24; 
@@ -240,9 +245,9 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             simNodes.push(propNode);
 
             // Link Source -> Prop (Domain)
-            simLinks.push({ source: source.id, target: propId, isArrow: false, role: 'domain' });
+            simLinks.push({ source: source.id, target: propId, isArrow: false, role: 'domain', isInferred });
             // Link Prop -> Target (Range)
-            simLinks.push({ source: propId, target: target.id, isArrow: true, role: 'range' });
+            simLinks.push({ source: propId, target: target.id, isArrow: true, role: 'range', isInferred });
         });
 
         // --- Handle External Selection ---
@@ -275,6 +280,9 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
         defs.append("marker").attr("id", "arrow-inst").attr("viewBox", "0 -5 10 10").attr("refX", 38).attr("refY", 0).attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
             .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#94a3b8");
+            
+        defs.append("marker").attr("id", "arrow-inf").attr("viewBox", "0 -5 10 10").attr("refX", 38).attr("refY", 0).attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
+            .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#fbbf24");
 
         const g = svg.append("g");
 
@@ -298,18 +306,19 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         const linkGroup = g.append("g").selectAll("g").data(simLinks).join("g");
 
         const linkPath = linkGroup.append("path")
-            .attr("stroke", "#475569")
-            .attr("stroke-width", 1.5)
+            .attr("stroke", d => d.isInferred ? THEME.inferredStroke : "#475569")
+            .attr("stroke-width", d => d.isInferred ? 1.5 : 1.5)
             .attr("fill", "none")
             .attr("marker-end", d => {
                 if (!d.isArrow) return null;
+                if (d.isInferred) return "url(#arrow-inf)";
                 const src = d.source as SimNode;
                 const tgt = d.target as SimNode;
                 if (d.role === 'instance') return "url(#arrow-inst)";
                 if (!src.isProperty && !tgt.isProperty) return "url(#arrow-sub)";
                 return "url(#arrow-std)";
             })
-            .attr("stroke-dasharray", d => (d.role === 'instance' || d.role === 'disjoint_link' || !d.isArrow) ? "4,4" : "");
+            .attr("stroke-dasharray", d => (d.role === 'instance' || d.role === 'disjoint_link' || !d.isArrow || d.isInferred) ? "4,4" : "");
 
         const node = g.append("g").selectAll("g").data(simNodes).join("g")
             .call(d3.drag<any, any>()
@@ -519,6 +528,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                     <div className="flex items-center gap-2"><span className="w-3 h-2 rounded bg-emerald-500 border border-white/80"></span> Data Property</div>
                     <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-purple-500 border border-white/80"></span> Individual</div>
                     <div className="flex items-center gap-2"><div className="w-3 h-0 border-t border-dashed border-slate-400"></div> Instantiation</div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-0 border-t border-dashed border-amber-400"></div> Inferred</div>
                     {showAttributes && <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-600 border border-slate-400"></span> Literal</div>}
                 </div>
             </div>

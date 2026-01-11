@@ -436,7 +436,7 @@ function App() {
                 {viewMode === 'entities' && (
                     <EntityCatalog 
                         nodes={nodes} 
-                        edges={edges}
+                        edges={displayEdges} // Pass displayEdges to show inferred relationships
                         isReasonerActive={isReasonerActive}
                         onAddNode={handleAddNode}
                         onDeleteNode={handleDeleteNode}
@@ -486,7 +486,7 @@ function App() {
                 {viewMode === 'concept' && (
                     <ConceptGraph 
                         nodes={visibleNodes} 
-                        edges={displayEdges} 
+                        edges={displayEdges} // Pass displayEdges for ConceptGraph reasoning view
                         searchTerm={searchTerm}
                         selectedNodeId={selectedNodeId}
                         onNavigate={handleNavigate}
@@ -494,7 +494,12 @@ function App() {
                 )}
 
                 {viewMode === 'owlviz' && (
-                    <OWLVizVisualization nodes={visibleNodes} edges={edges} searchTerm={searchTerm} selectedNodeId={selectedNodeId} />
+                    <OWLVizVisualization 
+                        nodes={visibleNodes} 
+                        edges={displayEdges} // Pass displayEdges for OWLViz reasoning view
+                        searchTerm={searchTerm} 
+                        selectedNodeId={selectedNodeId} 
+                    />
                 )}
 
                 {viewMode === 'code' && (

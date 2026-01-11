@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Method } from '../types';
-import { Database, ArrowRightLeft, Tag, User, FileType, Plus, Trash2, Search, Edit3, Settings, ArrowRight, GitMerge, List, BookOpen, Brain, AlertTriangle, Sigma } from 'lucide-react';
+import { Database, ArrowRightLeft, Tag, User, FileType, Plus, Trash2, Search, Edit3, Settings, ArrowRight, GitMerge, List, BookOpen, Brain, AlertTriangle, Sigma, Key, Link2, MessageSquare } from 'lucide-react';
 
 interface EntityCatalogProps {
     nodes: Node<UMLNodeData>[];
@@ -71,6 +71,10 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                  })).sort((a, b) => a.label.localeCompare(b.label));
                  rels.push({ type: 'Disjoint', values: disjoints });
             }
+            
+            // HasKey
+            const keys = node.data.methods.filter(m => m.name.toLowerCase() === 'haskey').map(m => ({ label: m.returnType, inferred: false }));
+            if (keys.length > 0) rels.push({ type: 'Keys', values: keys });
         }
 
         // 2. Individuals
@@ -100,15 +104,17 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
             
             if (domains.length > 0) rels.push({ type: 'Domain', values: domains });
             if (ranges.length > 0) rels.push({ type: 'Range', values: ranges });
+
+            // Property Chains
+            const chains = node.data.methods.filter(m => m.name.toLowerCase() === 'propertychainaxiom').map(m => ({ label: m.returnType, inferred: false }));
+            if (chains.length > 0) rels.push({ type: 'Chains', values: chains });
+
+            // Disjoint Properties
+            const disjoints = node.data.methods.filter(m => m.name.toLowerCase() === 'propertydisjointwith' || m.name.toLowerCase() === 'disjointwith').map(m => ({ label: m.returnType, inferred: false }));
+            if (disjoints.length > 0) rels.push({ type: 'Disjoint', values: disjoints });
         }
 
         return rels;
-    };
-
-    const getDescription = (node: Node<UMLNodeData>) => {
-        if (node.data.description) return node.data.description;
-        const comment = node.data.annotations?.find(a => a.property === 'rdfs:comment' || a.property === 'skos:definition');
-        return comment ? comment.value.replace(/"/g, '') : '';
     };
 
     // --- Description Logic Converters ---
@@ -151,6 +157,8 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
             case 'domain': return `∃${subject}.⊤ ⊑ ${o}`;
             case 'range': return `⊤ ⊑ ∀${subject}.${o}`;
             case 'type': return `${o}(${subject})`;
+            case 'haskey': return `${subject} HasKey(${o})`;
+            case 'propertychainaxiom': return `${o} ⊑ ${subject}`;
             default: return `${subject} ${method.name} ${o}`;
         }
     };
@@ -168,8 +176,20 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
         else if (type === 'inverseof') { prefix = 'Inverse of'; color = 'text-amber-400'; }
         else if (type === 'subpropertyof') { prefix = 'Sub-prop of'; color = 'text-blue-400'; }
         else if (type === 'type') { prefix = 'Type'; color = 'text-pink-400'; }
+        else if (type === 'haskey') { prefix = 'Key'; color = 'text-yellow-400'; }
+        else if (type === 'propertychainaxiom') { prefix = 'Chain'; color = 'text-cyan-400'; }
         
         return { prefix, target: method.returnType, color };
+    };
+
+    const highlightSyntax = (text: string) => {
+        const parts = text.split(/(\b(?:some|only|value|min|max|exactly|that|not|and|or)\b)/g);
+        return parts.map((part, i) => {
+            if (['some', 'only', 'value', 'min', 'max', 'exactly', 'that', 'not', 'and', 'or'].includes(part.toLowerCase())) {
+                return <span key={i} className="text-purple-400 font-bold">{part}</span>;
+            }
+            return <span key={i}>{part}</span>;
+        });
     };
 
     const handleCreate = (e?: React.FormEvent) => {
@@ -190,7 +210,7 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                         Entity Catalog
                     </h2>
                     <p className="text-slate-400 mt-1">
-                        Manage ontology vocabulary. Quickly create and organize classes, properties, and individuals.
+                        Manage ontology vocabulary. View axioms, annotations, and logical characteristics.
                     </p>
                 </div>
                 {isReasonerActive && (
@@ -269,18 +289,17 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                                         <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/4">Label & IRI</th>
                                         
                                         {/* Dynamic Headers based on Type */}
-                                        {activeTab === 'classes' && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/5">Hierarchy</th>}
-                                        {(activeTab === 'objectProps' || activeTab === 'dataProps') && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/5">Signature</th>}
+                                        {activeTab === 'classes' && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/5">Hierarchy & Logic</th>}
+                                        {(activeTab === 'objectProps' || activeTab === 'dataProps') && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/5">Signature & Flags</th>}
                                         {activeTab === 'individuals' && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/5">Type Assertions</th>}
                                         
-                                        <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800">Definition & Axioms</th>
+                                        <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800">Formal Definition & Annotations</th>
                                         <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 text-right w-24">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-800/50">
                                     {filteredNodes.map(node => {
                                         const rels = getRelationships(node);
-                                        const description = getDescription(node);
                                         const isUnsatisfiable = unsatisfiableNodeIds.includes(node.id);
                                         
                                         // Sort axioms alphabetically for display consistency
@@ -341,12 +360,21 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
 
                                                 {/* 3. Description & Axioms */}
                                                 <td className="p-4 align-top">
-                                                    {description && (
+                                                    {/* Enhanced Annotations */}
+                                                    {node.data.annotations && node.data.annotations.length > 0 && (
                                                         <div className="mb-3">
-                                                            <div className="text-[10px] uppercase font-bold text-slate-600 mb-1">Description</div>
-                                                            <p className="text-xs text-slate-400 leading-relaxed line-clamp-2" title={description}>
-                                                                {description}
-                                                            </p>
+                                                            <div className="text-[10px] uppercase font-bold text-slate-600 mb-1 flex items-center gap-1">
+                                                                <MessageSquare size={10} /> Annotations
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                {node.data.annotations.map((ann, i) => (
+                                                                    <div key={i} className="text-xs flex gap-1.5 items-start">
+                                                                        <span className="text-slate-500 font-mono text-[10px] shrink-0 mt-0.5">{ann.property}:</span>
+                                                                        <span className="text-slate-400 leading-snug">{ann.value.replace(/"/g, '')}</span>
+                                                                        {ann.language && <span className="text-[9px] bg-slate-800 px-1 rounded text-slate-500">@{ann.language}</span>}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
                                                         </div>
                                                     )}
                                                     
@@ -356,7 +384,7 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                                                             <div className="text-[10px] uppercase font-bold text-slate-600 mb-1 flex items-center gap-1">
                                                                 <BookOpen size={10} /> Formal Definition
                                                             </div>
-                                                            {sortedMethods.slice(0, 4).map((m, mIdx) => {
+                                                            {sortedMethods.slice(0, 5).map((m, mIdx) => {
                                                                 const { prefix, target, color } = getHumanReadableAxiom(m);
                                                                 const dlString = getDLAxiom(m, node.data.label);
                                                                 
@@ -364,7 +392,9 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                                                                     <div key={mIdx} className="flex flex-col gap-1 text-xs bg-slate-900/50 p-1.5 rounded border border-slate-800/50 hover:border-slate-700 hover:bg-slate-800 transition-colors">
                                                                         <div className="flex items-baseline gap-2">
                                                                             <span className={`font-semibold ${color} shrink-0 text-[11px] w-20 text-right`}>{prefix}</span>
-                                                                            <span className="text-slate-300 font-mono text-[11px] truncate">{target}</span>
+                                                                            <span className="text-slate-300 font-mono text-[11px] truncate">
+                                                                                {highlightSyntax(target)}
+                                                                            </span>
                                                                         </div>
                                                                         {/* DL Representation */}
                                                                         <div className="flex items-center gap-2 pl-[5.5rem] opacity-60">
@@ -374,15 +404,15 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                                                                     </div>
                                                                 );
                                                             })}
-                                                            {sortedMethods.length > 4 && (
+                                                            {sortedMethods.length > 5 && (
                                                                 <span className="text-[9px] text-slate-500 pl-2">
-                                                                    ... and {sortedMethods.length - 4} more axioms
+                                                                    ... and {sortedMethods.length - 5} more axioms
                                                                 </span>
                                                             )}
                                                         </div>
                                                     )}
                                                     
-                                                    {!description && sortedMethods.length === 0 && (
+                                                    {!node.data.description && (!node.data.annotations || node.data.annotations.length === 0) && sortedMethods.length === 0 && (
                                                         <span className="text-[10px] text-slate-600 italic">No description or axioms</span>
                                                     )}
                                                 </td>

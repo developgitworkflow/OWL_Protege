@@ -1,14 +1,28 @@
 
-import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather, Workflow, Brain, CheckCircle2, List, Activity, Map, GitBranch, Undo2, Redo2, Globe, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import React from 'react';
+import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Workflow, Map, Feather, GitGraph, FolderTree, Terminal, Eye, EyeOff, ShieldCheck, Activity, Calculator, ScrollText, Sigma } from 'lucide-react';
 
 interface TopBarProps {
-    onSaveJSON: () => void;
-    onSaveTurtle: () => void;
-    onLoad: (event: React.ChangeEvent<HTMLInputElement>) => void;
-    onLoadUrl: () => void;
-    onNewProject: () => void;
     onOpenSettings: () => void;
+    currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz' | 'workflow';
+    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz' | 'workflow') => void;
+    searchTerm: string;
+    onSearchChange: (term: string) => void;
+    isReasonerActive: boolean;
+    onRunReasoner: () => void;
+    showInferred: boolean;
+    onToggleInferred: () => void;
+    onUndo: () => void;
+    onRedo: () => void;
+    canUndo: boolean;
+    canRedo: boolean;
+    onToggleSidebar: () => void;
+    isSidebarOpen: boolean;
+    showSidebarToggle: boolean;
+    
+    // Ontology Tools
+    showIndividuals: boolean;
+    onToggleIndividuals: () => void;
     onValidate: () => void;
     onOpenDLQuery: () => void;
     onOpenSWRL: () => void;
@@ -16,46 +30,12 @@ interface TopBarProps {
     onOpenExpressivity: () => void;
     onOpenDatalog: () => void;
     onOpenMetrics: () => void;
-    currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz' | 'workflow';
-    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz' | 'workflow') => void;
-    showIndividuals: boolean;
-    onToggleIndividuals: () => void;
-    searchTerm: string;
-    onSearchChange: (term: string) => void;
-    // Reasoner props
-    isReasonerActive: boolean;
-    onRunReasoner: () => void;
-    showInferred: boolean;
-    onToggleInferred: () => void;
-    // Undo/Redo
-    onUndo: () => void;
-    onRedo: () => void;
-    canUndo: boolean;
-    canRedo: boolean;
-    // Sidebar Control
-    onToggleSidebar: () => void;
-    isSidebarOpen: boolean;
-    showSidebarToggle: boolean;
 }
 
 const TopBar: React.FC<TopBarProps> = ({ 
-    onSaveJSON, 
-    onSaveTurtle, 
-    onLoad,
-    onLoadUrl, 
-    onNewProject, 
     onOpenSettings, 
-    onValidate,
-    onOpenDLQuery,
-    onOpenSWRL,
-    onOpenDLAxioms,
-    onOpenExpressivity,
-    onOpenDatalog,
-    onOpenMetrics,
     currentView,
     onViewChange,
-    showIndividuals,
-    onToggleIndividuals,
     searchTerm,
     onSearchChange,
     isReasonerActive,
@@ -68,329 +48,205 @@ const TopBar: React.FC<TopBarProps> = ({
     canRedo,
     onToggleSidebar,
     isSidebarOpen,
-    showSidebarToggle
+    showSidebarToggle,
+    showIndividuals,
+    onToggleIndividuals,
+    onValidate,
+    onOpenDLQuery,
+    onOpenSWRL,
+    onOpenDLAxioms,
+    onOpenExpressivity,
+    onOpenDatalog,
+    onOpenMetrics
 }) => {
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const [showImportMenu, setShowImportMenu] = useState(false);
+
+  const views = [
+      { id: 'workflow', label: 'Workflow', icon: GitBranch },
+      { id: 'design', label: 'Design', icon: Layers },
+      { id: 'entities', label: 'Catalog', icon: List },
+      { id: 'concept', label: 'Concept', icon: Workflow },
+      { id: 'uml', label: 'UML', icon: Box },
+      { id: 'owlviz', label: 'Map', icon: Map },
+      { id: 'peirce', label: 'Peirce', icon: Feather },
+      { id: 'mindmap', label: 'Mindmap', icon: GitGraph },
+      { id: 'tree', label: 'Tree', icon: FolderTree },
+      { id: 'code', label: 'Code', icon: Terminal },
+  ];
 
   return (
-    <div className="h-16 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-6 shadow-md z-20 text-white">
-      <div className="flex items-center gap-3">
-        {showSidebarToggle && (
-            <button 
-                onClick={onToggleSidebar}
-                className="text-slate-400 hover:text-white transition-colors mr-2"
-                title={isSidebarOpen ? "Hide Toolbox" : "Show Toolbox"}
-            >
-                {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
-            </button>
-        )}
-        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg">
-            <Layers className="text-white w-5 h-5" />
+    <div className="flex flex-col z-20 shadow-md">
+        {/* Primary Toolbar */}
+        <div className="h-14 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-4 text-white gap-4">
+        
+        {/* Left: Branding & Sidebar */}
+        <div className="flex items-center gap-3 shrink-0">
+            {showSidebarToggle && (
+                <button 
+                    onClick={onToggleSidebar}
+                    className="text-slate-400 hover:text-white transition-colors"
+                    title={isSidebarOpen ? "Hide Toolbox" : "Show Toolbox"}
+                >
+                    {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+                </button>
+            )}
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg">
+                <Layers className="text-white w-5 h-5" />
+            </div>
+            <div className="hidden md:block">
+                <h1 className="font-bold text-lg tracking-tight leading-none">Ontology <span className="text-blue-400 font-light">Architect</span></h1>
+            </div>
         </div>
-        <div>
-            <h1 className="font-bold text-lg tracking-tight">Ontology <span className="text-blue-400 font-light">Architect</span></h1>
-            <p className="text-[10px] text-slate-400 -mt-1 uppercase tracking-wider">Semantic Modeling Platform</p>
+
+        {/* Center: Navigation Views */}
+        <div className="flex-1 flex justify-center overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-1 bg-slate-800/50 p-1 rounded-lg border border-slate-700/50">
+                {views.map(view => (
+                    <button 
+                        key={view.id}
+                        onClick={() => onViewChange(view.id as any)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                            currentView === view.id 
+                            ? 'bg-blue-600 text-white shadow-sm' 
+                            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                        }`}
+                        title={view.label}
+                    >
+                        <view.icon size={12} />
+                        <span className="hidden xl:inline">{view.label}</span>
+                    </button>
+                ))}
+            </div>
         </div>
-      </div>
 
-      <div className="flex items-center gap-4">
-         
-         {/* Group 1: Views */}
-         <div className="hidden xl:flex gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700/50">
-            <button 
-                onClick={() => onViewChange('workflow')}
-                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'workflow' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                title="Workflow & Lifecycle"
-            >
-                <GitBranch size={12} />
-                Workflow
-            </button>
-            <div className="w-px h-4 bg-slate-700 my-auto mx-1"></div>
-            <button 
-                onClick={() => onViewChange('design')}
-                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'design' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                title="Canvas Design View"
-            >
-                <Layers size={12} />
-                Design
-            </button>
-            <button 
-                onClick={() => onViewChange('entities')}
-                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'entities' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                title="Entity Catalog"
-            >
-                <List size={12} />
-                Catalog
-            </button>
-            <button 
-                onClick={() => onViewChange('concept')}
-                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'concept' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                title="VOWL-style Concept Map"
-            >
-                <Workflow size={12} />
-                Concept
-            </button>
-            <button 
-                onClick={() => onViewChange('uml')}
-                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'uml' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                title="UML Class Diagram"
-            >
-                <Box size={12} />
-                UML
-            </button>
-            <button 
-                onClick={() => onViewChange('owlviz')}
-                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'owlviz' ? 'bg-indigo-900/50 text-indigo-200 shadow border border-indigo-800' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                title="Ontology Map (Mermaid)"
-            >
-                <Map size={12} />
-                OntoMap
-            </button>
-            <button 
-                onClick={() => onViewChange('peirce')}
-                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'peirce' ? 'bg-amber-900/50 text-amber-200 shadow border border-amber-800' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                title="Peirce Existential Graphs"
-            >
-                <Feather size={12} />
-                Peirce
-            </button>
-            <button 
-                onClick={() => onViewChange('mindmap')}
-                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'mindmap' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                title="Hierarchy Mindmap"
-            >
-                <GitGraph size={12} />
-                Mindmap
-            </button>
-            <button 
-                onClick={() => onViewChange('tree')}
-                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'tree' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                title="Tree List"
-            >
-                <FolderTree size={12} />
-                Tree
-            </button>
-            <button 
-                onClick={() => onViewChange('code')}
-                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'code' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                title="Code Editor"
-            >
-                <Terminal size={12} />
-                Code
-            </button>
-         </div>
+        {/* Right: Actions & Tools */}
+        <div className="flex items-center gap-3 shrink-0">
+            
+            {/* Search */}
+            <div className="relative hidden lg:block">
+                <input 
+                    className="bg-slate-800 border border-slate-700 rounded-full pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 w-40 transition-all focus:w-60 placeholder-slate-500"
+                    placeholder="Search entities..."
+                    value={searchTerm}
+                    onChange={(e) => onSearchChange(e.target.value)}
+                />
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            </div>
 
-         <div className="h-6 w-px bg-slate-700 mx-1"></div>
+            <div className="h-6 w-px bg-slate-700"></div>
 
-         {/* Group 2: Undo/Redo & Reasoner */}
-         <div className="flex items-center gap-2">
-             <div className="flex gap-1">
-                 <button 
+            {/* Undo/Redo */}
+            <div className="flex gap-1">
+                <button 
                     onClick={onUndo} 
                     disabled={!canUndo}
-                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                     title="Undo (Ctrl+Z)"
-                 >
-                     <Undo2 size={16} />
-                 </button>
-                 <button 
+                >
+                    <Undo2 size={18} />
+                </button>
+                <button 
                     onClick={onRedo} 
                     disabled={!canRedo}
-                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                     title="Redo (Ctrl+Y)"
-                 >
-                     <Redo2 size={16} />
-                 </button>
-             </div>
+                >
+                    <Redo2 size={18} />
+                </button>
+            </div>
 
-             <div className="w-px h-6 bg-slate-700 mx-1"></div>
+            <div className="h-6 w-px bg-slate-700"></div>
 
-             <button 
-                onClick={onRunReasoner}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all border ${
-                    isReasonerActive 
-                    ? 'bg-amber-500/20 border-amber-500/50 text-amber-400 hover:bg-amber-500/30 hover:border-amber-400' 
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500'
-                }`}
-                title={isReasonerActive ? "Stop/Reset Reasoner" : "Run HermiT-like Reasoner"}
-             >
-                 {isReasonerActive ? <CheckCircle2 size={14} /> : <Brain size={14} />}
-                 {isReasonerActive ? 'Reasoner Active' : 'Start Reasoner'}
-             </button>
-             
-             {isReasonerActive && (
-                 <div className="flex items-center bg-slate-900 rounded-md border border-slate-700 p-0.5">
-                     <button
-                        onClick={() => onToggleInferred()}
-                        className={`px-2 py-1 text-[10px] font-bold rounded transition-colors ${!showInferred ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
-                     >
-                         Asserted
-                     </button>
-                     <button
-                        onClick={() => onToggleInferred()}
-                        className={`px-2 py-1 text-[10px] font-bold rounded transition-colors ${showInferred ? 'bg-amber-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
-                     >
-                         Inferred
-                     </button>
-                 </div>
-             )}
-         </div>
+            {/* Reasoner */}
+            <div className="flex items-center gap-2">
+                <button 
+                    onClick={onRunReasoner}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all border ${
+                        isReasonerActive 
+                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-400 hover:bg-amber-500/30 hover:border-amber-400' 
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500'
+                    }`}
+                    title={isReasonerActive ? "Stop/Reset Reasoner" : "Run HermiT-like Reasoner"}
+                >
+                    {isReasonerActive ? <CheckCircle2 size={14} /> : <Brain size={14} />}
+                    <span className="hidden sm:inline">{isReasonerActive ? 'Active' : 'Reasoner'}</span>
+                </button>
+                
+                {isReasonerActive && (
+                    <div className="flex items-center bg-slate-900 rounded-md border border-slate-700 p-0.5">
+                        <button
+                            onClick={() => onToggleInferred()}
+                            className={`p-1 rounded transition-colors ${!showInferred ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+                            title="Show Asserted"
+                        >
+                            <Layers size={12} />
+                        </button>
+                        <button
+                            onClick={() => onToggleInferred()}
+                            className={`p-1 rounded transition-colors ${showInferred ? 'bg-amber-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+                            title="Show Inferred"
+                        >
+                            <Brain size={12} />
+                        </button>
+                    </div>
+                )}
+            </div>
 
-         <div className="h-6 w-px bg-slate-700 mx-1"></div>
+            <div className="h-6 w-px bg-slate-700"></div>
 
-         {/* Group 3: Ontology Tools */}
-         <div className="flex items-center gap-3">
-             <button 
-                onClick={onToggleIndividuals}
-                className={`flex items-center gap-2 text-sm font-medium transition-colors ${showIndividuals ? 'text-pink-400 hover:text-pink-300' : 'text-slate-500 hover:text-slate-400'}`}
-                title={showIndividuals ? "Hide Individuals" : "Show Individuals"}
-             >
-                {showIndividuals ? <Eye size={16} /> : <EyeOff size={16} />}
-             </button>
+            {/* Settings Main Action */}
+            <button 
+                onClick={onOpenSettings}
+                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-3 py-1.5 rounded-md text-xs font-bold border border-slate-700 transition-colors"
+                title="Settings, Project & Import/Export"
+            >
+                <Settings size={14} />
+            </button>
+        </div>
+        </div>
 
-             <button 
-                onClick={onValidate}
-                className="flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
-                title="Validate Ontology"
-             >
-                <ShieldCheck size={16} />
-             </button>
+        {/* Secondary Toolbar (Ontology Tools) */}
+        <div className="h-10 bg-slate-950 border-b border-slate-800 flex items-center px-4 gap-4 overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-2 border-r border-slate-800 pr-4">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Visibility</span>
+                <button 
+                    onClick={onToggleIndividuals}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors ${showIndividuals ? 'bg-pink-900/20 text-pink-400 border border-pink-900/30' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'}`}
+                    title={showIndividuals ? "Hide Individuals" : "Show Individuals"}
+                >
+                    {showIndividuals ? <Eye size={12} /> : <EyeOff size={12} />}
+                    Individuals
+                </button>
+            </div>
 
-             <button 
-                onClick={onOpenMetrics}
-                className="flex items-center gap-2 text-sm font-medium text-cyan-400 hover:text-cyan-300 transition-colors"
-                title="Ontology Metrics"
-             >
-                <Activity size={16} />
-             </button>
+            <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Analysis</span>
+                <button onClick={onValidate} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-emerald-400 hover:bg-slate-900 transition-colors">
+                    <ShieldCheck size={12} /> Validate
+                </button>
+                <button onClick={onOpenMetrics} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-cyan-400 hover:bg-slate-900 transition-colors">
+                    <Activity size={12} /> Metrics
+                </button>
+                <button onClick={onOpenExpressivity} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-pink-400 hover:bg-slate-900 transition-colors">
+                    <Calculator size={12} /> Complexity
+                </button>
+            </div>
 
-             <button 
-                onClick={onOpenExpressivity}
-                className="flex items-center gap-2 text-sm font-medium text-pink-400 hover:text-pink-300 transition-colors"
-                title="Calculate DL Expressivity"
-             >
-                <Calculator size={16} />
-             </button>
-
-             <button 
-                onClick={onOpenDLQuery}
-                className="flex items-center gap-2 text-sm font-medium text-purple-400 hover:text-purple-300 transition-colors"
-                title="DL Query"
-             >
-                <Search size={16} />
-             </button>
-
-             <button 
-                onClick={onOpenSWRL}
-                className="flex items-center gap-2 text-sm font-medium text-amber-400 hover:text-amber-300 transition-colors"
-                title="SWRL Rules"
-             >
-                <ScrollText size={16} />
-             </button>
-
-             <button 
-                onClick={onOpenDLAxioms}
-                className="flex items-center gap-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
-                title="Description Logic Axioms"
-             >
-                <Sigma size={16} />
-             </button>
-
-             <button 
-                onClick={onOpenDatalog}
-                className="flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
-                title="Datalog Translation"
-             >
-                <Terminal size={16} />
-             </button>
-         </div>
-
-         <div className="h-6 w-px bg-slate-700 mx-1"></div>
-
-         {/* Group 4: Project Actions */}
-         <div className="flex items-center gap-3">
-             <button 
-                onClick={onNewProject}
-                className="flex items-center gap-2 text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors"
-                title="New Project"
-             >
-                <FilePlus size={16} />
-             </button>
-
-             {/* Import Menu */}
-             <div className="relative">
-                 <button 
-                    onClick={() => setShowImportMenu(!showImportMenu)}
-                    className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition-colors focus:outline-none"
-                    title="Import Ontology"
-                 >
-                    <Upload size={16} />
-                    <ChevronDown size={14} className="opacity-50" />
-                 </button>
-                 {showImportMenu && (
-                     <div className="absolute top-full right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-md shadow-xl z-50">
-                         <label className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700 first:rounded-t-md cursor-pointer flex items-center gap-2">
-                            <Upload size={12} />
-                            <span>Upload File</span>
-                            <input type="file" className="hidden" accept=".json,.ttl,.rdf,.nt,.owl,.ofn,.xml" onChange={(e) => { onLoad(e); setShowImportMenu(false); }} />
-                         </label>
-                         <button 
-                            onClick={() => { onLoadUrl(); setShowImportMenu(false); }}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700 last:rounded-b-md flex items-center gap-2"
-                         >
-                            <Globe size={12} />
-                            <span>From URL</span>
-                         </button>
-                     </div>
-                 )}
-                 {showImportMenu && <div className="fixed inset-0 z-40" onClick={() => setShowImportMenu(false)} />}
-             </div>
-
-             {/* Export Dropdown */}
-             <div className="relative">
-                 <button 
-                    onClick={() => setShowExportMenu(!showExportMenu)}
-                    className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition-colors focus:outline-none"
-                    title="Export Project"
-                 >
-                    <Download size={16} />
-                    <ChevronDown size={14} className="opacity-50" />
-                 </button>
-                 
-                 {showExportMenu && (
-                     <div className="absolute top-full right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-md shadow-xl z-50">
-                         <button 
-                            onClick={() => { onSaveJSON(); setShowExportMenu(false); }}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700 first:rounded-t-md"
-                         >
-                            JSON (Project)
-                         </button>
-                         <button 
-                            onClick={() => { onSaveTurtle(); setShowExportMenu(false); }}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700 last:rounded-b-md"
-                         >
-                            Turtle (RDF .ttl)
-                         </button>
-                     </div>
-                 )}
-                 
-                 {showExportMenu && (
-                     <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
-                 )}
-             </div>
-         </div>
-
-         <div className="h-6 w-px bg-slate-700 mx-1"></div>
-
-         <button 
-            onClick={onOpenSettings}
-            className="text-slate-300 hover:text-white p-2 rounded-full hover:bg-slate-800 transition-colors"
-            title="Settings"
-         >
-            <Settings size={20} />
-         </button>
-      </div>
+            <div className="flex items-center gap-2 border-l border-slate-800 pl-4">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Logic</span>
+                <button onClick={onOpenDLQuery} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-purple-400 hover:bg-slate-900 transition-colors">
+                    <Search size={12} /> DL Query
+                </button>
+                <button onClick={onOpenSWRL} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-amber-400 hover:bg-slate-900 transition-colors">
+                    <ScrollText size={12} /> SWRL
+                </button>
+                <button onClick={onOpenDLAxioms} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-indigo-400 hover:bg-slate-900 transition-colors">
+                    <Sigma size={12} /> Axioms
+                </button>
+                <button onClick={onOpenDatalog} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-emerald-400 hover:bg-slate-900 transition-colors">
+                    <Terminal size={12} /> Datalog
+                </button>
+            </div>
+        </div>
     </div>
   );
 };

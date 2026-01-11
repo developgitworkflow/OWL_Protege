@@ -664,23 +664,9 @@ const Flow = () => {
       />
 
       <TopBar 
-        onSaveJSON={handleSaveJSON} 
-        onSaveTurtle={handleSaveTurtle}
-        onLoad={handleLoad}
-        onLoadUrl={() => setIsImportUrlModalOpen(true)}
-        onNewProject={() => setIsCreateModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
-        onValidate={handleValidate}
-        onOpenDLQuery={() => setIsDLQueryModalOpen(true)}
-        onOpenSWRL={() => setIsSWRLModalOpen(true)}
-        onOpenDLAxioms={() => setIsDLAxiomModalOpen(true)}
-        onOpenExpressivity={() => setIsExpressivityModalOpen(true)}
-        onOpenDatalog={() => setIsDatalogModalOpen(true)}
-        onOpenMetrics={() => setIsMetricsModalOpen(true)}
         currentView={viewMode}
         onViewChange={setViewMode}
-        showIndividuals={showIndividuals}
-        onToggleIndividuals={() => setShowIndividuals(!showIndividuals)}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         isReasonerActive={isReasonerActive}
@@ -694,6 +680,17 @@ const Flow = () => {
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         isSidebarOpen={isSidebarOpen}
         showSidebarToggle={viewMode === 'design'}
+        
+        // Pass tool handlers
+        showIndividuals={showIndividuals}
+        onToggleIndividuals={() => setShowIndividuals(!showIndividuals)}
+        onValidate={handleValidate}
+        onOpenDLQuery={() => setIsDLQueryModalOpen(true)}
+        onOpenSWRL={() => setIsSWRLModalOpen(true)}
+        onOpenDLAxioms={() => setIsDLAxiomModalOpen(true)}
+        onOpenExpressivity={() => setIsExpressivityModalOpen(true)}
+        onOpenDatalog={() => setIsDatalogModalOpen(true)}
+        onOpenMetrics={() => setIsMetricsModalOpen(true)}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -872,9 +869,17 @@ const Flow = () => {
         onClose={() => setIsSettingsModalOpen(false)}
         projectData={projectMetadata}
         onUpdateProjectData={setProjectMetadata}
+        onNewProject={() => setIsCreateModalOpen(true)}
         onExportJSON={handleSaveJSON}
         onExportTurtle={handleSaveTurtle}
         onImportJSON={handleLoad}
+        onValidate={handleValidate}
+        onOpenDLQuery={() => setIsDLQueryModalOpen(true)}
+        onOpenSWRL={() => setIsSWRLModalOpen(true)}
+        onOpenDLAxioms={() => setIsDLAxiomModalOpen(true)}
+        onOpenExpressivity={() => setIsExpressivityModalOpen(true)}
+        onOpenDatalog={() => setIsDatalogModalOpen(true)}
+        onOpenMetrics={() => setIsMetricsModalOpen(true)}
       />
 
       <ValidationModal 

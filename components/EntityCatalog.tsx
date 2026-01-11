@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Method } from '../types';
-import { Database, ArrowRightLeft, Tag, User, FileType, Plus, Trash2, Search, Edit3, Settings, ArrowRight, GitMerge, List, BookOpen, Brain, AlertTriangle } from 'lucide-react';
+import { Database, ArrowRightLeft, Tag, User, FileType, Plus, Trash2, Search, Edit3, Settings, ArrowRight, GitMerge, List, BookOpen, Brain, AlertTriangle, Sigma } from 'lucide-react';
 
 interface EntityCatalogProps {
     nodes: Node<UMLNodeData>[];
@@ -109,6 +109,50 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
         if (node.data.description) return node.data.description;
         const comment = node.data.annotations?.find(a => a.property === 'rdfs:comment' || a.property === 'skos:definition');
         return comment ? comment.value.replace(/"/g, '') : '';
+    };
+
+    // --- Description Logic Converters ---
+
+    const toDL = (expr: string): string => {
+        if (!expr) return '';
+        let dl = expr;
+        
+        // Keywords to Symbols
+        dl = dl.replace(/\band\b/gi, '⊓');
+        dl = dl.replace(/\bor\b/gi, '⊔');
+        dl = dl.replace(/\bnot\b/gi, '¬');
+        dl = dl.replace(/\bsome\b/gi, '∃');
+        dl = dl.replace(/\bonly\b/gi, '∀');
+        dl = dl.replace(/\bvalue\b/gi, '∋');
+        dl = dl.replace(/\bmin\s+(\d+)/gi, '≥$1');
+        dl = dl.replace(/\bmax\s+(\d+)/gi, '≤$1');
+        dl = dl.replace(/\bexactly\s+(\d+)/gi, '=$1');
+        dl = dl.replace(/\bself\b/gi, 'Self');
+        dl = dl.replace(/\bthat\b/gi, '.'); 
+        
+        // Clean up spaces
+        dl = dl.replace(/\s*⊓\s*/g, ' ⊓ ');
+        dl = dl.replace(/\s*⊔\s*/g, ' ⊔ ');
+        
+        return dl;
+    };
+
+    const getDLAxiom = (method: Method, subject: string) => {
+        const type = method.name.toLowerCase().replace(/[^a-z]/g, '');
+        const o = toDL(method.returnType);
+        
+        switch (type) {
+            case 'subclassof': return `${subject} ⊑ ${o}`;
+            case 'equivalentto':
+            case 'equivalentclass': return `${subject} ≡ ${o}`;
+            case 'disjointwith': return `${subject} ⊓ ${o} ⊑ ⊥`;
+            case 'subpropertyof': return `${subject} ⊑ ${o}`;
+            case 'inverseof': return `${subject} ≡ ${o}⁻`;
+            case 'domain': return `∃${subject}.⊤ ⊑ ${o}`;
+            case 'range': return `⊤ ⊑ ∀${subject}.${o}`;
+            case 'type': return `${o}(${subject})`;
+            default: return `${subject} ${method.name} ${o}`;
+        }
     };
 
     const getHumanReadableAxiom = (method: Method) => {
@@ -299,7 +343,7 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                                                         </div>
                                                     )}
                                                     
-                                                    {/* Human Readable Axioms */}
+                                                    {/* Axioms */}
                                                     {node.data.methods.length > 0 && (
                                                         <div className="space-y-1.5">
                                                             <div className="text-[10px] uppercase font-bold text-slate-600 mb-1 flex items-center gap-1">
@@ -307,10 +351,19 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                                                             </div>
                                                             {node.data.methods.slice(0, 4).map((m, mIdx) => {
                                                                 const { prefix, target, color } = getHumanReadableAxiom(m);
+                                                                const dlString = getDLAxiom(m, node.data.label);
+                                                                
                                                                 return (
-                                                                    <div key={mIdx} className="flex items-baseline gap-2 text-xs bg-slate-900/50 p-1 rounded border border-slate-800/50 hover:border-slate-700 hover:bg-slate-800 transition-colors">
-                                                                        <span className={`font-semibold ${color} shrink-0 text-[11px] w-20 text-right`}>{prefix}</span>
-                                                                        <span className="text-slate-300 font-mono text-[11px] truncate">{target}</span>
+                                                                    <div key={mIdx} className="flex flex-col gap-1 text-xs bg-slate-900/50 p-1.5 rounded border border-slate-800/50 hover:border-slate-700 hover:bg-slate-800 transition-colors">
+                                                                        <div className="flex items-baseline gap-2">
+                                                                            <span className={`font-semibold ${color} shrink-0 text-[11px] w-20 text-right`}>{prefix}</span>
+                                                                            <span className="text-slate-300 font-mono text-[11px] truncate">{target}</span>
+                                                                        </div>
+                                                                        {/* DL Representation */}
+                                                                        <div className="flex items-center gap-2 pl-[5.5rem] opacity-60">
+                                                                            <span className="text-[9px] text-slate-500 font-serif border border-slate-700 px-1 rounded bg-slate-950 flex items-center gap-1"><Sigma size={8} /> DL</span>
+                                                                            <span className="font-serif text-slate-400 text-[11px] truncate">{dlString}</span>
+                                                                        </div>
                                                                     </div>
                                                                 );
                                                             })}

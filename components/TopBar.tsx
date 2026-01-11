@@ -134,10 +134,10 @@ const TopBar: React.FC<TopBarProps> = ({
                 onClick={onRunReasoner}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all border ${
                     isReasonerActive 
-                    ? 'bg-amber-500/10 border-amber-500/50 text-amber-400' 
+                    ? 'bg-amber-500/20 border-amber-500/50 text-amber-400 hover:bg-amber-500/30 hover:border-amber-400' 
                     : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500'
                 }`}
-                title="Run HermiT-like Reasoner"
+                title={isReasonerActive ? "Stop/Reset Reasoner" : "Run HermiT-like Reasoner"}
              >
                  {isReasonerActive ? <CheckCircle2 size={14} /> : <Brain size={14} />}
                  {isReasonerActive ? 'Reasoner Active' : 'Start Reasoner'}
@@ -165,6 +165,14 @@ const TopBar: React.FC<TopBarProps> = ({
 
          {/* Group 3: Ontology Tools */}
          <div className="flex items-center gap-3">
+             <button 
+                onClick={onToggleIndividuals}
+                className={`flex items-center gap-2 text-sm font-medium transition-colors ${showIndividuals ? 'text-pink-400 hover:text-pink-300' : 'text-slate-500 hover:text-slate-400'}`}
+                title={showIndividuals ? "Hide Individuals" : "Show Individuals"}
+             >
+                {showIndividuals ? <Eye size={16} /> : <EyeOff size={16} />}
+             </button>
+
              <button 
                 onClick={onValidate}
                 className="flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors"

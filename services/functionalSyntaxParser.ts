@@ -1,3 +1,4 @@
+
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, ProjectData, SWRLRule } from '../types';
 import { convertFunctionalToHuman } from './swrlService';
@@ -16,7 +17,7 @@ interface Token {
 }
 
 // Delimiters defined in OWL 2 Specification
-const DELIMITERS = new Set(['(', ')', '<', '>', '=', '@', '^']);
+const DELIMITERS = new Set(['(', ')', '<', '>', '=', '@', '^', '.']);
 
 // Regex Definitions (Order matters for greedy matching!)
 const TERMINALS: { type: TokenType, regex: RegExp }[] = [
@@ -31,8 +32,8 @@ const TERMINALS: { type: TokenType, regex: RegExp }[] = [
     { type: 'FLOAT', regex: /^[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+|[0-9]+)[eE][+-]?[0-9]+/ },
     { type: 'DECIMAL', regex: /^[+-]?[0-9]*\.[0-9]+/ },
     { type: 'INTEGER', regex: /^[+-]?[0-9]+/ },
-    { type: 'DELIMITER', regex: /^[()<>@=^]/ },
-    { type: 'KEYWORD', regex: /^[a-zA-Z][a-zA-Z0-9_-]*/ }, // Matches any identifier
+    { type: 'DELIMITER', regex: /^[()<>@=^.]/ }, // Added dot to delimiters to safely tokenize Turtle artifacts if mixed
+    { type: 'KEYWORD', regex: /^[a-zA-Z][a-zA-Z0-9._-]*/ }, // Allow dots in keywords/identifiers
     { type: 'WHITESPACE', regex: /^[\x20\x09\x0A\x0D]+/ }
 ];
 

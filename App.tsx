@@ -90,12 +90,19 @@ const Flow = () => {
   }, [nodes, edges]);
 
   const handleRunReasoner = useCallback(() => {
-      // 1. Compute Inferences
-      const inferred = computeInferredEdges(nodes, edges);
-      setInferredEdges(inferred);
-      setIsReasonerActive(true);
-      setShowInferred(true);
-  }, [nodes, edges]);
+      if (isReasonerActive) {
+          // Deactivate
+          setIsReasonerActive(false);
+          setShowInferred(false);
+          setInferredEdges([]);
+      } else {
+          // Activate
+          const inferred = computeInferredEdges(nodes, edges);
+          setInferredEdges(inferred);
+          setIsReasonerActive(true);
+          setShowInferred(true);
+      }
+  }, [nodes, edges, isReasonerActive]);
 
   // Determine which edges to pass to visualizations
   const activeEdges = useMemo(() => {
@@ -265,23 +272,7 @@ const Flow = () => {
               // Not valid JSON, continue
           }
 
-          // 2. Try Turtle/RDF (Async)
-          if (fileName.endsWith('.ttl') || fileName.endsWith('.rdf') || fileName.endsWith('.nt')) {
-              try {
-                  const result = await parseTurtle(content);
-                  if (result.nodes.length > 0) {
-                      const normalizedNodes = normalizeOntology(result.nodes);
-                      setNodes(normalizedNodes);
-                      setEdges(result.edges);
-                      setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
-                      return;
-                  }
-              } catch (rdfErr) {
-                  console.warn("RDF Parse failed, trying other formats...", rdfErr);
-              }
-          }
-
-          // 3. Try RDF/XML (Check content or extension)
+          // 2. Try RDF/XML (Check content or extension)
           if (content.trim().startsWith('<') || fileName.endsWith('.xml') || fileName.endsWith('.rdf') || fileName.endsWith('.owl')) {
               try {
                   const result = parseRdfXml(content);
@@ -293,12 +284,13 @@ const Flow = () => {
                       return;
                   }
               } catch (xmlErr) {
-                  console.warn("XML Parse failed, trying Functional Syntax...", xmlErr);
+                  console.warn("XML Parse failed, trying other formats...", xmlErr);
               }
           }
 
-          // 4. Try OWL Functional Syntax
-          if (content.includes('Ontology') || content.includes('Declaration') || fileName.endsWith('.ofn') || fileName.endsWith('.owl')) {
+          // 3. Try OWL Functional Syntax (Check for characteristic signatures)
+          // We specifically look for "Ontology(" or "Declaration(" with a parenthesis to distinguish from Turtle's "owl:Ontology"
+          if (/Ontology\s*\(/.test(content) || /Declaration\s*\(/.test(content) || /Prefix\s*\(/.test(content) || fileName.endsWith('.ofn')) {
               try {
                 const result = parseFunctionalSyntax(content);
                 if (result.nodes.length > 0) {
@@ -310,8 +302,21 @@ const Flow = () => {
                 }
               } catch (fnErr) {
                  console.warn("Functional Syntax Parse failed", fnErr);
-                 throw fnErr;
               }
+          }
+
+          // 4. Try Turtle/RDF (Default Fallback for .owl/.ttl)
+          try {
+              const result = await parseTurtle(content);
+              if (result.nodes.length > 0) {
+                  const normalizedNodes = normalizeOntology(result.nodes);
+                  setNodes(normalizedNodes);
+                  setEdges(result.edges);
+                  setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
+                  return;
+              }
+          } catch (rdfErr) {
+              console.warn("RDF Parse failed", rdfErr);
           }
 
           throw new Error("Unknown format or parsing failed.");

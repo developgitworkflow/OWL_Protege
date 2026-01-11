@@ -36,6 +36,8 @@ export const classifyOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]) => {
 
     // Initialize structures
     nodes.forEach(n => {
+        if (!n.data) return; // Skip invalid nodes
+
         const label = n.data.label;
         labelToId[label] = n.id;
         // Handle Prefix stripping for lookups (e.g. "ex:Person" -> "Person")
@@ -50,15 +52,19 @@ export const classifyOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]) => {
         // Property Metadata
         if (n.data.type === ElementType.OWL_OBJECT_PROPERTY || n.data.type === ElementType.OWL_DATA_PROPERTY) {
             if (!propertyCharacteristics[label]) propertyCharacteristics[label] = new Set();
-            n.data.attributes.forEach(attr => propertyCharacteristics[label].add(attr.name));
+            if (n.data.attributes) {
+                n.data.attributes.forEach(attr => propertyCharacteristics[label].add(attr.name));
+            }
             
             // Internal SubPropertyOf Axioms
-            n.data.methods.forEach(m => {
-                if (m.name.toLowerCase() === 'subpropertyof') {
-                    if (!subPropertyOf[label]) subPropertyOf[label] = new Set();
-                    subPropertyOf[label].add(m.returnType);
-                }
-            });
+            if (n.data.methods) {
+                n.data.methods.forEach(m => {
+                    if (m.name.toLowerCase() === 'subpropertyof') {
+                        if (!subPropertyOf[label]) subPropertyOf[label] = new Set();
+                        subPropertyOf[label].add(m.returnType);
+                    }
+                });
+            }
         }
     });
 
@@ -82,7 +88,7 @@ export const classifyOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]) => {
         if (label === 'rdfs:subPropertyOf' || label === 'subPropertyOf') {
             const sNode = nodeMap.get(e.source);
             const tNode = nodeMap.get(e.target);
-            if (sNode && tNode) {
+            if (sNode && sNode.data && tNode && tNode.data) {
                 const s = sNode.data.label;
                 const t = tNode.data.label;
                 if (!subPropertyOf[s]) subPropertyOf[s] = new Set();
@@ -102,15 +108,17 @@ export const classifyOntology = (nodes: Node<UMLNodeData>[], edges: Edge[]) => {
 
     // Also process Axioms (Methods) into the graph structure for reasoning
     nodes.forEach(n => {
-        n.data.methods.forEach(m => {
-            if (m.name.toLowerCase() === 'subclassof') {
-                const targetId = labelToId[m.returnType];
-                if (targetId) {
-                    subClassOf[n.id].add(targetId);
-                    superClassOf[targetId].add(n.id);
+        if (n.data && n.data.methods) {
+            n.data.methods.forEach(m => {
+                if (m.name.toLowerCase() === 'subclassof') {
+                    const targetId = labelToId[m.returnType];
+                    if (targetId) {
+                        subClassOf[n.id].add(targetId);
+                        superClassOf[targetId].add(n.id);
+                    }
                 }
-            }
-        });
+            });
+        }
     });
 
     // Transitive Closure (Reasoning)
@@ -234,15 +242,17 @@ const resolveExpression = (expr: string): Set<string> | null => {
         });
 
         nodeMap.forEach(node => {
-            node.data.methods.forEach(m => {
-                if (m.name === 'SubClassOf') {
-                    if (m.returnType.includes(`${propLabel} some`)) {
-                        if (m.returnType.includes(targetExpr)) {
-                            result.add(node.id);
+            if (node.data && node.data.methods) {
+                node.data.methods.forEach(m => {
+                    if (m.name === 'SubClassOf') {
+                        if (m.returnType.includes(`${propLabel} some`)) {
+                            if (m.returnType.includes(targetExpr)) {
+                                result.add(node.id);
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
         });
 
         return result;
@@ -289,28 +299,28 @@ export const executeDLQuery = (query: string, queryType: QueryType): Node<UMLNod
     const lowerQuery = query.toLowerCase().trim();
 
     if (['owl:class', 'class', 'classes'].includes(lowerQuery)) {
-        return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_CLASS);
+        return Array.from(nodeMap.values()).filter(n => n.data?.type === ElementType.OWL_CLASS);
     }
     if (['owl:namedindividual', 'namedindividual', 'individual', 'individuals'].includes(lowerQuery)) {
-        return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL);
+        return Array.from(nodeMap.values()).filter(n => n.data?.type === ElementType.OWL_NAMED_INDIVIDUAL);
     }
     if (['owl:objectproperty', 'objectproperty', 'object properties'].includes(lowerQuery)) {
-        return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_OBJECT_PROPERTY);
+        return Array.from(nodeMap.values()).filter(n => n.data?.type === ElementType.OWL_OBJECT_PROPERTY);
     }
     if (['owl:datatypeproperty', 'datatypeproperty', 'data properties', 'dataproperty'].includes(lowerQuery)) {
-        return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_DATA_PROPERTY);
+        return Array.from(nodeMap.values()).filter(n => n.data?.type === ElementType.OWL_DATA_PROPERTY);
     }
     if (['owl:datatype', 'datatype', 'datatypes'].includes(lowerQuery)) {
-        return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_DATATYPE);
+        return Array.from(nodeMap.values()).filter(n => n.data?.type === ElementType.OWL_DATATYPE);
     }
 
     let targetClasses = resolveExpression(query);
 
     if (!targetClasses && (lowerQuery === 'thing' || lowerQuery === 'owl:thing')) {
         if (queryType === 'instances') {
-             return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL);
+             return Array.from(nodeMap.values()).filter(n => n.data?.type === ElementType.OWL_NAMED_INDIVIDUAL);
         } else {
-             return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_CLASS);
+             return Array.from(nodeMap.values()).filter(n => n.data?.type === ElementType.OWL_CLASS);
         }
     }
 
@@ -321,7 +331,7 @@ export const executeDLQuery = (query: string, queryType: QueryType): Node<UMLNod
     if (queryType === 'instances') {
         targetClasses.forEach(id => {
             const node = nodeMap.get(id);
-            if (node?.data.type === ElementType.OWL_NAMED_INDIVIDUAL) {
+            if (node?.data?.type === ElementType.OWL_NAMED_INDIVIDUAL) {
                 resultIds.add(id);
             }
             const insts = instances[id];
@@ -333,7 +343,7 @@ export const executeDLQuery = (query: string, queryType: QueryType): Node<UMLNod
             const children = superClassOf[clsId]; 
             if (children) children.forEach(c => resultIds.add(c));
             const node = nodeMap.get(clsId);
-            if (node?.data.type === ElementType.OWL_CLASS) {
+            if (node?.data?.type === ElementType.OWL_CLASS) {
                 resultIds.add(clsId);
             }
         });
@@ -343,7 +353,7 @@ export const executeDLQuery = (query: string, queryType: QueryType): Node<UMLNod
             const parents = subClassOf[clsId];
             if (parents) parents.forEach(p => resultIds.add(p));
             const node = nodeMap.get(clsId);
-            if (node?.data.type === ElementType.OWL_CLASS) {
+            if (node?.data?.type === ElementType.OWL_CLASS) {
                  resultIds.add(clsId);
             }
         });
@@ -402,9 +412,10 @@ export const computeInferredEdges = (nodes: Node<UMLNodeData>[], explicitEdges: 
     explicitEdges.forEach(e => {
         if (!['rdf:type', 'subClassOf', 'rdfs:subClassOf', 'owl:disjointWith', 'disjointWith'].includes(e.label as string)) {
             // Find property node to get domain/range
-            const propNode = nodes.find(n => n.data.label === e.label || n.data.label === (e.label as string).split(':')[1]);
+            // Safety check for data
+            const propNode = nodes.find(n => n.data && (n.data.label === e.label || n.data.label === (e.label as string).split(':')[1]));
             
-            if (propNode) {
+            if (propNode && propNode.data && propNode.data.methods) {
                 // Domain
                 propNode.data.methods.forEach(m => {
                     if (m.name.toLowerCase() === 'domain') {
@@ -456,14 +467,9 @@ export const computeInferredEdges = (nodes: Node<UMLNodeData>[], explicitEdges: 
             }
         });
 
-        const visited = new Set<string>();
         // DFS for each node
         Object.keys(index.outgoingEdges).forEach(startNode => {
-            const stack = [{ curr: startNode, path: [startNode] }];
-            
             // Simple DFS to find all reachable nodes via 'propLabel' edges
-            // Note: This implementation re-traverses, optimization possible but sufficient for UI size
-            const reachable = new Set<string>();
             const queue = [startNode];
             const localVisited = new Set<string>();
             localVisited.add(startNode);
@@ -474,7 +480,6 @@ export const computeInferredEdges = (nodes: Node<UMLNodeData>[], explicitEdges: 
                 neighbors.forEach(v => {
                     if (!localVisited.has(v)) {
                         localVisited.add(v);
-                        reachable.add(v);
                         queue.push(v);
                         // Add inferred edge from startNode to v
                         addEdge(startNode, v, propLabel, 'Transitive Property');

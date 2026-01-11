@@ -1,3 +1,4 @@
+
 import { Node } from 'reactflow';
 import { UMLNodeData } from '../types';
 
@@ -7,6 +8,9 @@ import { UMLNodeData } from '../types';
  */
 export const normalizeOntology = (nodes: Node<UMLNodeData>[]): Node<UMLNodeData>[] => {
   return nodes.map(node => {
+    // Safety check for node data
+    if (!node.data) return node;
+
     // If no methods, skip
     if (!node.data.methods || node.data.methods.length === 0) return node;
 

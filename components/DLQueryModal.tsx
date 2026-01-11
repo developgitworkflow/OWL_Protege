@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, Search, Database, User, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Lightbulb, Sparkles, Loader2, ArrowRight, BookOpen, ExternalLink } from 'lucide-react';
+import { X, Search, Database, User, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Lightbulb, Sparkles, Loader2, ArrowRight, BookOpen, ExternalLink, List, Workflow, Layers } from 'lucide-react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
 import { classifyOntology, executeDLQuery, QueryType } from '../services/reasonerService';
@@ -13,6 +13,7 @@ interface DLQueryModalProps {
   onClose: () => void;
   nodes: Node<UMLNodeData>[];
   edges: Edge[];
+  onNavigate: (view: string, id: string) => void;
 }
 
 const STATIC_EXAMPLES = [
@@ -20,7 +21,7 @@ const STATIC_EXAMPLES = [
     { label: 'All Individuals', query: 'owl:NamedIndividual', type: 'instances' as QueryType, desc: 'List all defined Individuals' },
 ];
 
-const DLQueryModal: React.FC<DLQueryModalProps> = ({ isOpen, onClose, nodes, edges }) => {
+const DLQueryModal: React.FC<DLQueryModalProps> = ({ isOpen, onClose, nodes, edges, onNavigate }) => {
   const [query, setQuery] = useState('');
   const [queryType, setQueryType] = useState<QueryType>('subclasses');
   const [results, setResults] = useState<Node<UMLNodeData>[]>([]);
@@ -408,13 +409,40 @@ const DLQueryModal: React.FC<DLQueryModalProps> = ({ isOpen, onClose, nodes, edg
                             {results.map(node => (
                                 <div key={node.id} className="relative group">
                                     <div className="absolute inset-0 bg-purple-500/5 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity" />
-                                    <div className="relative flex items-center gap-3 p-3 bg-slate-950 border border-slate-800 rounded-lg shadow-sm hover:border-purple-500/50 transition-colors">
-                                        <div className={`p-2 rounded-md ${node.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'bg-pink-900/20 text-pink-400' : (node.data.type === ElementType.OWL_OBJECT_PROPERTY || node.data.type === ElementType.OWL_DATA_PROPERTY ? 'bg-green-900/20 text-green-400' : 'bg-blue-900/20 text-blue-400')}`}>
-                                            {node.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? <User size={18} /> : (node.data.type === ElementType.OWL_CLASS ? <Database size={18} /> : <ArrowDownCircle size={18} />)}
+                                    <div className="relative flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-lg shadow-sm hover:border-purple-500/50 transition-colors">
+                                        <div className="flex items-center gap-3 overflow-hidden">
+                                            <div className={`p-2 rounded-md ${node.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'bg-pink-900/20 text-pink-400' : (node.data.type === ElementType.OWL_OBJECT_PROPERTY || node.data.type === ElementType.OWL_DATA_PROPERTY ? 'bg-green-900/20 text-green-400' : 'bg-blue-900/20 text-blue-400')}`}>
+                                                {node.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? <User size={18} /> : (node.data.type === ElementType.OWL_CLASS ? <Database size={18} /> : <ArrowDownCircle size={18} />)}
+                                            </div>
+                                            <div className="overflow-hidden">
+                                                <div className="text-sm font-medium text-slate-200 truncate">{node.data.label}</div>
+                                                <div className="text-[10px] text-slate-500 font-mono truncate">{node.data.iri || node.id}</div>
+                                            </div>
                                         </div>
-                                        <div className="overflow-hidden">
-                                            <div className="text-sm font-medium text-slate-200 truncate">{node.data.label}</div>
-                                            <div className="text-[10px] text-slate-500 font-mono truncate">{node.data.iri || node.id}</div>
+                                        
+                                        {/* Actions */}
+                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/80 backdrop-blur-sm rounded p-1 absolute right-2">
+                                            <button 
+                                                onClick={() => { onNavigate('entities', node.id); onClose(); }}
+                                                className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-slate-800 rounded transition-colors"
+                                                title="View in Catalog"
+                                            >
+                                                <List size={16} />
+                                            </button>
+                                            <button 
+                                                onClick={() => { onNavigate('concept', node.id); onClose(); }}
+                                                className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded transition-colors"
+                                                title="View Concept Graph"
+                                            >
+                                                <Workflow size={16} />
+                                            </button>
+                                            <button 
+                                                onClick={() => { onNavigate('design', node.id); onClose(); }}
+                                                className="p-1.5 text-slate-400 hover:text-purple-400 hover:bg-slate-800 rounded transition-colors"
+                                                title="View on Canvas"
+                                            >
+                                                <Layers size={16} />
+                                            </button>
                                         </div>
                                     </div>
                                 </div>

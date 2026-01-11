@@ -42,6 +42,8 @@ import ExpressivityModal from './components/ExpressivityModal';
 import DatalogModal from './components/DatalogModal';
 import OntoMetricsModal from './components/OntoMetricsModal';
 import OWLVizVisualization from './components/OWLVizVisualization';
+import Toast, { ToastMessage, ToastType } from './components/Toast';
+import ConfirmDialog from './components/ConfirmDialog';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
 import { generateTurtle } from './services/owlMapper';
@@ -77,8 +79,10 @@ const Flow = () => {
   const [inferredEdges, setInferredEdges] = useState<Edge[]>([]);
   const [unsatisfiableIds, setUnsatisfiableIds] = useState<string[]>([]);
   
-  // Edge Tooltip State
+  // UI State
   const [edgeTooltip, setEdgeTooltip] = useState<{ id: string, x: number, y: number, label: string, type?: string } | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [confirmConfig, setConfirmConfig] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -97,6 +101,19 @@ const Flow = () => {
       defaultPrefix: 'ex',
       rules: []
   });
+
+  // --- Notifications ---
+  const addToast = useCallback((message: string, type: ToastType = 'success') => {
+      const id = Math.random().toString(36).substr(2, 9);
+      setToasts(prev => [...prev, { id, message, type }]);
+      setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+      }, 4000);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
 
   // --- History Management ---
 
@@ -119,7 +136,8 @@ const Flow = () => {
       setPast(newPast);
       setNodes(previous.nodes);
       setEdges(previous.edges);
-  }, [past, nodes, edges, setNodes, setEdges]);
+      addToast('Undo successful', 'info');
+  }, [past, nodes, edges, setNodes, setEdges, addToast]);
 
   const redo = useCallback(() => {
       if (future.length === 0) return;
@@ -130,7 +148,8 @@ const Flow = () => {
       setFuture(newFuture);
       setNodes(next.nodes);
       setEdges(next.edges);
-  }, [future, nodes, edges, setNodes, setEdges]);
+      addToast('Redo successful', 'info');
+  }, [future, nodes, edges, setNodes, setEdges, addToast]);
 
   // Keyboard Shortcuts for Undo/Redo
   useEffect(() => {
@@ -200,6 +219,7 @@ const Flow = () => {
           if (!result.isValid) {
               // Found inconsistencies - Stop and Show Report
               setIsValidationModalOpen(true);
+              addToast('Validation failed: Inconsistencies detected', 'error');
               return;
           }
 
@@ -208,8 +228,9 @@ const Flow = () => {
           setInferredEdges(inferred);
           setIsReasonerActive(true);
           setShowInferred(true);
+          addToast('Reasoner completed successfully', 'success');
       }
-  }, [nodes, edges, isReasonerActive, projectMetadata]);
+  }, [nodes, edges, isReasonerActive, projectMetadata, addToast]);
 
   // Determine which edges to pass to visualizations
   const activeEdges = useMemo(() => {
@@ -306,7 +327,8 @@ const Flow = () => {
       };
 
       setNodes((nds) => nds.concat(newNode));
-    }, [setNodes, saveHistory]);
+      addToast(`Created new ${elementType}`, 'success');
+    }, [setNodes, saveHistory, addToast]);
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
@@ -322,12 +344,26 @@ const Flow = () => {
     setNodes((nds) => nds.map((node) => node.id === id ? { ...node, data: newData } : node));
   }, [setNodes]);
 
-  const deleteNode = useCallback((id: string) => {
+  const performDeleteNode = useCallback((id: string) => {
       saveHistory();
+      const node = nodes.find(n => n.id === id);
       setNodes((nds) => nds.filter(n => n.id !== id));
       setEdges((eds) => eds.filter(e => e.source !== id && e.target !== id));
       setSelectedNodeId(null);
-  }, [setNodes, setEdges, saveHistory]);
+      addToast(`Deleted ${node?.data.label || 'element'}`, 'success');
+  }, [nodes, setNodes, setEdges, saveHistory, addToast]);
+
+  const deleteNode = useCallback((id: string) => {
+      const node = nodes.find(n => n.id === id);
+      setConfirmConfig({
+          title: `Delete ${node?.data.label || 'Element'}?`,
+          message: "Are you sure you want to delete this element? This action cannot be undone unless you use the history undo.",
+          onConfirm: () => {
+              performDeleteNode(id);
+              setConfirmConfig(null);
+          }
+      });
+  }, [nodes, performDeleteNode]);
 
   const handleCreateIndividual = useCallback((classNodeId: string, name: string) => {
       const classNode = nodes.find(n => n.id === classNodeId);
@@ -364,7 +400,8 @@ const Flow = () => {
 
       setNodes((nds) => [...nds, newNode]);
       setEdges((eds) => [...eds, newEdge]);
-  }, [nodes, setNodes, setEdges, saveHistory]);
+      addToast(`Created individual '${name}'`, 'success');
+  }, [nodes, setNodes, setEdges, saveHistory, addToast]);
 
   const handleCreateNode = useCallback((type: ElementType, label: string) => {
       saveHistory();
@@ -386,8 +423,9 @@ const Flow = () => {
           }
       };
       setNodes((nds) => [...nds, newNode]);
+      addToast(`Created ${label}`, 'success');
       return newId; // Return ID for selection
-  }, [setNodes, projectMetadata, saveHistory]);
+  }, [setNodes, projectMetadata, saveHistory, addToast]);
 
   const onDiagramGenerated = useCallback((newNodes: Node[], newEdges: Edge[]) => {
       saveHistory();
@@ -399,7 +437,8 @@ const Flow = () => {
           labelStyle: { fill: '#cbd5e1' },
           markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' }
       })));
-  }, [setNodes, setEdges, saveHistory]);
+      addToast('Diagram generated from AI description', 'success');
+  }, [setNodes, setEdges, saveHistory, addToast]);
 
   const handleSaveJSON = () => {
       const data = JSON.stringify({ metadata: projectMetadata, nodes, edges });
@@ -409,6 +448,7 @@ const Flow = () => {
       link.href = url;
       link.download = `${projectMetadata.name.replace(/\s+/g, '_') || 'diagram'}.json`;
       link.click();
+      addToast('Project JSON exported', 'success');
   };
 
   const handleSaveTurtle = () => {
@@ -419,6 +459,7 @@ const Flow = () => {
       link.href = url;
       link.download = `${projectMetadata.name.replace(/\s+/g, '_') || 'ontology'}.ttl`;
       link.click();
+      addToast('Turtle (TTL) exported', 'success');
   };
 
   const handleCodeUpdate = async (code: string, syntax: 'functional' | 'manchester' | 'turtle') => {
@@ -438,11 +479,13 @@ const Flow = () => {
               setNodes(normalizedNodes);
               setEdges(result.edges);
               setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
+              addToast('Code imported successfully', 'success');
           } else {
               throw new Error("No valid entities found in code.");
           }
       } catch (e) {
           console.error(e);
+          addToast(`Failed to parse ${syntax}: ${(e as Error).message}`, 'error');
           throw new Error(`Failed to parse ${syntax} syntax: ${(e as Error).message}`);
       }
   };
@@ -458,6 +501,7 @@ const Flow = () => {
                   setNodes(normalizedNodes);
                   setEdges(flow.edges);
                   if (flow.metadata) setProjectMetadata(flow.metadata);
+                  addToast('Project loaded', 'success');
                   return;
               }
           } catch (e) { }
@@ -471,6 +515,7 @@ const Flow = () => {
                       setNodes(normalizedNodes);
                       setEdges(result.edges);
                       setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
+                      addToast('RDF/XML loaded', 'success');
                       return;
                   }
               } catch (xmlErr) { }
@@ -485,6 +530,7 @@ const Flow = () => {
                     setNodes(normalizedNodes);
                     setEdges(result.edges);
                     setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
+                    addToast('Functional Syntax loaded', 'success');
                     return;
                 }
               } catch (fnErr) { }
@@ -498,6 +544,7 @@ const Flow = () => {
                   setNodes(normalizedNodes);
                   setEdges(result.edges);
                   setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
+                  addToast('Turtle loaded', 'success');
                   return;
               }
           } catch (rdfErr) { }
@@ -505,6 +552,7 @@ const Flow = () => {
           throw new Error("Unknown format or parsing failed.");
       } catch (err) {
           console.error("Failed to load file", err);
+          addToast(`Failed to load file: ${(err as Error).message}`, 'error');
           alert(`Failed to load file: ${(err as Error).message}`);
       }
   };
@@ -542,6 +590,7 @@ const Flow = () => {
       setNodes([]);
       setEdges([]);
       setSelectedNodeId(null);
+      addToast('New project created', 'success');
     }
     setIsCreateModalOpen(false);
   };
@@ -551,13 +600,19 @@ const Flow = () => {
       setValidationResult(result);
       setUnsatisfiableIds(result.unsatisfiableNodeIds);
       setIsValidationModalOpen(true);
+      if (result.isValid) {
+          addToast('Ontology is consistent', 'success');
+      } else {
+          addToast('Validation found issues', 'error');
+      }
   };
 
   const handleOntologyUpdate = useCallback((newNodes: Node<UMLNodeData>[], newEdges: Edge[]) => {
       saveHistory();
       setNodes(newNodes);
       setEdges(newEdges);
-  }, [setNodes, setEdges, saveHistory]);
+      addToast('Ontology updated from axioms', 'success');
+  }, [setNodes, setEdges, saveHistory, addToast]);
 
   const selectedNode = useMemo(() => {
       return nodes.find(n => n.id === selectedNodeId) || null;
@@ -571,6 +626,16 @@ const Flow = () => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-slate-950 text-slate-200 font-sans">
+      <Toast toasts={toasts} onDismiss={removeToast} />
+      
+      <ConfirmDialog 
+        isOpen={!!confirmConfig}
+        title={confirmConfig?.title || ''}
+        message={confirmConfig?.message || ''}
+        onConfirm={confirmConfig?.onConfirm || (() => {})}
+        onCancel={() => setConfirmConfig(null)}
+      />
+
       <TopBar 
         onSaveJSON={handleSaveJSON} 
         onSaveTurtle={handleSaveTurtle}
@@ -848,6 +913,7 @@ const Flow = () => {
         onClose={() => setIsDLQueryModalOpen(false)}
         nodes={nodes}
         edges={edges}
+        onNavigate={handleNavigate}
       />
 
       <SWRLModal 

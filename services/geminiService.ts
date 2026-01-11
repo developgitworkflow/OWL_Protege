@@ -202,6 +202,60 @@ export const generateSWRLRule = async (description: string, ontologyContext: str
   }
 };
 
+export const suggestSWRLRules = async (ontologyContext: string): Promise<{ label: string, rule: string, desc: string }[]> => {
+  if (!apiKey) return [];
+
+  const systemInstruction = `
+    You are an expert in Semantic Web Rule Language (SWRL) and Ontology Engineering.
+    Analyze the provided Ontology Context (Classes and Properties).
+    Suggest 3 plausible and logically sound SWRL rules that fit this specific domain.
+    
+    Focus on:
+    1. Property composition (e.g., parent's brother -> uncle).
+    2. Classification based on data values (e.g., high price -> LuxuryItem).
+    3. Interaction between object properties (e.g., location containment).
+    4. Transitive or Symmetric implications not easily expressed in pure OWL.
+
+    Ontology Context:
+    ${ontologyContext}
+
+    Return a JSON array where each object has:
+    - label: Short 2-3 word name for the rule.
+    - rule: The SWRL expression.
+    - desc: A concise explanation (max 1 sentence).
+    
+    Do not suggest rules that are purely tautological (A -> A).
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: "Suggest relevant rules based on the context.",
+      config: {
+        systemInstruction: systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    label: { type: Type.STRING },
+                    rule: { type: Type.STRING },
+                    desc: { type: Type.STRING }
+                }
+            }
+        }
+      }
+    });
+    const text = response.text;
+    if (!text) return [];
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("Error suggesting SWRL:", error);
+    return [];
+  }
+};
+
 export const generateDLQuery = async (description: string, ontologyContext: string): Promise<string | null> => {
   if (!apiKey) return null;
 

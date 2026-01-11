@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
-import { X, ScrollText, Plus, Trash2, Save, AlertCircle, ArrowRight, Check, Code, Sparkles, Loader2, ShieldCheck, AlertTriangle, Lightbulb } from 'lucide-react';
+import { X, ScrollText, Plus, Trash2, Save, AlertCircle, ArrowRight, Check, Code, Sparkles, Loader2, ShieldCheck, AlertTriangle, Lightbulb, GitBranch, Calculator, Users, Filter, Zap, Wand2 } from 'lucide-react';
 import { ProjectData, SWRLRule, ElementType, UMLNodeData } from '../types';
 import { Node, Edge } from 'reactflow';
-import { generateSWRLRule } from '../services/geminiService';
+import { generateSWRLRule, suggestSWRLRules } from '../services/geminiService';
 
 interface SWRLModalProps {
   isOpen: boolean;
@@ -27,6 +28,39 @@ const SWRL_EXAMPLES = [
     { label: "Free Shipping", rule: "Order(?o) ^ totalWeight(?o, ?w) ^ swrlb:lessThan(?w, 10) -> FreeShipping(?o)", desc: "Business rule based on weight limit." }
 ];
 
+const COMMON_PATTERNS = [
+    { 
+        label: "Composition", 
+        icon: GitBranch, 
+        rule: "hasParent(?x, ?y) ^ hasParent(?y, ?z) -> hasGrandparent(?x, ?z)", 
+        desc: "Chain two relations to infer a third (A->B->C implies A->C)." 
+    },
+    { 
+        label: "Prop Transfer", 
+        icon: ArrowRight, 
+        rule: "owns(?x, ?y) ^ hasPart(?y, ?z) -> owns(?x, ?z)", 
+        desc: "Transfer a property across another relation (e.g., owning the whole implies owning the parts)." 
+    },
+    { 
+        label: "Classification", 
+        icon: Filter, 
+        rule: "Person(?p) ^ age(?p, ?a) ^ swrlb:greaterThan(?a, 65) -> Senior(?p)", 
+        desc: "Classify individuals into a new Class based on data values." 
+    },
+    { 
+        label: "Identity Logic", 
+        icon: Users, 
+        rule: "hasSSN(?x, ?s) ^ hasSSN(?y, ?s) -> sameAs(?x, ?y)", 
+        desc: "Infer that two individuals are the same if they share a unique key." 
+    },
+    { 
+        label: "Calculation", 
+        icon: Calculator, 
+        rule: "hasPrice(?x, ?p) ^ swrlb:multiply(?t, ?p, 0.2) -> hasTax(?x, ?t)", 
+        desc: "Derive new values using mathematical built-ins." 
+    }
+];
+
 const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onUpdateProjectData, nodes = [], edges = [] }) => {
   const [rules, setRules] = useState<SWRLRule[]>([]);
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
@@ -36,7 +70,12 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
   const [editExpression, setEditExpression] = useState('');
   const [editComment, setEditComment] = useState('');
   const [naturalLanguage, setNaturalLanguage] = useState('');
+  
+  // AI State
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<{ label: string, rule: string, desc: string }[]>([]);
+  
   const [error, setError] = useState<string | null>(null);
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
 
@@ -55,11 +94,12 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
       setEditExpression(rule.expression);
       setEditComment(rule.comment || '');
       setNaturalLanguage(''); // Reset generator input
+      setAiSuggestions([]); // Clear previous suggestions
       setError(null);
       setVerificationResult(null);
   };
 
-  const loadExample = (ex: typeof SWRL_EXAMPLES[0]) => {
+  const loadExample = (ex: { label: string, rule: string, desc: string }) => {
       setEditExpression(ex.rule);
       setEditComment(ex.desc);
       if (!editName || editName.startsWith('NewRule')) {
@@ -116,11 +156,7 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
       setEditExpression(prev => prev + ' ' + sym + ' ');
   };
 
-  const handleGenerateRule = async () => {
-      if (!naturalLanguage.trim()) return;
-      
-      setIsGenerating(true);
-      
+  const getOntologyContext = () => {
       // Build Context String from Nodes
       const classes = nodes.filter(n => n.data.type === ElementType.OWL_CLASS).map(n => n.data.label).join(', ');
       const properties = nodes
@@ -129,7 +165,14 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
       // Also get attributes that serve as data properties
       const attributes = nodes.flatMap(n => n.data.attributes?.map(a => a.name) || []).join(', ');
       
-      const context = `Classes: [${classes}]. Properties: [${properties}, ${attributes}]`;
+      return `Classes: [${classes}]. Properties: [${properties}, ${attributes}]`;
+  };
+
+  const handleGenerateRule = async () => {
+      if (!naturalLanguage.trim()) return;
+      
+      setIsGenerating(true);
+      const context = getOntologyContext();
       
       const generatedRule = await generateSWRLRule(naturalLanguage, context);
       
@@ -143,6 +186,21 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
       }
       
       setIsGenerating(false);
+  };
+
+  const handleSuggestRules = async () => {
+      setIsSuggesting(true);
+      const context = getOntologyContext();
+      
+      const suggestions = await suggestSWRLRules(context);
+      
+      if (suggestions && suggestions.length > 0) {
+          setAiSuggestions(suggestions);
+      } else {
+          setError("Could not infer any rules from the current ontology.");
+      }
+      
+      setIsSuggesting(false);
   };
 
   const handleVerifyRule = () => {
@@ -259,7 +317,7 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
         onClick={onClose}
       />
 
-      <div className="relative w-full max-w-5xl bg-slate-900 rounded-xl shadow-2xl ring-1 ring-slate-700 flex flex-col h-[80vh] overflow-hidden border border-slate-800 animate-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-5xl bg-slate-900 rounded-xl shadow-2xl ring-1 ring-slate-700 flex flex-col h-[85vh] overflow-hidden border border-slate-800 animate-in zoom-in-95 duration-200">
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900">
@@ -361,28 +419,62 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
                             {/* AI Generation Section */}
                             <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-4 rounded-lg border border-slate-700/50 relative overflow-hidden group">
                                 <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                                <div className="flex items-start gap-3">
-                                    <Sparkles className="text-blue-400 mt-1 shrink-0" size={18} />
-                                    <div className="flex-1 space-y-2">
-                                        <label className="text-xs font-bold text-blue-300 uppercase tracking-wider">Natural Language to SWRL</label>
-                                        <div className="flex gap-2">
-                                            <input 
-                                                className="flex-1 bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm text-slate-200 focus:border-blue-500 outline-none placeholder-slate-600"
-                                                placeholder="e.g. If a Person has age > 18, then they are an Adult."
-                                                value={naturalLanguage}
-                                                onChange={(e) => setNaturalLanguage(e.target.value)}
-                                                onKeyDown={(e) => e.key === 'Enter' && handleGenerateRule()}
-                                            />
-                                            <button 
-                                                onClick={handleGenerateRule}
-                                                disabled={isGenerating || !naturalLanguage.trim()}
-                                                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-medium text-sm transition-colors disabled:opacity-50 flex items-center gap-2 shadow-lg"
-                                            >
-                                                {isGenerating ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
-                                                Generate
-                                            </button>
+                                <div className="space-y-3">
+                                    <div className="flex items-start gap-3">
+                                        <Sparkles className="text-blue-400 mt-1 shrink-0" size={18} />
+                                        <div className="flex-1 space-y-2">
+                                            <label className="text-xs font-bold text-blue-300 uppercase tracking-wider">Natural Language to SWRL</label>
+                                            <div className="flex gap-2">
+                                                <input 
+                                                    className="flex-1 bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm text-slate-200 focus:border-blue-500 outline-none placeholder-slate-600"
+                                                    placeholder="e.g. If a Person has age > 18, then they are an Adult."
+                                                    value={naturalLanguage}
+                                                    onChange={(e) => setNaturalLanguage(e.target.value)}
+                                                    onKeyDown={(e) => e.key === 'Enter' && handleGenerateRule()}
+                                                />
+                                                <button 
+                                                    onClick={handleGenerateRule}
+                                                    disabled={isGenerating || !naturalLanguage.trim()}
+                                                    className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-medium text-sm transition-colors disabled:opacity-50 flex items-center gap-2 shadow-lg"
+                                                >
+                                                    {isGenerating ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
+                                                    Generate
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
+                                    
+                                    {/* Auto-Discover Button */}
+                                    <div className="pl-8 pt-1">
+                                        <button 
+                                            onClick={handleSuggestRules}
+                                            disabled={isSuggesting}
+                                            className="text-xs flex items-center gap-2 text-purple-400 hover:text-purple-300 hover:bg-purple-900/20 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                                        >
+                                            {isSuggesting ? <Loader2 className="animate-spin" size={12} /> : <Wand2 size={12} />}
+                                            Auto-Discover Rules from Ontology
+                                        </button>
+                                    </div>
+
+                                    {/* AI Suggestions Display */}
+                                    {aiSuggestions.length > 0 && (
+                                        <div className="mt-3 pl-8 grid grid-cols-1 gap-2 animate-in fade-in slide-in-from-top-2">
+                                            {aiSuggestions.map((sugg, i) => (
+                                                <button 
+                                                    key={i}
+                                                    onClick={() => loadExample(sugg)}
+                                                    className="flex flex-col gap-1 p-2 bg-slate-950/50 border border-purple-900/30 hover:border-purple-500/50 rounded text-left transition-colors group"
+                                                >
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-xs font-bold text-purple-300 group-hover:text-purple-200">{sugg.label}</span>
+                                                        <span className="text-[10px] text-slate-500 uppercase tracking-wider">AI Suggestion</span>
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-400">{sugg.desc}</div>
+                                                    <div className="text-[10px] font-mono text-slate-500 group-hover:text-slate-300 truncate w-full">{sugg.rule}</div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -440,6 +532,28 @@ const SWRLModal: React.FC<SWRLModalProps> = ({ isOpen, onClose, projectData, onU
                                     onChange={(e) => setEditComment(e.target.value)}
                                     placeholder="Explain what this rule implies..."
                                 />
+                            </div>
+
+                            {/* Quick Patterns Section */}
+                            <div>
+                                <h4 className="text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider flex items-center gap-2">
+                                    <Zap size={12} /> Quick Patterns
+                                </h4>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                                    {COMMON_PATTERNS.map((pat, i) => (
+                                        <button 
+                                            key={i} 
+                                            onClick={() => loadExample(pat)}
+                                            className="flex flex-col items-center justify-center gap-2 p-3 bg-slate-800 border border-slate-700 rounded-lg hover:border-blue-500 hover:bg-slate-700 hover:shadow-lg transition-all group h-full"
+                                            title={pat.desc}
+                                        >
+                                            <pat.icon size={20} className="text-slate-400 group-hover:text-blue-400 transition-colors" />
+                                            <span className="text-[10px] font-bold text-slate-300 group-hover:text-white text-center leading-tight">
+                                                {pat.label}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -377,8 +377,9 @@ export const computeInferredEdges = (nodes: Node<UMLNodeData>[], explicitEdges: 
         
         const key = `${s}-${t}-${label}`;
         if (!exists.has(key)) {
+            // Use deterministic ID based on content so ReactFlow doesn't re-mount edges on every render
             inferredEdges.push({
-                id: `inferred-${s}-${t}-${label}-${Math.random()}`,
+                id: `inferred-${s}-${t}-${label}`,
                 source: s,
                 target: t,
                 label: label,
@@ -435,18 +436,22 @@ export const computeInferredEdges = (nodes: Node<UMLNodeData>[], explicitEdges: 
                         // Inverse logic might produce cycle if symmetric, addEdge handles self-loop
                         // Explicit inverse edge creation logic:
                         if (e.target !== e.source) {
-                            inferredEdges.push({
-                                id: `inferred-inv-${e.id}`,
-                                source: e.target,
-                                target: e.source,
-                                label: invPropName,
-                                type: 'smoothstep',
-                                animated: true,
-                                style: { stroke: '#a78bfa', strokeWidth: 1.5, strokeDasharray: '5,5' }, // different color for inverse
-                                labelStyle: { fill: '#a78bfa', fontStyle: 'italic' },
-                                markerEnd: { type: MarkerType.ArrowClosed, color: '#a78bfa' },
-                                data: { isInferred: true, inferenceType: 'Inverse Property' }
-                            });
+                            const invKey = `${e.target}-${e.source}-${invPropName}`;
+                            if (!exists.has(invKey)) {
+                                inferredEdges.push({
+                                    id: `inferred-inv-${e.target}-${e.source}-${invPropName}`,
+                                    source: e.target,
+                                    target: e.source,
+                                    label: invPropName,
+                                    type: 'smoothstep',
+                                    animated: true,
+                                    style: { stroke: '#a78bfa', strokeWidth: 1.5, strokeDasharray: '5,5' }, // different color for inverse
+                                    labelStyle: { fill: '#a78bfa', fontStyle: 'italic' },
+                                    markerEnd: { type: MarkerType.ArrowClosed, color: '#a78bfa' },
+                                    data: { isInferred: true, inferenceType: 'Inverse Property' }
+                                });
+                                exists.add(invKey);
+                            }
                         }
                     }
                 });

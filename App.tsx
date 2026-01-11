@@ -11,7 +11,8 @@ import ReactFlow, {
   Background,
   ReactFlowProvider,
   BackgroundVariant,
-  MiniMap
+  MiniMap,
+  useReactFlow
 } from 'reactflow';
 
 import TopBar from './components/TopBar';
@@ -104,8 +105,24 @@ function App() {
   };
 
   const onConnect = useCallback((params: Connection) => {
-    setEdges((eds) => addEdge({ ...params, type: 'smoothstep', label: 'rel' }, eds));
-  }, [setEdges]);
+    // Smart Connection Labeling
+    const sourceNode = nodes.find(n => n.id === params.source);
+    const targetNode = nodes.find(n => n.id === params.target);
+    
+    let label = 'rel';
+    
+    if (sourceNode && targetNode) {
+        if (sourceNode.data.type === ElementType.OWL_CLASS && targetNode.data.type === ElementType.OWL_CLASS) {
+            label = 'subClassOf';
+        } else if (sourceNode.data.type === ElementType.OWL_NAMED_INDIVIDUAL && targetNode.data.type === ElementType.OWL_CLASS) {
+            label = 'rdf:type';
+        } else if (sourceNode.data.type === ElementType.OWL_NAMED_INDIVIDUAL && targetNode.data.type === ElementType.OWL_NAMED_INDIVIDUAL) {
+            label = 'knows'; // Default object property example
+        }
+    }
+
+    setEdges((eds) => addEdge({ ...params, type: 'smoothstep', label }, eds));
+  }, [setEdges, nodes]);
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
@@ -139,6 +156,72 @@ function App() {
     });
   };
 
+  // --- Keyboard Navigation ---
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          // Ignore if user is typing in an input
+          if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
+              return;
+          }
+
+          // Delete Shortcut
+          if (e.key === 'Delete' || e.key === 'Backspace') {
+              if (selectedNodeId) {
+                  e.preventDefault(); // Prevent browser back
+                  handleDeleteNode(selectedNodeId);
+              }
+          }
+
+          // Escape Shortcut
+          if (e.key === 'Escape') {
+              setSelectedNodeId(null);
+          }
+
+          // Spatial Navigation (Alt + Arrows)
+          if (selectedNodeId && e.key.startsWith('Arrow') && e.altKey) {
+              e.preventDefault();
+              const current = nodes.find(n => n.id === selectedNodeId);
+              if (!current) return;
+
+              const candidates = nodes.filter(n => n.id !== selectedNodeId);
+              let bestCandidate: Node | null = null;
+              let minDist = Infinity;
+
+              candidates.forEach(target => {
+                  const dx = target.position.x - current.position.x;
+                  const dy = target.position.y - current.position.y;
+                  
+                  let isValid = false;
+                  // Right: x increases, y change is minimal
+                  if (e.key === 'ArrowRight') isValid = dx > 0;
+                  if (e.key === 'ArrowLeft') isValid = dx < 0;
+                  if (e.key === 'ArrowDown') isValid = dy > 0;
+                  if (e.key === 'ArrowUp') isValid = dy < 0;
+
+                  if (isValid) {
+                      // Weigh distance and angle. Prefer targets closer to the axis.
+                      const dist = Math.sqrt(dx*dx + dy*dy);
+                      // Angle penalty: prioritize nodes directly in direction
+                      const angle = Math.atan2(Math.abs(dy), Math.abs(dx)); 
+                      const score = dist * (1 + angle); // Simple heuristic
+
+                      if (score < minDist) {
+                          minDist = score;
+                          bestCandidate = target;
+                      }
+                  }
+              });
+
+              if (bestCandidate) {
+                  setSelectedNodeId((bestCandidate as Node).id);
+              }
+          }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNodeId, nodes]);
+
   const handleAddNode = (type: ElementType, label: string) => {
       const newNode: Node<UMLNodeData> = {
           id: `node-${Date.now()}`,
@@ -160,13 +243,17 @@ function App() {
   };
 
   const handleRunReasoner = () => {
-      setIsReasonerActive(!isReasonerActive);
-      if (!isReasonerActive) {
-          // Activate
-          addToast('Reasoner activated. Inferences computed.', 'success');
-      } else {
-          addToast('Reasoner deactivated.', 'info');
-      }
+      setIsReasonerActive((prev) => {
+          const newState = !prev;
+          if (newState) {
+              addToast('Reasoner activated. Inferences computed.', 'success');
+              setShowInferred(true); // Auto-show inferred edges when running
+          } else {
+              addToast('Reasoner deactivated.', 'info');
+              setShowInferred(false);
+          }
+          return newState;
+      });
   };
 
   const handleValidate = () => {
@@ -241,6 +328,13 @@ function App() {
       return edges;
   }, [nodes, edges, isReasonerActive, showInferred]);
 
+  // Filter visible nodes based on "Show Individuals" toggle
+  const visibleNodes = useMemo(() => {
+      return showIndividuals 
+        ? nodes 
+        : nodes.filter(n => n.data.type !== ElementType.OWL_NAMED_INDIVIDUAL);
+  }, [nodes, showIndividuals]);
+
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [selectedNodeId, nodes]);
 
   // Sync sidebar visibility with view mode
@@ -290,7 +384,7 @@ function App() {
             <div className="flex-1 relative bg-slate-950">
                 {viewMode === 'design' && (
                     <ReactFlow
-                        nodes={nodes.filter(n => showIndividuals || n.data.type !== ElementType.OWL_NAMED_INDIVIDUAL)}
+                        nodes={visibleNodes}
                         edges={displayEdges}
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
@@ -301,6 +395,7 @@ function App() {
                         fitView
                         className="bg-slate-950"
                         minZoom={0.1}
+                        deleteKeyCode={null} // Disable default delete to use custom handler with dialog
                     >
                         <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#334155" />
                         <Controls className="bg-slate-800 border-slate-700 fill-slate-400 text-slate-400" />
@@ -349,7 +444,7 @@ function App() {
 
                 {viewMode === 'graph' && (
                     <GraphVisualization 
-                        nodes={nodes} 
+                        nodes={visibleNodes} 
                         edges={displayEdges} 
                         searchTerm={searchTerm} 
                         selectedNodeId={selectedNodeId}
@@ -359,7 +454,7 @@ function App() {
 
                 {viewMode === 'mindmap' && (
                     <MindmapVisualization 
-                        nodes={nodes} 
+                        nodes={visibleNodes} 
                         edges={displayEdges}
                         searchTerm={searchTerm}
                         selectedNodeId={selectedNodeId}
@@ -368,7 +463,7 @@ function App() {
 
                 {viewMode === 'tree' && (
                     <TreeVisualization 
-                        nodes={nodes} 
+                        nodes={visibleNodes} 
                         edges={displayEdges}
                         searchTerm={searchTerm}
                         selectedNodeId={selectedNodeId}
@@ -377,16 +472,16 @@ function App() {
                 )}
 
                 {viewMode === 'uml' && (
-                    <UMLVisualization nodes={nodes} edges={edges} searchTerm={searchTerm} />
+                    <UMLVisualization nodes={visibleNodes} edges={edges} searchTerm={searchTerm} />
                 )}
 
                 {viewMode === 'peirce' && (
-                    <PeirceVisualization nodes={nodes} edges={edges} />
+                    <PeirceVisualization nodes={visibleNodes} edges={edges} />
                 )}
 
                 {viewMode === 'concept' && (
                     <ConceptGraph 
-                        nodes={nodes} 
+                        nodes={visibleNodes} 
                         edges={displayEdges} 
                         searchTerm={searchTerm}
                         selectedNodeId={selectedNodeId}
@@ -395,7 +490,7 @@ function App() {
                 )}
 
                 {viewMode === 'owlviz' && (
-                    <OWLVizVisualization nodes={nodes} edges={edges} searchTerm={searchTerm} selectedNodeId={selectedNodeId} />
+                    <OWLVizVisualization nodes={visibleNodes} edges={edges} searchTerm={searchTerm} selectedNodeId={selectedNodeId} />
                 )}
 
                 {viewMode === 'code' && (

@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { Node, Edge } from 'reactflow';
-import { UMLNodeData, ElementType } from '../types';
-import { Database, ArrowRightLeft, Tag, User, FileType, Plus, Trash2, Search, Edit3, Settings, ArrowRight, GitMerge, List } from 'lucide-react';
+import { UMLNodeData, ElementType, Method } from '../types';
+import { Database, ArrowRightLeft, Tag, User, FileType, Plus, Trash2, Search, Edit3, Settings, ArrowRight, GitMerge, List, BookOpen } from 'lucide-react';
 
 interface EntityCatalogProps {
     nodes: Node<UMLNodeData>[];
@@ -54,10 +54,11 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, onAddNode, 
             if (parentEdges.length > 0) {
                 rels.push({ type: 'Parents', values: parentEdges.map(e => getNodeLabel(e.target)) });
             }
-            // Disjointness
-            const disjoint = node.data.methods.filter(m => m.name.toLowerCase() === 'disjointwith').map(m => m.returnType);
-            if (disjoint.length > 0) {
-                rels.push({ type: 'Disjoint', values: disjoint });
+            // Disjointness (Implicit from edges or axioms handled by formatAxiom mostly, but explicit disjoint edges here)
+            const disjointEdges = edges.filter(e => (e.source === node.id || e.target === node.id) && (e.label === 'owl:disjointWith' || e.label === 'disjointWith'));
+            if (disjointEdges.length > 0) {
+                 const disjoints = disjointEdges.map(e => e.source === node.id ? getNodeLabel(e.target) : getNodeLabel(e.source));
+                 rels.push({ type: 'Disjoint', values: disjoints });
             }
         }
 
@@ -72,12 +73,6 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, onAddNode, 
 
         // 3. Properties
         if (node.data.type === ElementType.OWL_OBJECT_PROPERTY || node.data.type === ElementType.OWL_DATA_PROPERTY) {
-            const domains = node.data.methods.filter(m => m.name.toLowerCase() === 'domain').map(m => m.returnType);
-            const ranges = node.data.methods.filter(m => m.name.toLowerCase() === 'range').map(m => m.returnType);
-            
-            if (domains.length > 0) rels.push({ type: 'Domain', values: domains });
-            if (ranges.length > 0) rels.push({ type: 'Range', values: ranges });
-            
             // Characteristics
             const chars = node.data.attributes.map(a => a.name);
             if (chars.length > 0) rels.push({ type: 'Flags', values: chars });
@@ -90,6 +85,23 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, onAddNode, 
         if (node.data.description) return node.data.description;
         const comment = node.data.annotations?.find(a => a.property === 'rdfs:comment' || a.property === 'skos:definition');
         return comment ? comment.value.replace(/"/g, '') : '';
+    };
+
+    const getHumanReadableAxiom = (method: Method) => {
+        const type = method.name.toLowerCase();
+        let prefix = method.name;
+        let color = 'text-slate-500';
+        
+        if (type === 'subclassof') { prefix = 'Is a'; color = 'text-blue-400'; }
+        else if (type.includes('equivalent')) { prefix = 'Defined as'; color = 'text-green-400'; }
+        else if (type.includes('disjoint')) { prefix = 'Not a'; color = 'text-red-400'; }
+        else if (type === 'domain') { prefix = 'Applies to'; color = 'text-purple-400'; }
+        else if (type === 'range') { prefix = 'Points to'; color = 'text-purple-400'; }
+        else if (type === 'inverseof') { prefix = 'Inverse of'; color = 'text-amber-400'; }
+        else if (type === 'subpropertyof') { prefix = 'Sub-prop of'; color = 'text-blue-400'; }
+        else if (type === 'type') { prefix = 'Type'; color = 'text-pink-400'; }
+        
+        return { prefix, target: method.returnType, color };
     };
 
     const handleCreate = (e?: React.FormEvent) => {
@@ -181,11 +193,11 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, onAddNode, 
                                         <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/4">Label & IRI</th>
                                         
                                         {/* Dynamic Headers based on Type */}
-                                        {activeTab === 'classes' && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/4">Hierarchy</th>}
-                                        {(activeTab === 'objectProps' || activeTab === 'dataProps') && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/4">Signature</th>}
-                                        {activeTab === 'individuals' && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/4">Type Assertions</th>}
+                                        {activeTab === 'classes' && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/5">Hierarchy</th>}
+                                        {(activeTab === 'objectProps' || activeTab === 'dataProps') && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/5">Signature</th>}
+                                        {activeTab === 'individuals' && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/5">Type Assertions</th>}
                                         
-                                        <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800">Description / Details</th>
+                                        <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800">Definition & Axioms</th>
                                         <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 text-right w-24">Actions</th>
                                     </tr>
                                 </thead>
@@ -233,22 +245,42 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, onAddNode, 
                                                     </td>
                                                 )}
 
-                                                {/* 3. Description / Details */}
+                                                {/* 3. Description & Axioms */}
                                                 <td className="p-4 align-top">
-                                                    {description ? (
-                                                        <p className="text-xs text-slate-400 leading-relaxed line-clamp-2" title={description}>
-                                                            {description}
-                                                        </p>
-                                                    ) : (
-                                                        <span className="text-[10px] text-slate-600 italic">No description</span>
+                                                    {description && (
+                                                        <div className="mb-3">
+                                                            <div className="text-[10px] uppercase font-bold text-slate-600 mb-1">Description</div>
+                                                            <p className="text-xs text-slate-400 leading-relaxed line-clamp-2" title={description}>
+                                                                {description}
+                                                            </p>
+                                                        </div>
                                                     )}
                                                     
-                                                    {/* Additional Axiom Hint */}
+                                                    {/* Human Readable Axioms */}
                                                     {node.data.methods.length > 0 && (
-                                                        <div className="mt-2 flex items-center gap-1 text-[10px] text-blue-400/70">
-                                                            <List size={10} />
-                                                            {node.data.methods.length} {node.data.methods.length === 1 ? 'Axiom' : 'Axioms'} defined
+                                                        <div className="space-y-1.5">
+                                                            <div className="text-[10px] uppercase font-bold text-slate-600 mb-1 flex items-center gap-1">
+                                                                <BookOpen size={10} /> Formal Definition
+                                                            </div>
+                                                            {node.data.methods.slice(0, 4).map((m, mIdx) => {
+                                                                const { prefix, target, color } = getHumanReadableAxiom(m);
+                                                                return (
+                                                                    <div key={mIdx} className="flex items-baseline gap-2 text-xs bg-slate-900/50 p-1 rounded border border-slate-800/50 hover:border-slate-700 hover:bg-slate-800 transition-colors">
+                                                                        <span className={`font-semibold ${color} shrink-0 text-[11px] w-20 text-right`}>{prefix}</span>
+                                                                        <span className="text-slate-300 font-mono text-[11px] truncate">{target}</span>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                            {node.data.methods.length > 4 && (
+                                                                <span className="text-[9px] text-slate-500 pl-2">
+                                                                    ... and {node.data.methods.length - 4} more axioms
+                                                                </span>
+                                                            )}
                                                         </div>
+                                                    )}
+                                                    
+                                                    {!description && node.data.methods.length === 0 && (
+                                                        <span className="text-[10px] text-slate-600 italic">No description or axioms</span>
                                                     )}
                                                 </td>
 

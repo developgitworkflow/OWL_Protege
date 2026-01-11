@@ -320,20 +320,24 @@ function App() {
       }
   };
 
-  // Helper for derived edges (with inferences if enabled)
-  const displayEdges = useMemo(() => {
-      if (isReasonerActive && showInferred) {
-          return computeInferredEdges(nodes, edges);
-      }
-      return edges;
-  }, [nodes, edges, isReasonerActive, showInferred]);
-
   // Filter visible nodes based on "Show Individuals" toggle
   const visibleNodes = useMemo(() => {
       return showIndividuals 
         ? nodes 
         : nodes.filter(n => n.data.type !== ElementType.OWL_NAMED_INDIVIDUAL);
   }, [nodes, showIndividuals]);
+
+  // Helper for derived edges (with inferences if enabled)
+  // Must filter edges to ensuring both source and target exist in visibleNodes
+  const displayEdges = useMemo(() => {
+      let currentEdges = edges;
+      if (isReasonerActive && showInferred) {
+          currentEdges = computeInferredEdges(nodes, edges);
+      }
+      
+      const visibleIds = new Set(visibleNodes.map(n => n.id));
+      return currentEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+  }, [nodes, edges, isReasonerActive, showInferred, visibleNodes]);
 
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [selectedNodeId, nodes]);
 

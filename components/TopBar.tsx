@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather, Workflow } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -14,8 +14,8 @@ interface TopBarProps {
     onOpenDLAxioms: () => void;
     onOpenExpressivity: () => void;
     onOpenDatalog: () => void;
-    currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce';
-    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce') => void;
+    currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept';
+    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept') => void;
     showIndividuals: boolean;
     onToggleIndividuals: () => void;
     searchTerm: string;
@@ -68,6 +68,14 @@ const TopBar: React.FC<TopBarProps> = ({
                 Design
             </button>
             <button 
+                onClick={() => onViewChange('concept')}
+                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'concept' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
+                title="VOWL-style Concept Map"
+            >
+                <Workflow size={12} />
+                Concept
+            </button>
+            <button 
                 onClick={() => onViewChange('uml')}
                 className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'uml' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
                 title="UML Class Diagram"
@@ -86,7 +94,7 @@ const TopBar: React.FC<TopBarProps> = ({
             <button 
                 onClick={() => onViewChange('graph')}
                 className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'graph' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                title="Force Directed Graph"
+                title="Simple Force Graph"
             >
                 <Network size={12} />
                 Graph
@@ -112,7 +120,7 @@ const TopBar: React.FC<TopBarProps> = ({
                 className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'code' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
                 title="Code Editor"
             >
-                <Network size={12} />
+                <Terminal size={12} />
                 Code
             </button>
          </div>

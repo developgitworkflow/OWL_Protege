@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Node as FlowNode } from 'reactflow';
 import { UMLNodeData, ElementType, Annotation, Method } from '../types';
@@ -308,11 +309,32 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
 
       <div className="p-5 space-y-8">
         
-        {/* IRI Section */}
+        {/* Identity Section */}
         <div className="space-y-3">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                 Identity
             </h3>
+            <div className="space-y-1">
+                 <label className="text-xs text-slate-500">Label (Display Name)</label>
+                 <input
+                    type="text"
+                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
+                    value={localData.label}
+                    onChange={(e) => handleChange('label', e.target.value)}
+                />
+            </div>
+            
+            <div className="space-y-1">
+                 <label className="text-xs text-slate-500">Stereotype (4+1 View Tag)</label>
+                 <input
+                    type="text"
+                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
+                    placeholder="e.g. Component, Process, Node"
+                    value={localData.stereotype || ''}
+                    onChange={(e) => handleChange('stereotype', e.target.value)}
+                />
+            </div>
+
             <div className="space-y-1">
                  <label className="text-xs text-slate-500">IRI (Unique Identifier)</label>
                  <input
@@ -320,15 +342,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, onUpdat
                     className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
                     value={localData.iri || `http://example.org/${selectedNode.id}`}
                     onChange={(e) => handleChange('iri', e.target.value)}
-                />
-            </div>
-             <div className="space-y-1">
-                 <label className="text-xs text-slate-500">Label (Display Name)</label>
-                 <input
-                    type="text"
-                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
-                    value={localData.label}
-                    onChange={(e) => handleChange('label', e.target.value)}
                 />
             </div>
         </div>

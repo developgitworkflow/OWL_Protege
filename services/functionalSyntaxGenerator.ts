@@ -1,3 +1,4 @@
+
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, ProjectData } from '../types';
 import { convertRuleToFunctional } from './swrlService';
@@ -19,6 +20,13 @@ export const generateFunctionalSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
     lines.push(`Prefix( swrlb:=<http://www.w3.org/2003/11/swrlb#> )`);
     lines.push(`Prefix( : =<${baseIRI}> )`); 
     if (prefix !== ':') lines.push(`Prefix( ${prefix}:=<${baseIRI}> )`);
+    
+    // Custom Namespaces
+    if (metadata.namespaces) {
+        Object.entries(metadata.namespaces).forEach(([p, iri]) => {
+            lines.push(`Prefix( ${p}:=<${iri}> )`);
+        });
+    }
     
     lines.push('');
     lines.push(`Ontology( <${baseIRI.replace('#', '')}>`);

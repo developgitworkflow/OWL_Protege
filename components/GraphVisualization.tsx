@@ -27,6 +27,8 @@ interface D3Node extends d3.SimulationNodeDatum {
 
 interface D3Link extends d3.SimulationLinkDatum<D3Node> {
     id: string;
+    source: string | D3Node;
+    target: string | D3Node;
     label: string;
     isInferred: boolean;
 }
@@ -132,10 +134,10 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
             // but initially they are strings. We handle strings here for init.
             const s = (l.source as any).id || l.source;
             const t = (l.target as any).id || l.target;
-            if (!adj.has(s)) adj.set(s, new Set());
-            if (!adj.has(t)) adj.set(t, new Set());
-            adj.get(s)?.add(t);
-            adj.get(t)?.add(s);
+            if (!adj.has(s as string)) adj.set(s as string, new Set());
+            if (!adj.has(t as string)) adj.set(t as string, new Set());
+            adj.get(s as string)?.add(t as string);
+            adj.get(t as string)?.add(s as string);
         });
         adjList.current = adj;
 

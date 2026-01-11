@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather, Workflow, Brain, CheckCircle2, List, Activity } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather, Workflow, Brain, CheckCircle2, List, Activity, Map } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -15,8 +15,8 @@ interface TopBarProps {
     onOpenExpressivity: () => void;
     onOpenDatalog: () => void;
     onOpenMetrics: () => void;
-    currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities';
-    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities') => void;
+    currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz';
+    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz') => void;
     showIndividuals: boolean;
     onToggleIndividuals: () => void;
     searchTerm: string;
@@ -101,6 +101,14 @@ const TopBar: React.FC<TopBarProps> = ({
             >
                 <Box size={12} />
                 UML
+            </button>
+            <button 
+                onClick={() => onViewChange('owlviz')}
+                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'owlviz' ? 'bg-indigo-900/50 text-indigo-200 shadow border border-indigo-800' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
+                title="Ontology Map (Mermaid)"
+            >
+                <Map size={12} />
+                OntoMap
             </button>
             <button 
                 onClick={() => onViewChange('peirce')}

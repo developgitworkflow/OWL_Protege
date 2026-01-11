@@ -1,3 +1,4 @@
+
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, ProjectData } from '../types';
 
@@ -74,6 +75,13 @@ export const generateManchesterSyntax = (nodes: Node<UMLNodeData>[], edges: Edge
     lines.push(`Prefix: rdfs: <http://www.w3.org/2000/01/rdf-schema#>`);
     lines.push(`Prefix: : <${baseIRI}>`);
     if (defaultPrefix !== ':') lines.push(`Prefix: ${defaultPrefix}: <${baseIRI}>`);
+    
+    if (metadata.namespaces) {
+        Object.entries(metadata.namespaces).forEach(([p, iri]) => {
+            lines.push(`Prefix: ${p}: <${iri}>`);
+        });
+    }
+
     lines.push('');
     lines.push(`Ontology: <${baseIRI.replace('#', '')}>`);
     

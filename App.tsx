@@ -38,6 +38,7 @@ import DLAxiomModal from './components/DLAxiomModal';
 import ExpressivityModal from './components/ExpressivityModal';
 import DatalogModal from './components/DatalogModal';
 import OntoMetricsModal from './components/OntoMetricsModal';
+import OWLVizVisualization from './components/OWLVizVisualization';
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { ElementType, UMLNodeData, ProjectData } from './types';
 import { generateTurtle } from './services/owlMapper';
@@ -57,7 +58,7 @@ const Flow = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities'>('design');
+  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz'>('design');
   const [showIndividuals, setShowIndividuals] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -657,6 +658,16 @@ const Flow = () => {
         {viewMode === 'uml' && (
             <div className="flex-1 h-full">
                 <UMLVisualization 
+                    nodes={visibleNodes} 
+                    edges={visibleEdges} // Inferred support
+                    searchTerm={searchTerm}
+                />
+            </div>
+        )}
+
+        {viewMode === 'owlviz' && (
+            <div className="flex-1 h-full">
+                <OWLVizVisualization 
                     nodes={visibleNodes} 
                     edges={visibleEdges} // Inferred support
                     searchTerm={searchTerm}

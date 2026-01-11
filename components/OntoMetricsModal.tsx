@@ -28,7 +28,7 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, subValue, icon, d
         <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2">
                 <div className={`p-1.5 rounded-md bg-slate-900 ${color}`}>
-                    {React.cloneElement(icon as React.ReactElement, { size: 16 })}
+                    {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 16 }) : icon}
                 </div>
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</h3>
             </div>

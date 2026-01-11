@@ -1,5 +1,6 @@
+
 import React, { useState, useRef } from 'react';
-import { X, Settings, Download, Upload, Save, Globe } from 'lucide-react';
+import { X, Settings, Download, Upload, Save, Globe, Plus, Trash2 } from 'lucide-react';
 import { ProjectData } from '../types';
 import AnnotationManager from './AnnotationManager';
 
@@ -23,12 +24,32 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onImportJSON
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'export'>('general');
+  
+  // State for new namespace entry
+  const [newPrefix, setNewPrefix] = useState('');
+  const [newNamespaceIRI, setNewNamespaceIRI] = useState('');
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
   const handleChange = (field: keyof ProjectData, value: any) => {
     onUpdateProjectData({ ...projectData, [field]: value });
+  };
+
+  const handleAddNamespace = () => {
+      if (newPrefix && newNamespaceIRI) {
+          const currentNamespaces = projectData.namespaces || {};
+          handleChange('namespaces', { ...currentNamespaces, [newPrefix]: newNamespaceIRI });
+          setNewPrefix('');
+          setNewNamespaceIRI('');
+      }
+  };
+
+  const handleRemoveNamespace = (prefix: string) => {
+      const currentNamespaces = { ...projectData.namespaces };
+      delete currentNamespaces[prefix];
+      handleChange('namespaces', currentNamespaces);
   };
 
   return (
@@ -125,6 +146,50 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                         onChange={(e) => handleChange('description', e.target.value)}
                                         className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500 resize-none"
                                     />
+                                </div>
+
+                                {/* Custom Namespaces Section */}
+                                <div className="pt-4 border-t border-slate-800">
+                                    <label className="block text-sm font-medium text-slate-400 mb-2">Additional Namespaces</label>
+                                    
+                                    {/* List */}
+                                    <div className="space-y-2 mb-3">
+                                        {Object.entries(projectData.namespaces || {}).map(([prefix, iri]) => (
+                                            <div key={prefix} className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-md p-2">
+                                                <span className="font-mono text-blue-400 text-xs w-20 truncate">{prefix}:</span>
+                                                <span className="font-mono text-slate-400 text-xs flex-1 truncate">&lt;{iri}&gt;</span>
+                                                <button 
+                                                    onClick={() => handleRemoveNamespace(prefix)}
+                                                    className="text-slate-600 hover:text-red-400 transition-colors"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Add New */}
+                                    <div className="flex gap-2">
+                                        <input 
+                                            placeholder="prefix" 
+                                            className="w-24 px-3 py-2 bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
+                                            value={newPrefix}
+                                            onChange={(e) => setNewPrefix(e.target.value)}
+                                        />
+                                        <input 
+                                            placeholder="http://example.org/ns#" 
+                                            className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
+                                            value={newNamespaceIRI}
+                                            onChange={(e) => setNewNamespaceIRI(e.target.value)}
+                                        />
+                                        <button 
+                                            onClick={handleAddNamespace}
+                                            disabled={!newPrefix || !newNamespaceIRI}
+                                            className="px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded transition-colors"
+                                        >
+                                            <Plus size={16} />
+                                        </button>
+                                    </div>
                                 </div>
                                 
                                 <div className="pt-2 border-t border-slate-800">

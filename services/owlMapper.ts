@@ -1,3 +1,4 @@
+
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, ProjectData } from '../types';
 
@@ -41,7 +42,8 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
     owl: 'http://www.w3.org/2002/07/owl#',
     xsd: 'http://www.w3.org/2001/XMLSchema#',
     skos: 'http://www.w3.org/2004/02/skos/core#',
-    [userPrefix]: userIRI
+    [userPrefix]: userIRI,
+    ...metadata.namespaces // Merge custom namespaces
   };
 
   Object.entries(prefixes).forEach(([p, uri]) => add(`@prefix ${p}: <${uri}> .`));

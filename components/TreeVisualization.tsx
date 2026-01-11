@@ -56,7 +56,9 @@ const TreeNodeItem: React.FC<{ node: TreeNode; level: number; searchTerm: string
                     {node.label}
                 </span>
                 {node.isInferred && (
-                    <Brain size={10} className="text-amber-500 ml-1" title="Inferred by Reasoner" />
+                    <span title="Inferred by Reasoner">
+                        <Brain size={10} className="text-amber-500 ml-1" />
+                    </span>
                 )}
                 {node.type !== ElementType.OWL_NAMED_INDIVIDUAL && (
                     <span className="text-[10px] text-slate-600 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">

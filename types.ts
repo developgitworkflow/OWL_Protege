@@ -1,3 +1,4 @@
+
 import { Node, Edge } from 'reactflow';
 
 export enum DiagramType {
@@ -76,6 +77,7 @@ export interface ProjectData {
   description?: string;
   baseIri?: string;
   defaultPrefix?: string;
+  namespaces?: Record<string, string>; // Custom namespace prefixes
   file?: File;
   annotations?: Annotation[]; // Annotations on the Ontology itself
   rules?: SWRLRule[]; // SWRL Rules

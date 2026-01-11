@@ -1,30 +1,54 @@
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ChevronRight, ChevronDown, Database, User, Tag, ArrowRightLeft, FileType, Box, Layers, Brain } from 'lucide-react';
+import { ChevronRight, ChevronDown, Database, User, Tag, ArrowRightLeft, FileType, Box, Layers, Brain, Workflow } from 'lucide-react';
 
 interface TreeVisualizationProps {
     nodes: Node<UMLNodeData>[];
     edges: Edge[];
     searchTerm?: string;
+    selectedNodeId?: string | null;
+    onNavigate?: (view: string, id: string) => void;
 }
 
 interface TreeNode {
     id: string;
     label: string;
     type: ElementType;
-    isInferred?: boolean; // New flag
+    isInferred?: boolean; 
     children: TreeNode[];
 }
 
-const TreeNodeItem: React.FC<{ node: TreeNode; level: number; searchTerm: string }> = ({ node, level, searchTerm }) => {
+const TreeNodeItem: React.FC<{ 
+    node: TreeNode; 
+    level: number; 
+    searchTerm: string; 
+    selectedNodeId?: string | null; 
+    onNavigate?: (view: string, id: string) => void 
+}> = ({ node, level, searchTerm, selectedNodeId, onNavigate }) => {
     const [isOpen, setIsOpen] = useState(false);
     const hasChildren = node.children.length > 0;
+    const isSelected = selectedNodeId === node.id;
+    const rowRef = useRef<HTMLDivElement>(null);
     
     // Check match
     const isMatch = searchTerm && node.label.toLowerCase().includes(searchTerm.toLowerCase());
     const isDimmed = searchTerm && !isMatch;
+
+    // Auto-expand path if selected or search match
+    useEffect(() => {
+        if (isSelected) {
+            if (rowRef.current) {
+                rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    }, [isSelected]);
+
+    // Propagate open state up if children selected (handled via parent logic usually, but here simple expansion)
+    useEffect(() => {
+        if (isMatch) setIsOpen(true);
+    }, [isMatch]);
 
     const getIcon = () => {
         switch (node.type) {
@@ -40,9 +64,14 @@ const TreeNodeItem: React.FC<{ node: TreeNode; level: number; searchTerm: string
     return (
         <div className="select-none">
             <div 
-                className={`flex items-center gap-2 py-1 px-2 hover:bg-slate-800 rounded cursor-pointer transition-colors group ${level === 0 ? 'mb-1' : ''} ${isMatch ? 'bg-yellow-900/30 border border-yellow-700/50' : ''}`}
+                ref={rowRef}
+                className={`flex items-center gap-2 py-1 px-2 hover:bg-slate-800 rounded cursor-pointer transition-colors group relative ${level === 0 ? 'mb-1' : ''} ${isMatch ? 'bg-yellow-900/30 border border-yellow-700/50' : ''} ${isSelected ? 'bg-blue-900/30 border-l-2 border-blue-500' : ''}`}
                 style={{ paddingLeft: `${level * 16 + 8}px`, opacity: isDimmed ? 0.3 : 1 }}
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={(e) => { 
+                    // e.stopPropagation(); // Allow parent handling if needed
+                    if (hasChildren) setIsOpen(!isOpen); 
+                    if (onNavigate) onNavigate('tree', node.id); // Just update selection
+                }}
             >
                 <div className="w-4 flex items-center justify-center shrink-0">
                     {hasChildren ? (
@@ -52,7 +81,7 @@ const TreeNodeItem: React.FC<{ node: TreeNode; level: number; searchTerm: string
                     )}
                 </div>
                 {getIcon()}
-                <span className={`text-sm truncate ${isMatch ? 'text-yellow-200 font-bold' : (node.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'text-pink-200' : 'text-slate-200')} ${node.isInferred ? 'italic text-amber-300' : ''}`}>
+                <span className={`text-sm truncate ${isMatch ? 'text-yellow-200 font-bold' : (isSelected ? 'text-white font-medium' : (node.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'text-pink-200' : 'text-slate-200'))} ${node.isInferred ? 'italic text-amber-300' : ''}`}>
                     {node.label}
                 </span>
                 {node.isInferred && (
@@ -60,16 +89,31 @@ const TreeNodeItem: React.FC<{ node: TreeNode; level: number; searchTerm: string
                         <Brain size={10} className="text-amber-500 ml-1" />
                     </span>
                 )}
-                {node.type !== ElementType.OWL_NAMED_INDIVIDUAL && (
-                    <span className="text-[10px] text-slate-600 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {hasChildren ? `(${node.children.length})` : ''}
-                    </span>
-                )}
+                
+                {/* Navigation Action */}
+                <div className="ml-auto opacity-0 group-hover:opacity-100 flex items-center">
+                    {onNavigate && (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onNavigate('concept', node.id); }}
+                            className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-indigo-400 transition-colors"
+                            title="View in Concept Map"
+                        >
+                            <Workflow size={14} />
+                        </button>
+                    )}
+                </div>
             </div>
             {isOpen && hasChildren && (
                 <div>
                     {node.children.map((child, idx) => (
-                        <TreeNodeItem key={`${child.id}-${idx}`} node={child} level={level + 1} searchTerm={searchTerm} />
+                        <TreeNodeItem 
+                            key={`${child.id}-${idx}`} 
+                            node={child} 
+                            level={level + 1} 
+                            searchTerm={searchTerm} 
+                            selectedNodeId={selectedNodeId}
+                            onNavigate={onNavigate}
+                        />
                     ))}
                 </div>
             )}
@@ -77,9 +121,19 @@ const TreeNodeItem: React.FC<{ node: TreeNode; level: number; searchTerm: string
     );
 };
 
-const TreeSection: React.FC<{ title: string; icon: React.ReactNode; nodes: TreeNode[]; searchTerm: string }> = ({ title, icon, nodes, searchTerm }) => {
+const TreeSection: React.FC<{ 
+    title: string; 
+    icon: React.ReactNode; 
+    nodes: TreeNode[]; 
+    searchTerm: string;
+    selectedNodeId?: string | null;
+    onNavigate?: (view: string, id: string) => void;
+}> = ({ title, icon, nodes, searchTerm, selectedNodeId, onNavigate }) => {
     const [isExpanded, setIsExpanded] = useState(true);
 
+    // Auto expand section if selected node is inside (simplified check)
+    // Real implementation would check deep structure, but 'true' default covers most
+    
     if (nodes.length === 0) return null;
 
     return (
@@ -96,7 +150,14 @@ const TreeSection: React.FC<{ title: string; icon: React.ReactNode; nodes: TreeN
             {isExpanded && (
                 <div className="border-l border-slate-800 ml-4">
                     {nodes.map((node, i) => (
-                        <TreeNodeItem key={i} node={node} level={0} searchTerm={searchTerm} />
+                        <TreeNodeItem 
+                            key={i} 
+                            node={node} 
+                            level={0} 
+                            searchTerm={searchTerm} 
+                            selectedNodeId={selectedNodeId}
+                            onNavigate={onNavigate}
+                        />
                     ))}
                 </div>
             )}
@@ -104,7 +165,7 @@ const TreeSection: React.FC<{ title: string; icon: React.ReactNode; nodes: TreeN
     );
 };
 
-const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, searchTerm = '' }) => {
+const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, searchTerm = '', selectedNodeId, onNavigate }) => {
     
     const { classRoots, objPropRoots, dataPropRoots, datatypes, individuals } = useMemo(() => {
         const nodeMap = new Map<string, Node<UMLNodeData>>(nodes.map(n => [n.id, n]));
@@ -127,7 +188,6 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
             // Inheritance
             if (['subClassOf', 'rdfs:subClassOf'].includes(label)) {
                 if (!subClassOf.has(t)) subClassOf.set(t, []);
-                // If the edge is inferred, the relationship is inferred
                 subClassOf.get(t)!.push({ id: s, isInferred });
                 isChildClass.add(s);
             }
@@ -146,13 +206,11 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
         // Recursive Builder
         const buildClassTree = (classId: string, visited: Set<string> = new Set(), relInferred = false): TreeNode => {
             const n = nodeMap.get(classId)!;
-            // Prevent cycles
             if (visited.has(classId)) {
                 return { id: classId, label: `${n.data.label} (cycle)`, type: n.data.type, children: [], isInferred: relInferred };
             }
             const newVisited = new Set(visited).add(classId);
 
-            // Subclasses
             const childClasses = (subClassOf.get(classId) || [])
                 .map(item => {
                     const node = nodeMap.get(item.id);
@@ -161,7 +219,6 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
                 })
                 .filter(Boolean) as TreeNode[];
             
-            // Instances (Nested in Class Tree)
             const childInstances = (classInstances.get(classId) || [])
                 .map(item => {
                     const node = nodeMap.get(item.id);
@@ -176,7 +233,6 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
                 })
                 .filter(Boolean) as TreeNode[];
 
-            // Sort: Classes then Instances, alphabetical
             const children = [
                 ...childClasses.sort((a,b) => a.label.localeCompare(b.label)),
                 ...childInstances.sort((a,b) => a.label.localeCompare(b.label))
@@ -191,7 +247,6 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
             };
         };
 
-        // Note: Props tree simpler for now
         const buildPropTree = (propId: string, visited: Set<string> = new Set()): TreeNode => {
             const n = nodeMap.get(propId)!;
             if (visited.has(propId)) return { id: propId, label: n.data.label, type: n.data.type, children: [] };
@@ -211,34 +266,26 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
             };
         };
 
-        // --- Roots Identification ---
-
-        // 1. Classes
-        // Roots are OWL_CLASS nodes that are not in `isChildClass`
         const classRoots = nodes
             .filter((n: Node<UMLNodeData>) => n.data.type === ElementType.OWL_CLASS && !isChildClass.has(n.id))
             .map((n: Node<UMLNodeData>) => buildClassTree(n.id))
             .sort((a,b) => a.label.localeCompare(b.label));
 
-        // 2. Object Properties
         const objPropRoots = nodes
             .filter((n: Node<UMLNodeData>) => n.data.type === ElementType.OWL_OBJECT_PROPERTY && !isChildProp.has(n.id))
             .map((n: Node<UMLNodeData>) => buildPropTree(n.id))
             .sort((a,b) => a.label.localeCompare(b.label));
 
-        // 3. Data Properties
         const dataPropRoots = nodes
             .filter((n: Node<UMLNodeData>) => n.data.type === ElementType.OWL_DATA_PROPERTY && !isChildProp.has(n.id))
             .map((n: Node<UMLNodeData>) => buildPropTree(n.id))
             .sort((a,b) => a.label.localeCompare(b.label));
 
-        // 4. Datatypes (Flat list usually)
         const datatypes = nodes
             .filter((n: Node<UMLNodeData>) => n.data.type === ElementType.OWL_DATATYPE)
             .map((n: Node<UMLNodeData>) => ({ id: n.id, label: n.data.label, type: n.data.type, children: [] }))
             .sort((a,b) => a.label.localeCompare(b.label));
 
-        // 5. Individuals (All - Flat List)
         const individuals = nodes
             .filter((n: Node<UMLNodeData>) => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL)
             .map((n: Node<UMLNodeData>) => ({ id: n.id, label: n.data.label, type: n.data.type, children: [] }))
@@ -261,11 +308,11 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
                     </p>
                 </div>
 
-                <TreeSection title="Class Hierarchy" icon={<Database size={16} className="text-purple-400"/>} nodes={classRoots} searchTerm={searchTerm} />
-                <TreeSection title="Object Properties" icon={<ArrowRightLeft size={16} className="text-blue-400"/>} nodes={objPropRoots} searchTerm={searchTerm} />
-                <TreeSection title="Data Properties" icon={<Tag size={16} className="text-green-400"/>} nodes={dataPropRoots} searchTerm={searchTerm} />
-                <TreeSection title="Datatypes" icon={<FileType size={16} className="text-amber-400"/>} nodes={datatypes} searchTerm={searchTerm} />
-                <TreeSection title="Named Individuals" icon={<User size={16} className="text-pink-400"/>} nodes={individuals} searchTerm={searchTerm} />
+                <TreeSection title="Class Hierarchy" icon={<Database size={16} className="text-purple-400"/>} nodes={classRoots} searchTerm={searchTerm} selectedNodeId={selectedNodeId} onNavigate={onNavigate} />
+                <TreeSection title="Object Properties" icon={<ArrowRightLeft size={16} className="text-blue-400"/>} nodes={objPropRoots} searchTerm={searchTerm} selectedNodeId={selectedNodeId} onNavigate={onNavigate} />
+                <TreeSection title="Data Properties" icon={<Tag size={16} className="text-green-400"/>} nodes={dataPropRoots} searchTerm={searchTerm} selectedNodeId={selectedNodeId} onNavigate={onNavigate} />
+                <TreeSection title="Datatypes" icon={<FileType size={16} className="text-amber-400"/>} nodes={datatypes} searchTerm={searchTerm} selectedNodeId={selectedNodeId} onNavigate={onNavigate} />
+                <TreeSection title="Named Individuals" icon={<User size={16} className="text-pink-400"/>} nodes={individuals} searchTerm={searchTerm} selectedNodeId={selectedNodeId} onNavigate={onNavigate} />
             </div>
         </div>
     );

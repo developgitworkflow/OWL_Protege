@@ -54,11 +54,13 @@ const nodeTypes = {
   umlNode: UMLNode,
 };
 
+type ViewMode = 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz';
+
 const Flow = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz'>('design');
+  const [viewMode, setViewMode] = useState<ViewMode>('design');
   const [showIndividuals, setShowIndividuals] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -277,7 +279,6 @@ const Flow = () => {
   const handleCreateNode = useCallback((type: ElementType, label: string) => {
       const newId = `node-${Date.now()}`;
       
-      // Simple logic to prevent complete overlap by randomizing within a viewport range
       const randomX = Math.random() * 600 + 100;
       const randomY = Math.random() * 400 + 100;
 
@@ -290,7 +291,6 @@ const Flow = () => {
               type: type,
               attributes: [],
               methods: [],
-              // Basic IRI generation based on project metadata or default
               iri: `${projectMetadata.baseIri || 'http://example.org/ontology#'}${label.replace(/\s+/g, '_')}`
           }
       };
@@ -365,11 +365,9 @@ const Flow = () => {
                   if (flow.metadata) setProjectMetadata(flow.metadata);
                   return;
               }
-          } catch (e) {
-              // Not valid JSON, continue
-          }
+          } catch (e) { }
 
-          // 2. Try RDF/XML (Check content or extension)
+          // 2. Try RDF/XML
           if (content.trim().startsWith('<') || fileName.endsWith('.xml') || fileName.endsWith('.rdf') || fileName.endsWith('.owl')) {
               try {
                   const result = parseRdfXml(content);
@@ -380,13 +378,10 @@ const Flow = () => {
                       setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
                       return;
                   }
-              } catch (xmlErr) {
-                  console.warn("XML Parse failed, trying other formats...", xmlErr);
-              }
+              } catch (xmlErr) { }
           }
 
-          // 3. Try OWL Functional Syntax (Check for characteristic signatures)
-          // We specifically look for "Ontology(" or "Declaration(" with a parenthesis to distinguish from Turtle's "owl:Ontology"
+          // 3. Try OWL Functional Syntax
           if (/Ontology\s*\(/.test(content) || /Declaration\s*\(/.test(content) || /Prefix\s*\(/.test(content) || fileName.endsWith('.ofn')) {
               try {
                 const result = parseFunctionalSyntax(content);
@@ -397,12 +392,10 @@ const Flow = () => {
                     setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
                     return;
                 }
-              } catch (fnErr) {
-                 console.warn("Functional Syntax Parse failed", fnErr);
-              }
+              } catch (fnErr) { }
           }
 
-          // 4. Try Turtle/RDF (Default Fallback for .owl/.ttl)
+          // 4. Try Turtle/RDF
           try {
               const result = await parseTurtle(content);
               if (result.nodes.length > 0) {
@@ -412,9 +405,7 @@ const Flow = () => {
                   setProjectMetadata(prev => ({ ...prev, ...result.metadata }));
                   return;
               }
-          } catch (rdfErr) {
-              console.warn("RDF Parse failed", rdfErr);
-          }
+          } catch (rdfErr) { }
 
           throw new Error("Unknown format or parsing failed.");
       } catch (err) {
@@ -475,14 +466,10 @@ const Flow = () => {
       return nodes.find(n => n.id === selectedNodeId) || null;
   }, [nodes, selectedNodeId]);
 
-  const handleNavigateToGraph = useCallback((nodeId: string) => {
+  // Generic Navigation Handler
+  const handleNavigate = useCallback((targetView: string, nodeId: string) => {
       setSelectedNodeId(nodeId);
-      setViewMode('concept');
-  }, []);
-
-  const handleNavigateToCatalog = useCallback((nodeId: string) => {
-      setSelectedNodeId(nodeId);
-      setViewMode('entities');
+      setViewMode(targetView as ViewMode);
   }, []);
 
   return (
@@ -519,7 +506,7 @@ const Flow = () => {
                 <div className="flex-1 h-full relative" onDrop={onDrop} onDragOver={onDragOver}>
                     <ReactFlow
                         nodes={visibleNodes}
-                        edges={visibleEdges} // Uses inferred if active
+                        edges={visibleEdges} 
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
                         onConnect={onConnect}
@@ -562,7 +549,6 @@ const Flow = () => {
                         </Panel>
                     </ReactFlow>
                     
-                    {/* Edge Tooltip */}
                     {edgeTooltip && (
                         <div 
                             className="fixed z-50 pointer-events-none bg-slate-900 border border-amber-500/50 text-slate-200 text-xs px-3 py-2 rounded-lg shadow-xl animate-in fade-in zoom-in-95 duration-100 flex flex-col gap-1"
@@ -573,7 +559,6 @@ const Flow = () => {
                                 {edgeTooltip.type || 'Inferred by Reasoner'}
                             </div>
                             <div className="text-slate-400 italic font-mono text-[10px]">{edgeTooltip.label}</div>
-                            {/* Arrow */}
                             <div className="absolute left-6 -bottom-1.5 w-3 h-3 bg-slate-900 border-r border-b border-amber-500/50 transform rotate-45"></div>
                         </div>
                     )}
@@ -600,7 +585,7 @@ const Flow = () => {
                         onAddNode={handleCreateNode}
                         onDeleteNode={deleteNode}
                         onSelectNode={setSelectedNodeId}
-                        onViewInGraph={handleNavigateToGraph}
+                        onViewInGraph={(id) => handleNavigate('concept', id)}
                         selectedNodeId={selectedNodeId}
                     />
                 </div>
@@ -631,8 +616,10 @@ const Flow = () => {
             <div className="flex-1 h-full">
                 <GraphVisualization 
                     nodes={visibleNodes} 
-                    edges={visibleEdges} // Inferred support
+                    edges={visibleEdges}
                     searchTerm={searchTerm}
+                    selectedNodeId={selectedNodeId}
+                    onNavigate={handleNavigate}
                 />
             </div>
         )}
@@ -641,10 +628,10 @@ const Flow = () => {
             <div className="flex-1 h-full">
                 <ConceptGraph 
                     nodes={visibleNodes} 
-                    edges={visibleEdges} // Inferred support
+                    edges={visibleEdges} 
                     searchTerm={searchTerm}
                     selectedNodeId={selectedNodeId}
-                    onNavigateToCatalog={handleNavigateToCatalog}
+                    onNavigate={handleNavigate}
                 />
             </div>
         )}
@@ -653,8 +640,9 @@ const Flow = () => {
             <div className="flex-1 h-full">
                 <MindmapVisualization 
                     nodes={visibleNodes} 
-                    edges={visibleEdges} // Inferred support
+                    edges={visibleEdges}
                     searchTerm={searchTerm}
+                    selectedNodeId={selectedNodeId}
                 />
             </div>
         )}
@@ -663,8 +651,10 @@ const Flow = () => {
             <div className="flex-1 h-full">
                 <TreeVisualization 
                     nodes={visibleNodes} 
-                    edges={visibleEdges} // Inferred support
+                    edges={visibleEdges}
                     searchTerm={searchTerm}
+                    selectedNodeId={selectedNodeId}
+                    onNavigate={handleNavigate}
                 />
             </div>
         )}
@@ -673,7 +663,7 @@ const Flow = () => {
             <div className="flex-1 h-full">
                 <UMLVisualization 
                     nodes={visibleNodes} 
-                    edges={visibleEdges} // Inferred support
+                    edges={visibleEdges}
                     searchTerm={searchTerm}
                 />
             </div>
@@ -683,8 +673,9 @@ const Flow = () => {
             <div className="flex-1 h-full">
                 <OWLVizVisualization 
                     nodes={visibleNodes} 
-                    edges={visibleEdges} // Inferred support
+                    edges={visibleEdges}
                     searchTerm={searchTerm}
+                    selectedNodeId={selectedNodeId}
                 />
             </div>
         )}
@@ -693,7 +684,7 @@ const Flow = () => {
             <div className="flex-1 h-full">
                 <PeirceVisualization 
                     nodes={visibleNodes} 
-                    edges={visibleEdges} // Inferred support
+                    edges={visibleEdges}
                 />
             </div>
         )}

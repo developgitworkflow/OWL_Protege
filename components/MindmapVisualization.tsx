@@ -9,6 +9,7 @@ interface MindmapVisualizationProps {
     nodes: Node<UMLNodeData>[];
     edges: Edge[];
     searchTerm?: string;
+    selectedNodeId?: string | null;
 }
 
 interface HierarchyNode {
@@ -20,7 +21,7 @@ interface HierarchyNode {
     _children?: HierarchyNode[]; // For collapsing
 }
 
-const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edges, searchTerm = '' }) => {
+const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edges, searchTerm = '', selectedNodeId }) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
@@ -64,23 +65,14 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
                 if (!existing) {
                     childrenMap.get(parentId)!.push({ id: childId, isInferred });
                     parentSet.add(childId);
-                } else if (!existing.isInferred && isInferred) {
-                    // If we have both explicit and inferred edge, prefer explicit (keep isInferred=false)
-                    // No action needed if existing is false. 
-                    // If existing was inferred and we found explicit? logic above prefers first found. 
-                    // Usually explicit edges come first or we should check priority.
-                    // For visualization, if *any* edge is explicit, treat as explicit.
                 }
             }
         });
 
-        // Find Roots (Nodes that are not children of anything in this hierarchy context)
-        // Prefer Classes as roots.
+        // Find Roots
         const roots = nodes.filter(n => !parentSet.has(n.id) && (n.data.type === ElementType.OWL_CLASS));
-        
-        // If no class roots found, look for any unconnected nodes or use all classes
         let effectiveRoots = roots.length > 0 ? roots : nodes.filter(n => n.data.type === ElementType.OWL_CLASS);
-        if (effectiveRoots.length === 0) effectiveRoots = nodes; // Fallback to everything
+        if (effectiveRoots.length === 0) effectiveRoots = nodes;
 
         const traverse = (nodeId: string, visited: Set<string>, inferredRel: boolean): HierarchyNode => {
             const node = nodeMap.get(nodeId)!;
@@ -145,14 +137,12 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
         const root = d3.hierarchy(rootData);
         
         const update = (source: any) => {
-            const treeLayout = d3.tree().nodeSize([35, 160]); // height, width spacing
+            const treeLayout = d3.tree().nodeSize([35, 160]);
             treeLayout(root as any);
 
-            // Compute the new tree layout.
             const nodes = root.descendants().reverse();
             const links = root.links();
 
-            // Normalize for fixed-depth.
             nodes.forEach((d: any) => { d.y = d.depth * 180; });
 
             // --- Nodes ---
@@ -180,11 +170,10 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
                     if (d.data.type === ElementType.OWL_NAMED_INDIVIDUAL) return "#ec4899"; // Pink
                     return "#64748b";
                 })
-                .style("stroke", (d: any) => d.data.isInferred ? "#fbbf24" : "#1e293b") // Amber stroke if inferred
+                .style("stroke", (d: any) => d.data.isInferred ? "#fbbf24" : "#1e293b")
                 .style("stroke-width", (d: any) => d.data.isInferred ? 3 : 2)
                 .style("cursor", "pointer");
 
-            // Label
             const textGroup = nodeEnter.append("text")
                 .attr("dy", ".35em")
                 .attr("x", (d: any) => d.children || (d as any)._children ? -15 : 15)
@@ -197,43 +186,41 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
             textGroup.append("tspan")
                 .text((d: any) => d.data.name);
 
-            // Inferred Icon
-            /* D3 doesn't support React components directly easily, using text or simple svg shape */
-            // If inferred, maybe append a small * or similar
-            
             const nodeUpdate = nodeEnter.merge(node);
             
             nodeUpdate.transition().duration(200)
                 .attr("transform", (d: any) => `translate(${d.y},${d.x})`);
 
-            // Apply Search & Inferred Highlighting
+            // Apply Search & Selected Highlighting
             nodeUpdate.select("circle")
                 .style("fill", (d: any) => {
+                    if (d.data.id === selectedNodeId) return "#facc15"; // Yellow for selected
                     const match = searchTerm && d.data.name.toLowerCase().includes(searchTerm.toLowerCase());
-                    if (match) return "#facc15"; // Yellow for match
+                    if (match) return "#facc15";
                     if (d._children) return "#fbbf24";
                     if (d.data.type === ElementType.OWL_CLASS) return "#6366f1";
                     if (d.data.type === ElementType.OWL_NAMED_INDIVIDUAL) return "#ec4899";
                     return "#64748b";
                 })
                 .style("stroke", (d: any) => {
+                    if (d.data.id === selectedNodeId) return "#fff";
                     const match = searchTerm && d.data.name.toLowerCase().includes(searchTerm.toLowerCase());
                     if (match) return "#fff";
                     return d.data.isInferred ? "#fbbf24" : "#1e293b";
                 })
+                .style("stroke-width", (d: any) => d.data.id === selectedNodeId ? 4 : (d.data.isInferred ? 3 : 2))
                 .style("stroke-dasharray", (d: any) => d.data.isInferred ? "2,2" : "none");
             
-            // Dim text if searching
-            nodeUpdate.select("text")
-                .style("opacity", (d: any) => {
-                    if (!searchTerm) return 1;
-                    return d.data.name.toLowerCase().includes(searchTerm.toLowerCase()) ? 1 : 0.3;
-                })
-                .style("font-weight", (d: any) => {
-                    if (searchTerm && d.data.name.toLowerCase().includes(searchTerm.toLowerCase())) return "bold";
-                    return "normal";
-                })
-                .style("fill", (d: any) => d.data.isInferred ? "#fbbf24" : "#cbd5e1");
+            // Focus on Selected Node
+            if (selectedNodeId) {
+                // Find selected node
+                const target = nodes.find((d: any) => d.data.id === selectedNodeId);
+                if (target && svgRef.current && zoomRef.current) {
+                    // Center it
+                    const t = d3.zoomIdentity.translate(width / 2 - (target as any).y, height / 2 - (target as any).x).scale(1);
+                    d3.select(svgRef.current).transition().duration(750).call(zoomRef.current.transform, t);
+                }
+            }
 
             const nodeExit = node.exit().transition().duration(200)
                 .attr("transform", (d: any) => `translate(${source.y},${source.x})`)
@@ -242,7 +229,6 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
             nodeExit.select("circle").attr("r", 1e-6);
             nodeExit.select("text").style("fill-opacity", 1e-6);
 
-            // --- Links ---
             const link = g.selectAll<SVGPathElement, d3.HierarchyLink<HierarchyNode>>("path.link")
                 .data(links, (d: any) => d.target.data.id);
 
@@ -261,12 +247,7 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
             const linkUpdate = linkEnter.merge(link);
             
             linkUpdate.transition().duration(200)
-                .attr("d", (d: any) => diagonal(d.source, d.target))
-                .style("stroke", (d: any) => d.target.data.isInferred ? "#fbbf24" : "#475569")
-                .style("stroke-dasharray", (d: any) => d.target.data.isInferred ? "4,4" : "none");
-            
-            // Dim links on search
-            linkUpdate.style("opacity", searchTerm ? 0.1 : (d: any) => d.target.data.isInferred ? 0.8 : 1);
+                .attr("d", (d: any) => diagonal(d.source, d.target));
 
             link.exit().transition().duration(200)
                 .attr("d", (d: any) => {
@@ -281,7 +262,6 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
             });
         };
 
-        // Helper for curved paths
         const diagonal = (s: any, d: any) => {
             return `M ${s.y} ${s.x}
                     C ${(s.y + d.y) / 2} ${s.x},
@@ -289,13 +269,12 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
                       ${d.y} ${d.x}`;
         };
 
-        // Initialize root position
         (root as any).x0 = height / 2;
         (root as any).y0 = 0;
 
         update(root);
 
-    }, [rootData, searchTerm]);
+    }, [rootData, searchTerm, selectedNodeId]); // Re-render on selection change
 
     const handleZoomIn = useCallback(() => {
         if (!svgRef.current || !zoomRef.current) return;
@@ -308,7 +287,6 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
     }, []);
 
     const handleFitView = useCallback(() => {
-         // Re-center basic logic
          if (!svgRef.current || !zoomRef.current || !containerRef.current) return;
          const width = containerRef.current.clientWidth;
          const height = containerRef.current.clientHeight;
@@ -320,30 +298,14 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
 
     return (
         <div ref={containerRef} className="relative w-full h-full bg-slate-950 overflow-hidden">
-             {/* Controls */}
             <div className="absolute bottom-6 left-6 z-10 flex flex-col gap-2">
                 <div className="bg-slate-800/90 backdrop-blur border border-slate-700 rounded-lg p-1 shadow-lg flex flex-col gap-1">
-                    <button onClick={handleZoomIn} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors">
-                        <ZoomIn size={20} />
-                    </button>
-                    <button onClick={handleZoomOut} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors">
-                        <ZoomOut size={20} />
-                    </button>
+                    <button onClick={handleZoomIn} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"><ZoomIn size={20}/></button>
+                    <button onClick={handleZoomOut} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"><ZoomOut size={20}/></button>
                     <div className="h-px bg-slate-700 mx-1 my-0.5"></div>
-                    <button onClick={handleFitView} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors">
-                        <Maximize size={20} />
-                    </button>
+                    <button onClick={handleFitView} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"><Maximize size={20}/></button>
                 </div>
             </div>
-
-            <div className="absolute top-4 right-4 bg-slate-900/80 backdrop-blur border border-slate-800 p-3 rounded-lg text-xs text-slate-300 pointer-events-none">
-                 <h3 className="font-bold mb-2 text-slate-500 uppercase tracking-wider text-[10px]">Hierarchy</h3>
-                 <div className="flex items-center gap-2 mb-1"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> Class</div>
-                 <div className="flex items-center gap-2 mb-1"><span className="w-2.5 h-2.5 rounded-full bg-pink-500"></span> Individual</div>
-                 <div className="flex items-center gap-2 mb-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Collapsed</div>
-                 <div className="flex items-center gap-2"><span className="w-4 h-0.5 border-t border-dashed border-amber-400"></span> Inferred</div>
-            </div>
-
             <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing touch-none" />
         </div>
     );

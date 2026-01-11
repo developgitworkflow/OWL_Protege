@@ -3,14 +3,14 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, Layers, X, Brain, ArrowRight, Tag, Info, BookOpen, Quote, Key, GitCommit, Split, Shield, Globe, List } from 'lucide-react';
+import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, Layers, X, Brain, ArrowRight, Tag, Info, BookOpen, Quote, Key, GitCommit, Split, Shield, Globe, List, FolderTree, Box } from 'lucide-react';
 
 interface ConceptGraphProps {
     nodes: Node<UMLNodeData>[];
     edges: Edge[];
     searchTerm?: string;
     selectedNodeId?: string | null;
-    onNavigateToCatalog?: (id: string) => void;
+    onNavigate?: (view: string, id: string) => void;
 }
 
 // Custom types for the VOWL-like simulation
@@ -47,7 +47,7 @@ const THEME = {
     bg: '#0f172a'
 };
 
-const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = '', selectedNodeId, onNavigateToCatalog }) => {
+const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = '', selectedNodeId, onNavigate }) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [tooltip, setTooltip] = useState<{x: number, y: number, content: string} | null>(null);
@@ -200,7 +200,6 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         if (selectedNodeId) {
             const found = simNodes.find(n => n.originalId === selectedNodeId);
             if (found) {
-                // Defer setting state to avoid render loops, but here it's fine as we are in effect
                 setSelectedEntity(found);
             }
         }
@@ -217,7 +216,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         defs.append("marker")
             .attr("id", "arrow-std")
             .attr("viewBox", "0 -5 10 10")
-            .attr("refX", 10) // Tweak based on node radius? handled in link logic
+            .attr("refX", 10) 
             .attr("refY", 0)
             .attr("markerWidth", 6)
             .attr("markerHeight", 6)
@@ -230,7 +229,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         defs.append("marker")
             .attr("id", "arrow-sub")
             .attr("viewBox", "0 -5 10 10")
-            .attr("refX", 38) // Offset for class radius
+            .attr("refX", 38)
             .attr("refY", 0)
             .attr("markerWidth", 8)
             .attr("markerHeight", 8)
@@ -274,20 +273,16 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             .attr("fill", "none")
             .attr("marker-end", d => {
                 if (!d.isArrow) return null;
-                // If direct link between classes (SubClass), use specific arrow
                 const src = d.source as SimNode;
                 const tgt = d.target as SimNode;
                 if (!src.isProperty && !tgt.isProperty) return "url(#arrow-sub)";
                 return "url(#arrow-std)";
             })
-            // Dashed line for pure structural links (Source -> Prop) to indicate they are part of one edge
             .attr("stroke-dasharray", d => !d.isArrow ? "3,3" : "");
 
-        // Set Notation Labels (dom/rng)
         const linkLabels = linkGroup.append("g")
             .style("display", d => (d.role === 'domain' || d.role === 'range') ? "block" : "none");
 
-        // Background pill for label
         linkLabels.append("rect")
             .attr("rx", 3)
             .attr("ry", 3)
@@ -302,14 +297,13 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
         linkLabels.append("text")
             .text(d => d.role === 'domain' ? 'dom' : (d.role === 'range' ? 'rng' : ''))
-            .attr("dy", "0.25em") // Centering vertically
+            .attr("dy", "0.25em") 
             .attr("text-anchor", "middle")
             .attr("font-size", "8px")
-            .attr("font-family", "serif") // Serif to look like math notation
+            .attr("font-family", "serif")
             .attr("font-style", "italic")
             .attr("fill", "#cbd5e1");
 
-        // Nodes Group
         const node = g.append("g")
             .selectAll("g")
             .data(simNodes)
@@ -331,89 +325,30 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                 })
             );
 
-        // Click Handler for Details
         node.on('click', (event, d) => {
             event.stopPropagation();
             setSelectedEntity(d);
         });
 
-        // Draw Shapes based on Type
         node.each(function(d) {
             const el = d3.select(this);
-            
-            // A. Property Node (Rectangle Badge)
             if (d.isProperty) {
                 const w = d.width || 60;
                 const h = d.height || 20;
-                
-                el.append("rect")
-                    .attr("x", -w / 2)
-                    .attr("y", -h / 2)
-                    .attr("width", w)
-                    .attr("height", h)
-                    .attr("rx", 4)
-                    .attr("fill", d.color)
-                    .attr("stroke", "#fff")
-                    .attr("stroke-width", 1.5)
-                    .attr("class", "shadow-sm cursor-pointer hover:stroke-yellow-400");
-                
-                el.append("text")
-                    .text(d.label)
-                    .attr("dy", "0.35em")
-                    .attr("text-anchor", "middle")
-                    .attr("font-size", "10px")
-                    .attr("fill", "#fff")
-                    .attr("font-weight", "bold")
-                    .style("pointer-events", "none");
-            } 
-            // B. Datatype / Literal (Rectangle)
-            else if (d.type === 'datatype' || d.type === 'literal') {
-                // Adjust width based on text
+                el.append("rect").attr("x", -w / 2).attr("y", -h / 2).attr("width", w).attr("height", h).attr("rx", 4).attr("fill", d.color).attr("stroke", "#fff").attr("stroke-width", 1.5).attr("class", "shadow-sm cursor-pointer hover:stroke-yellow-400");
+                el.append("text").text(d.label).attr("dy", "0.35em").attr("text-anchor", "middle").attr("font-size", "10px").attr("fill", "#fff").attr("font-weight", "bold").style("pointer-events", "none");
+            } else if (d.type === 'datatype' || d.type === 'literal') {
                 const charW = 6;
                 const w = Math.max(60, d.label.length * charW + 10);
-                
-                el.append("rect")
-                    .attr("x", -w/2)
-                    .attr("y", -15)
-                    .attr("width", w)
-                    .attr("height", 30)
-                    .attr("fill", d.color)
-                    .attr("stroke", "#fff")
-                    .attr("stroke-width", 2);
-                
-                el.append("text")
-                    .text(d.label)
-                    .attr("dy", "0.35em")
-                    .attr("text-anchor", "middle")
-                    .attr("font-size", "11px")
-                    .attr("fill", "#fff")
-                    .style("pointer-events", "none");
-            }
-            // C. Class / Individual (Circle)
-            else {
-                el.append("circle")
-                    .attr("r", d.radius)
-                    .attr("fill", d.color)
-                    .attr("stroke", "#fff")
-                    .attr("stroke-width", d.type === 'class' ? 3 : 2)
-                    .attr("class", "cursor-pointer hover:stroke-yellow-400 transition-colors");
-
-                // Label (truncated if too long)
+                el.append("rect").attr("x", -w/2).attr("y", -15).attr("width", w).attr("height", 30).attr("fill", d.color).attr("stroke", "#fff").attr("stroke-width", 2);
+                el.append("text").text(d.label).attr("dy", "0.35em").attr("text-anchor", "middle").attr("font-size", "11px").attr("fill", "#fff").style("pointer-events", "none");
+            } else {
+                el.append("circle").attr("r", d.radius).attr("fill", d.color).attr("stroke", "#fff").attr("stroke-width", d.type === 'class' ? 3 : 2).attr("class", "cursor-pointer hover:stroke-yellow-400 transition-colors");
                 const displayLabel = d.label.length > 10 ? d.label.substring(0, 8) + '..' : d.label;
-                
-                el.append("text")
-                    .text(displayLabel)
-                    .attr("dy", "0.35em")
-                    .attr("text-anchor", "middle")
-                    .attr("font-size", d.type === 'class' ? "12px" : "10px")
-                    .attr("font-weight", "bold")
-                    .attr("fill", "#fff")
-                    .style("pointer-events", "none")
-                    .style("text-shadow", "0px 1px 3px rgba(0,0,0,0.5)");
+                el.append("text").text(displayLabel).attr("dy", "0.35em").attr("text-anchor", "middle").attr("font-size", d.type === 'class' ? "12px" : "10px").attr("font-weight", "bold").attr("fill", "#fff").style("pointer-events", "none").style("text-shadow", "0px 1px 3px rgba(0,0,0,0.5)");
             }
         });
 
-        // Hover Tooltip
         node.on('mouseenter', (event, d) => {
             const rect = containerRef.current?.getBoundingClientRect();
             if (rect) {
@@ -427,27 +362,19 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             setTooltip(null);
         });
 
-        // Search Highlight
         if (searchTerm) {
             const lower = searchTerm.toLowerCase();
             node.style('opacity', d => d.label.toLowerCase().includes(lower) ? 1 : 0.1);
             linkGroup.style('opacity', 0.1);
         }
 
-        // Tick
         simulation.on("tick", () => {
-            linkPath.attr("d", (d: any) => {
-                // Simple line for now, markers handle endpoint visuals
-                return `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`;
-            });
-
-            // Update Label Positions (Midpoint)
+            linkPath.attr("d", (d: any) => `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`);
             linkLabels.attr("transform", (d: any) => {
                 const x = (d.source.x + d.target.x) / 2;
                 const y = (d.source.y + d.target.y) / 2;
                 return `translate(${x},${y})`;
             });
-
             node.attr("transform", d => `translate(${d.x},${d.y})`);
         });
 
@@ -455,29 +382,20 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             simulation.stop();
         };
 
-    }, [nodes, edges, searchTerm, showAttributes, selectedNodeId]); // Re-run if selectedNodeId changes, mainly for init mount
+    }, [nodes, edges, searchTerm, showAttributes, selectedNodeId]);
 
-    const handleZoomIn = () => {
-        if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 1.3);
-    };
-    const handleZoomOut = () => {
-        if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 0.7);
-    };
+    const handleZoomIn = () => { if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 1.3); };
+    const handleZoomOut = () => { if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 0.7); };
     const handleFit = () => {
-        // Reset zoom logic
         if (svgRef.current && containerRef.current) {
              const width = containerRef.current.clientWidth;
              const height = containerRef.current.clientHeight;
-             d3.select(svgRef.current).transition().call(
-                 d3.zoom<SVGSVGElement, unknown>().transform as any, 
-                 d3.zoomIdentity.translate(width/2, height/2).scale(1).translate(-width/2, -height/2) // Rough center reset
-             );
+             d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().transform as any, d3.zoomIdentity.translate(width/2, height/2).scale(1).translate(-width/2, -height/2));
         }
     };
 
     const highlightSyntax = (text: string) => {
         if (!text) return null;
-        // Split by keywords, capturing them
         const parts = text.split(/(\b(?:some|only|value|min|max|exactly|that|not|and|or)\b)/g);
         return parts.map((part, i) => {
             if (['some', 'only', 'value', 'min', 'max', 'exactly', 'that', 'not', 'and', 'or'].includes(part.toLowerCase())) {
@@ -487,35 +405,22 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         });
     };
 
-    // Calculate details for selected entity
     const selectedDetails = useMemo(() => {
         if (!selectedEntity) return null;
-        
         let originalNode = nodes.find(n => n.id === selectedEntity.originalId);
-        
-        // If we clicked a reified property node, try to find the actual Property Node if it exists in the graph
         if (!originalNode && selectedEntity.isProperty) {
             originalNode = nodes.find(n => n.data.label === selectedEntity.label && (n.data.type === ElementType.OWL_OBJECT_PROPERTY || n.data.type === ElementType.OWL_DATA_PROPERTY));
         }
-
-        // Gather Connections
         const connectedEdges = edges.filter(e => {
-            if (originalNode) {
-                return e.source === originalNode.id || e.target === originalNode.id;
-            }
+            if (originalNode) return e.source === originalNode.id || e.target === originalNode.id;
             return false;
         });
-
-        // Filter Inferred
         const inferred = connectedEdges.filter(e => e.data?.isInferred);
-        
-        // Categorize Axioms
         const tboxAxioms: any[] = [];
         const rboxAxioms: any[] = [];
         const aboxAxioms: any[] = [];
 
         if (originalNode) {
-            // Internal Methods
             if (originalNode.data.methods) {
                 originalNode.data.methods.forEach(m => {
                     const name = m.name.toLowerCase().replace(/[^a-z]/g, '');
@@ -526,19 +431,15 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                     } else if (['type', 'sameas', 'differentfrom'].includes(name)) {
                         aboxAxioms.push(m);
                     } else {
-                        // Fallback
                         if (originalNode?.data.type === ElementType.OWL_CLASS) tboxAxioms.push(m);
                         else if (originalNode?.data.type === ElementType.OWL_OBJECT_PROPERTY) rboxAxioms.push(m);
                         else aboxAxioms.push(m);
                     }
                 });
             }
-
-            // Convert Attributes to Axioms for display where appropriate
             if (originalNode.data.attributes) {
                 originalNode.data.attributes.forEach(attr => {
                     if (originalNode?.data.type === ElementType.OWL_OBJECT_PROPERTY || originalNode?.data.type === ElementType.OWL_DATA_PROPERTY) {
-                        // These are Characteristics -> RBox
                         rboxAxioms.push({ id: attr.id, name: attr.name, returnType: 'True', isCharacteristic: true });
                     }
                 });
@@ -556,9 +457,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         };
     }, [selectedEntity, nodes, edges]);
 
-    const getNodeLabel = (id: string) => {
-        return nodes.find(n => n.id === id)?.data.label || id;
-    };
+    const getNodeLabel = (id: string) => nodes.find(n => n.id === id)?.data.label || id;
 
     return (
         <div ref={containerRef} className="relative w-full h-full bg-slate-950 overflow-hidden">
@@ -584,18 +483,16 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                 </div>
             </div>
 
-            {/* Top Left Controls: Detail Toggle */}
+            {/* Controls */}
             <div className="absolute top-4 left-6 flex bg-slate-800 rounded-lg p-1 border border-slate-700 shadow-xl z-20">
                 <button 
                     onClick={() => setShowAttributes(!showAttributes)}
                     className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded transition-all ${showAttributes ? 'bg-green-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                    title="Toggle Data Properties/Attributes"
                 >
                     <Database size={14} /> {showAttributes ? 'Hide' : 'Show'} Attributes
                 </button>
             </div>
 
-            {/* Zoom Controls */}
             <div className="absolute bottom-6 left-6 flex flex-col gap-2">
                 <div className="bg-slate-800/90 backdrop-blur border border-slate-700 rounded-lg p-1 shadow-lg flex flex-col gap-1">
                     <button onClick={handleZoomIn} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"><ZoomIn size={20}/></button>
@@ -620,29 +517,26 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                                 </div>
                             )}
                         </div>
-                        <div className="flex gap-1">
-                            {selectedDetails?.node && onNavigateToCatalog && (
-                                <button 
-                                    onClick={() => onNavigateToCatalog(selectedDetails.node!.id)}
-                                    className="text-slate-500 hover:text-indigo-400 p-1 rounded transition-colors"
-                                    title="View in Catalog"
-                                >
-                                    <List size={18} />
-                                </button>
+                        <div className="flex gap-2 items-start">
+                            {selectedDetails?.node && onNavigate && (
+                                <div className="flex gap-1 bg-slate-800/50 p-1 rounded-lg border border-slate-800">
+                                    <button onClick={() => onNavigate('entities', selectedDetails.node!.id)} className="text-slate-400 hover:text-blue-400 p-1 rounded hover:bg-slate-800 transition-colors" title="Catalog"><List size={14}/></button>
+                                    <button onClick={() => onNavigate('design', selectedDetails.node!.id)} className="text-slate-400 hover:text-indigo-400 p-1 rounded hover:bg-slate-800 transition-colors" title="Design"><Layers size={14}/></button>
+                                    <button onClick={() => onNavigate('tree', selectedDetails.node!.id)} className="text-slate-400 hover:text-emerald-400 p-1 rounded hover:bg-slate-800 transition-colors" title="Tree"><FolderTree size={14}/></button>
+                                    <button onClick={() => onNavigate('uml', selectedDetails.node!.id)} className="text-slate-400 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition-colors" title="UML"><Box size={14}/></button>
+                                </div>
                             )}
-                            <button onClick={() => setSelectedEntity(null)} className="text-slate-500 hover:text-white transition-colors">
+                            <button onClick={() => setSelectedEntity(null)} className="text-slate-500 hover:text-white transition-colors p-1">
                                 <X size={18} />
                             </button>
                         </div>
                     </div>
                     
                     <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                        {/* Reasoner Execution Report */}
+                        {/* Logic Content */}
                         {selectedDetails && selectedDetails.inferredEdges.length > 0 && (
                             <div className="bg-amber-950/20 border border-amber-900/50 rounded-lg p-3">
-                                <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                    <Brain size={14} /> Reasoner Execution
-                                </h3>
+                                <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-2"><Brain size={14} /> Reasoner Execution</h3>
                                 <div className="space-y-2">
                                     {selectedDetails.inferredEdges.map((edge) => (
                                         <div key={edge.id} className="flex flex-col gap-0.5 bg-amber-900/10 p-2 rounded border border-amber-900/30">
@@ -650,21 +544,16 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                                                 <span className="font-bold">{edge.label}</span>
                                                 <span className="opacity-70">{edge.source === selectedEntity.id ? '->' : '<-'} {getNodeLabel(edge.source === selectedEntity.id ? edge.target : edge.source)}</span>
                                             </div>
-                                            <div className="text-[10px] text-amber-500/80 italic">
-                                                {edge.data?.inferenceType || 'Inferred Axiom'}
-                                            </div>
+                                            <div className="text-[10px] text-amber-500/80 italic">{edge.data?.inferenceType || 'Inferred Axiom'}</div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* Annotations */}
                         {selectedDetails?.node?.data.annotations && selectedDetails.node.data.annotations.length > 0 && (
                             <div>
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                    <Info size={12} /> Annotations
-                                </h3>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2"><Info size={12} /> Annotations</h3>
                                 <div className="space-y-1">
                                     {selectedDetails.node.data.annotations.map(ann => (
                                         <div key={ann.id} className="text-xs bg-slate-800/50 p-2 rounded border border-slate-800 flex justify-between">
@@ -672,21 +561,16 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                                                 <span className="text-blue-400 font-mono text-[10px] block mb-0.5">{ann.property}</span>
                                                 <span className="text-slate-300">{ann.value.replace(/"/g, '')}</span>
                                             </div>
-                                            {ann.language && (
-                                                <span className="text-[9px] text-slate-500 self-start bg-slate-900 px-1 rounded ml-2">@{ann.language}</span>
-                                            )}
+                                            {ann.language && <span className="text-[9px] text-slate-500 self-start bg-slate-900 px-1 rounded ml-2">@{ann.language}</span>}
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* TBox: Schema Definitions */}
                         {selectedDetails && selectedDetails.tbox.length > 0 && (
                             <div>
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                    <Database size={12} /> TBox (Schema)
-                                </h3>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2"><Database size={12} /> TBox (Schema)</h3>
                                 <div className="space-y-1">
                                     {selectedDetails.tbox.map(method => (
                                         <div key={method.id} className="text-xs bg-indigo-950/20 p-2 rounded border border-indigo-900/30">
@@ -695,69 +579,50 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                                                 {method.name.toLowerCase().includes('disjoint') && <Split size={10} className="text-red-400" />}
                                                 <span className="text-indigo-400 font-bold text-[10px] uppercase">{method.name}</span>
                                             </div>
-                                            <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">
-                                                {highlightSyntax(method.returnType)}
-                                            </div>
+                                            <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">{highlightSyntax(method.returnType)}</div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* RBox: Property Definitions */}
                         {selectedDetails && selectedDetails.rbox.length > 0 && (
                             <div>
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                    <BookOpen size={12} /> RBox (Properties)
-                                </h3>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2"><BookOpen size={12} /> RBox (Properties)</h3>
                                 <div className="space-y-1">
                                     {selectedDetails.rbox.map(method => (
                                         <div key={method.id} className="text-xs bg-blue-950/20 p-2 rounded border border-blue-900/30">
                                             <div className="flex items-baseline gap-2 mb-0.5">
                                                 {method.name.toLowerCase() === 'propertychainaxiom' && <GitCommit size={10} className="text-cyan-400" />}
                                                 {method.isCharacteristic && <Shield size={10} className="text-emerald-400" />}
-                                                <span className={`font-bold text-[10px] uppercase ${method.isCharacteristic ? 'text-emerald-400' : 'text-blue-400'}`}>
-                                                    {method.name}{method.isCharacteristic ? ' Property' : ''}
-                                                </span>
+                                                <span className={`font-bold text-[10px] uppercase ${method.isCharacteristic ? 'text-emerald-400' : 'text-blue-400'}`}>{method.name}{method.isCharacteristic ? ' Property' : ''}</span>
                                             </div>
-                                            {!method.isCharacteristic && (
-                                                <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">
-                                                    {highlightSyntax(method.returnType)}
-                                                </div>
-                                            )}
+                                            {!method.isCharacteristic && <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">{highlightSyntax(method.returnType)}</div>}
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* ABox: Assertions */}
                         {selectedDetails && selectedDetails.abox.length > 0 && (
                             <div>
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                    <Globe size={12} /> ABox (Assertions)
-                                </h3>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2"><Globe size={12} /> ABox (Assertions)</h3>
                                 <div className="space-y-1">
                                     {selectedDetails.abox.map(method => (
                                         <div key={method.id} className="text-xs bg-pink-950/20 p-2 rounded border border-pink-900/30">
                                             <div className="flex items-baseline gap-2 mb-0.5">
                                                 <span className="text-pink-400 font-bold text-[10px] uppercase">{method.name}</span>
                                             </div>
-                                            <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">
-                                                {highlightSyntax(method.returnType)}
-                                            </div>
+                                            <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">{highlightSyntax(method.returnType)}</div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* ABox: Fact Edges (Relationships) */}
                         {selectedDetails && selectedDetails.assertedEdges.length > 0 && (
                             <div>
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                    <ArrowRight size={12} /> Direct Facts
-                                </h3>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2"><ArrowRight size={12} /> Direct Facts</h3>
                                 <div className="space-y-1">
                                     {selectedDetails.assertedEdges.map(edge => {
                                         const isOutgoing = edge.source === selectedEntity.id;
@@ -776,42 +641,14 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                             </div>
                         )}
 
-                        {/* ABox: Data Assertions / TBox: Data Props */}
-                        {selectedDetails?.node?.data.attributes && selectedDetails.node.data.attributes.length > 0 && selectedDetails.node.data.type !== ElementType.OWL_OBJECT_PROPERTY && selectedDetails.node.data.type !== ElementType.OWL_DATA_PROPERTY && (
-                            <div>
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                    <Tag size={12} /> 
-                                    {selectedDetails.node.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'Data Assertions' : 'Data Properties'}
-                                </h3>
-                                <div className="space-y-1">
-                                    {selectedDetails.node.data.attributes.map(attr => (
-                                        <div key={attr.id} className="flex items-center justify-between text-xs bg-slate-800/50 p-2 rounded border border-slate-800">
-                                            <span className="text-green-400 font-medium">{attr.name}</span>
-                                            <span className="text-slate-400 font-mono text-[10px] bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700">
-                                                {selectedDetails.node?.data.type === ElementType.OWL_NAMED_INDIVIDUAL 
-                                                    ? (attr.type || '"value"') // For individuals, type field holds value
-                                                    : (attr.type || 'Literal') // For classes, type field holds range (e.g. xsd:int)
-                                                }
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        
-                        {!selectedDetails?.node && (
-                            <div className="text-center py-8 text-slate-600 text-xs italic">
-                                Use the entity catalog or canvas tools to define detailed properties for this node.
-                            </div>
-                        )}
+                        {!selectedDetails?.node && <div className="text-center py-8 text-slate-600 text-xs italic">Use the entity catalog or canvas tools to define detailed properties for this node.</div>}
                     </div>
                 </div>
             )}
 
             {/* Tooltip */}
             {tooltip && !selectedEntity && (
-                <div className="absolute px-2 py-1 bg-slate-800 text-white text-xs rounded border border-slate-700 pointer-events-none z-50 transform -translate-x-1/2 -translate-y-full mt-[-10px]"
-                     style={{ left: tooltip.x, top: tooltip.y }}>
+                <div className="absolute px-2 py-1 bg-slate-800 text-white text-xs rounded border border-slate-700 pointer-events-none z-50 transform -translate-x-1/2 -translate-y-full mt-[-10px]" style={{ left: tooltip.x, top: tooltip.y }}>
                     {tooltip.content}
                 </div>
             )}

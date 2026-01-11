@@ -3,12 +3,13 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, Maximize, Download, RefreshCw, Map as MapIcon, BoxSelect } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize, Download, Map as MapIcon } from 'lucide-react';
 
 interface OWLVizVisualizationProps {
     nodes: Node<UMLNodeData>[];
     edges: Edge[];
     searchTerm?: string;
+    selectedNodeId?: string | null;
 }
 
 interface SimNode extends d3.SimulationNodeDatum {
@@ -45,7 +46,7 @@ const THEME = {
     bg: '#0f172a'
 };
 
-const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges, searchTerm = '' }) => {
+const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges, searchTerm = '', selectedNodeId }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const svgRef = useRef<SVGSVGElement>(null);
     const [tooltip, setTooltip] = useState<{x: number, y: number, content: React.ReactNode} | null>(null);
@@ -54,6 +55,7 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
     const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
     const simNodes = useRef<SimNode[]>([]);
     const simLinks = useRef<SimLink[]>([]);
+    const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
     useEffect(() => {
         if (!svgRef.current || !containerRef.current) return;
@@ -99,7 +101,6 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             if (['subclassof', 'rdfs:subclassof'].includes(lowerLabel)) type = 'subclass';
             else if (['rdf:type', 'a'].includes(lowerLabel)) type = 'type';
             
-            // Clean label
             label = label.replace('owl:', '').replace('rdf:', '').replace('rdfs:', '');
 
             simLinks.current.push({
@@ -118,7 +119,6 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
                     const targetName = m.returnType;
                     const targetNode = relevantNodes.find(rn => rn.data.label === targetName);
                     if (targetNode) {
-                        // Check duplicate
                         const exists = simLinks.current.some(l => 
                             (l.source === n.id || (l.source as SimNode).id === n.id) && 
                             (l.target === targetNode.id || (l.target as SimNode).id === targetNode.id) &&
@@ -144,7 +144,6 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
 
         const defs = svg.append("defs");
         
-        // Markers
         const markers = [
             { id: 'arrow-rel', color: '#64748b', filled: true },
             { id: 'arrow-sub', color: '#f8fafc', filled: false }, // Hollow triangle
@@ -155,7 +154,7 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             defs.append("marker")
                 .attr("id", m.id)
                 .attr("viewBox", "0 -5 10 10")
-                .attr("refX", 22) // Offset for node boundary
+                .attr("refX", 22)
                 .attr("refY", 0)
                 .attr("markerWidth", 8)
                 .attr("markerHeight", 8)
@@ -169,33 +168,29 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
 
         const g = svg.append("g");
 
-        // Zoom
         const zoom = d3.zoom<SVGSVGElement, unknown>()
             .scaleExtent([0.1, 4])
             .on("zoom", (event) => g.attr("transform", event.transform));
+        zoomRef.current = zoom;
         svg.call(zoom);
 
-        // Simulation
         const simulation = d3.forceSimulation(simNodes.current)
             .force("link", d3.forceLink(simLinks.current).id((d: any) => d.id).distance(150))
             .force("charge", d3.forceManyBody().strength(-500))
             .force("center", d3.forceCenter(width / 2, height / 2))
-            // Separate Classes and Individuals vertically
             .force("y", d3.forceY((d: any) => d.type === ElementType.OWL_NAMED_INDIVIDUAL ? height * 0.7 : height * 0.3).strength(0.3))
             .force("collide", d3.forceCollide().radius((d: any) => (d.width || 40)/1.5).iterations(2));
         
         simulationRef.current = simulation;
 
         // --- Layers ---
-        // Box Layer (Behind)
         const boxLayer = g.append("g").attr("class", "box-layer");
         const linkGroup = g.append("g").attr("class", "links");
         const nodeGroup = g.append("g").attr("class", "nodes");
 
-        // Individual Bounding Box
         const indivBoxGroup = boxLayer.append("g").style("display", "none");
         const indivBoxRect = indivBoxGroup.append("rect")
-            .attr("fill", "rgba(236, 72, 153, 0.05)") // Pink tint
+            .attr("fill", "rgba(236, 72, 153, 0.05)") 
             .attr("stroke", "rgba(236, 72, 153, 0.3)")
             .attr("stroke-width", 1)
             .attr("stroke-dasharray", "4,4")
@@ -210,7 +205,6 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             .style("letter-spacing", "1px")
             .text("Named Individuals");
 
-        // Links
         const link = linkGroup
             .selectAll("g")
             .data(simLinks.current)
@@ -232,7 +226,6 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
                 return "url(#arrow-rel)";
             });
 
-        // Link Labels
         const linkLabelGroup = link.append("g").style("display", d => d.type === 'subclass' ? 'none' : 'block');
         
         linkLabelGroup.append("rect")
@@ -260,7 +253,6 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             .attr("x", function() { return -(((this.parentNode as any).querySelector('text')._bbox.width || 0) + 6) / 2; })
             .attr("y", function() { return -(((this.parentNode as any).querySelector('text')._bbox.height || 0) + 4) / 2; });
 
-        // Nodes
         const node = nodeGroup
             .selectAll("g")
             .data(simNodes.current)
@@ -283,7 +275,6 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
                 })
             );
 
-        // Class Rects
         node.filter(d => d.type === ElementType.OWL_CLASS)
             .append("rect")
             .attr("width", d => d.width!)
@@ -291,21 +282,19 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             .attr("x", d => -d.width! / 2)
             .attr("y", d => -d.height! / 2)
             .attr("rx", 6)
-            .attr("fill", THEME.classFill)
-            .attr("stroke", THEME.classStroke)
-            .attr("stroke-width", 2)
+            .attr("fill", d => d.id === selectedNodeId ? '#facc15' : THEME.classFill) // Highlight
+            .attr("stroke", d => d.id === selectedNodeId ? '#fff' : THEME.classStroke)
+            .attr("stroke-width", d => d.id === selectedNodeId ? 3 : 2)
             .attr("class", "shadow-sm cursor-grab active:cursor-grabbing");
 
-        // Individual Circles
         node.filter(d => d.type === ElementType.OWL_NAMED_INDIVIDUAL)
             .append("circle")
             .attr("r", 20)
-            .attr("fill", THEME.indivFill)
-            .attr("stroke", THEME.indivStroke)
-            .attr("stroke-width", 2)
+            .attr("fill", d => d.id === selectedNodeId ? '#facc15' : THEME.indivFill) // Highlight
+            .attr("stroke", d => d.id === selectedNodeId ? '#fff' : THEME.indivStroke)
+            .attr("stroke-width", d => d.id === selectedNodeId ? 3 : 2)
             .attr("class", "cursor-grab active:cursor-grabbing");
 
-        // Labels
         node.append("text")
             .text(d => d.label)
             .attr("text-anchor", "middle")
@@ -316,18 +305,11 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             .style("pointer-events", "none")
             .style("text-shadow", "0 1px 2px rgba(0,0,0,0.8)");
 
-        // Tick
         simulation.on("tick", () => {
-            linkPath.attr("d", (d: any) => {
-                // Adjust endpoint for markers based on target shape
-                return `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`;
-            });
-
+            linkPath.attr("d", (d: any) => `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`);
             linkLabelGroup.attr("transform", (d: any) => `translate(${(d.source.x + d.target.x)/2},${(d.source.y + d.target.y)/2})`);
-
             node.attr("transform", d => `translate(${d.x},${d.y})`);
 
-            // Update Individual Box Position
             const indivs = simNodes.current.filter(n => n.type === ElementType.OWL_NAMED_INDIVIDUAL);
             if (indivs.length > 0) {
                 const padding = 30;
@@ -351,7 +333,6 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             }
         });
 
-        // Hover interactions
         node.on("mouseenter", (event, d) => {
             const rect = containerRef.current?.getBoundingClientRect();
             if (rect) {
@@ -371,42 +352,33 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             }
         }).on("mouseleave", () => setTooltip(null));
 
-        // Cleanup
         return () => {
             simulation.stop();
         };
 
-    }, [nodes, edges, searchTerm]);
+    }, [nodes, edges, searchTerm, selectedNodeId]); // Re-run on selection
 
-    // Search Highlight
+    // Focus Logic
     useEffect(() => {
-        if (!svgRef.current || !searchTerm) {
-            d3.select(svgRef.current).selectAll('.node-group, .link-group').style('opacity', 1);
-            return;
+        if (selectedNodeId && svgRef.current && zoomRef.current && containerRef.current) {
+            const node = simNodes.current.find(n => n.id === selectedNodeId);
+            if (node && node.x !== undefined && node.y !== undefined) {
+                const width = containerRef.current.clientWidth;
+                const height = containerRef.current.clientHeight;
+                const scale = 1.2;
+                const transform = d3.zoomIdentity.translate(width / 2, height / 2).scale(scale).translate(-node.x, -node.y);
+                d3.select(svgRef.current).transition().duration(750).call(zoomRef.current.transform, transform);
+            }
         }
-        
-        const lowerTerm = searchTerm.toLowerCase();
-        d3.select(svgRef.current).selectAll('.node-group').style('opacity', (d: any) => 
-            d.label.toLowerCase().includes(lowerTerm) ? 1 : 0.1
-        );
-        d3.select(svgRef.current).selectAll('.link-group').style('opacity', 0.1);
+    }, [selectedNodeId]);
 
-    }, [searchTerm]);
-
-    const handleZoomIn = () => {
-        if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 1.3);
-    };
-    const handleZoomOut = () => {
-        if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 0.7);
-    };
+    const handleZoomIn = () => { if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 1.3); };
+    const handleZoomOut = () => { if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 0.7); };
     const handleReset = () => {
         if (svgRef.current && containerRef.current) {
             const width = containerRef.current.clientWidth;
             const height = containerRef.current.clientHeight;
-            d3.select(svgRef.current).transition().call(
-                d3.zoom<SVGSVGElement, unknown>().transform as any, 
-                d3.zoomIdentity.translate(width/2 - 100, height/2 - 100).scale(1)
-            );
+            d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().transform as any, d3.zoomIdentity.translate(width/2 - 100, height/2 - 100).scale(1));
             simulationRef.current?.alpha(1).restart();
         }
     };
@@ -427,65 +399,22 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
 
     return (
         <div ref={containerRef} className="relative w-full h-full bg-slate-950 overflow-hidden">
-            
-            {/* Toolbar */}
             <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
                 <div className="bg-slate-900/80 backdrop-blur border border-slate-800 p-2 rounded-lg text-xs text-slate-300 shadow-xl flex flex-col gap-2">
                     <div className="flex gap-1">
-                        <button onClick={handleZoomIn} className="p-1.5 hover:bg-slate-700 rounded transition-colors" title="Zoom In">
-                            <ZoomIn size={16} />
-                        </button>
-                        <button onClick={handleZoomOut} className="p-1.5 hover:bg-slate-700 rounded transition-colors" title="Zoom Out">
-                            <ZoomOut size={16} />
-                        </button>
-                        <button onClick={handleReset} className="p-1.5 hover:bg-slate-700 rounded transition-colors" title="Reset View">
-                            <Maximize size={16} />
-                        </button>
+                        <button onClick={handleZoomIn} className="p-1.5 hover:bg-slate-700 rounded transition-colors"><ZoomIn size={16} /></button>
+                        <button onClick={handleZoomOut} className="p-1.5 hover:bg-slate-700 rounded transition-colors"><ZoomOut size={16} /></button>
+                        <button onClick={handleReset} className="p-1.5 hover:bg-slate-700 rounded transition-colors"><Maximize size={16} /></button>
                     </div>
                     <div className="h-px bg-slate-700"></div>
-                    <button onClick={handleDownload} className="flex items-center gap-2 p-1.5 hover:bg-slate-700 rounded transition-colors text-blue-400">
-                        <Download size={16} /> SVG
-                    </button>
+                    <button onClick={handleDownload} className="flex items-center gap-2 p-1.5 hover:bg-slate-700 rounded transition-colors text-blue-400"><Download size={16} /> SVG</button>
                 </div>
             </div>
-
-            {/* Legend */}
-            <div className="absolute top-4 left-6 pointer-events-none">
-                <div className="bg-slate-900/80 backdrop-blur border border-slate-800 p-3 rounded-lg shadow-xl text-slate-300">
-                    <div className="flex items-center gap-2 mb-2 font-bold text-sm text-indigo-400">
-                        <MapIcon size={16} /> Ontology Map
-                    </div>
-                    <div className="space-y-1.5 text-[10px]">
-                        <div className="flex items-center gap-2">
-                            <span className="w-3 h-3 border border-indigo-500 bg-slate-800 rounded-sm"></span> Class
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="w-3 h-3 border border-pink-500 bg-pink-900 rounded-full"></span> Individual
-                        </div>
-                        <div className="h-px bg-slate-700 my-1"></div>
-                        <div className="flex items-center gap-2">
-                            <span className="w-6 h-0.5 bg-slate-400"></span> Relation
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="w-6 h-0.5 border-t border-white border-dashed"></span> SubClass (Hollow)
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="w-6 h-0.5 border-t-2 border-amber-400 border-dashed"></span> Inferred
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Tooltip */}
             {tooltip && (
-                <div 
-                    className="absolute z-50 bg-slate-900/95 border border-slate-700 p-2 rounded-lg shadow-2xl pointer-events-none transform -translate-x-1/2 min-w-[120px] text-white animate-in fade-in zoom-in-95 duration-75"
-                    style={{ left: tooltip.x, top: tooltip.y - 10 }}
-                >
+                <div className="absolute z-50 bg-slate-900/95 border border-slate-700 p-2 rounded-lg shadow-2xl pointer-events-none transform -translate-x-1/2 min-w-[120px] text-white animate-in fade-in zoom-in-95 duration-75" style={{ left: tooltip.x, top: tooltip.y - 10 }}>
                     {tooltip.content}
                 </div>
             )}
-
             <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing touch-none" />
         </div>
     );

@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, Maximize, Download, RefreshCw, Map as MapIcon } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize, Download, RefreshCw, Map as MapIcon, BoxSelect } from 'lucide-react';
 
 interface OWLVizVisualizationProps {
     nodes: Node<UMLNodeData>[];
@@ -180,12 +180,38 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             .force("link", d3.forceLink(simLinks.current).id((d: any) => d.id).distance(150))
             .force("charge", d3.forceManyBody().strength(-500))
             .force("center", d3.forceCenter(width / 2, height / 2))
+            // Separate Classes and Individuals vertically
+            .force("y", d3.forceY((d: any) => d.type === ElementType.OWL_NAMED_INDIVIDUAL ? height * 0.7 : height * 0.3).strength(0.3))
             .force("collide", d3.forceCollide().radius((d: any) => (d.width || 40)/1.5).iterations(2));
         
         simulationRef.current = simulation;
 
+        // --- Layers ---
+        // Box Layer (Behind)
+        const boxLayer = g.append("g").attr("class", "box-layer");
+        const linkGroup = g.append("g").attr("class", "links");
+        const nodeGroup = g.append("g").attr("class", "nodes");
+
+        // Individual Bounding Box
+        const indivBoxGroup = boxLayer.append("g").style("display", "none");
+        const indivBoxRect = indivBoxGroup.append("rect")
+            .attr("fill", "rgba(236, 72, 153, 0.05)") // Pink tint
+            .attr("stroke", "rgba(236, 72, 153, 0.3)")
+            .attr("stroke-width", 1)
+            .attr("stroke-dasharray", "4,4")
+            .attr("rx", 16);
+        
+        const indivBoxLabel = indivBoxGroup.append("text")
+            .attr("fill", "rgba(236, 72, 153, 0.6)")
+            .attr("font-size", "10px")
+            .attr("font-weight", "bold")
+            .attr("text-anchor", "start")
+            .style("text-transform", "uppercase")
+            .style("letter-spacing", "1px")
+            .text("Named Individuals");
+
         // Links
-        const link = g.append("g")
+        const link = linkGroup
             .selectAll("g")
             .data(simLinks.current)
             .join("g")
@@ -206,7 +232,7 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
                 return "url(#arrow-rel)";
             });
 
-        // Link Labels (Background Rect + Text)
+        // Link Labels
         const linkLabelGroup = link.append("g").style("display", d => d.type === 'subclass' ? 'none' : 'block');
         
         linkLabelGroup.append("rect")
@@ -235,7 +261,7 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             .attr("y", function() { return -(((this.parentNode as any).querySelector('text')._bbox.height || 0) + 4) / 2; });
 
         // Nodes
-        const node = g.append("g")
+        const node = nodeGroup
             .selectAll("g")
             .data(simNodes.current)
             .join("g")
@@ -294,13 +320,35 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
         simulation.on("tick", () => {
             linkPath.attr("d", (d: any) => {
                 // Adjust endpoint for markers based on target shape
-                // Simple straight line for now, markers handle visual overlap
                 return `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`;
             });
 
             linkLabelGroup.attr("transform", (d: any) => `translate(${(d.source.x + d.target.x)/2},${(d.source.y + d.target.y)/2})`);
 
             node.attr("transform", d => `translate(${d.x},${d.y})`);
+
+            // Update Individual Box Position
+            const indivs = simNodes.current.filter(n => n.type === ElementType.OWL_NAMED_INDIVIDUAL);
+            if (indivs.length > 0) {
+                const padding = 30;
+                const xMin = d3.min(indivs, n => (n.x || 0) - (n.radius || 20)) || 0;
+                const xMax = d3.max(indivs, n => (n.x || 0) + (n.radius || 20)) || 0;
+                const yMin = d3.min(indivs, n => (n.y || 0) - (n.radius || 20)) || 0;
+                const yMax = d3.max(indivs, n => (n.y || 0) + (n.radius || 20)) || 0;
+                
+                indivBoxGroup.style("display", "block");
+                indivBoxRect
+                    .attr("x", xMin - padding)
+                    .attr("y", yMin - padding)
+                    .attr("width", xMax - xMin + padding * 2)
+                    .attr("height", yMax - yMin + padding * 2);
+                
+                indivBoxLabel
+                    .attr("x", xMin - padding + 10)
+                    .attr("y", yMin - padding - 8);
+            } else {
+                indivBoxGroup.style("display", "none");
+            }
         });
 
         // Hover interactions

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather, Workflow } from 'lucide-react';
+import { Download, Upload, Layers, FilePlus, ChevronDown, Settings, ShieldCheck, Search, Network, GitGraph, ScrollText, Eye, EyeOff, FolderTree, X, Box, Sigma, Calculator, Terminal, Feather, Workflow, Brain, CheckCircle2 } from 'lucide-react';
 
 interface TopBarProps {
     onSaveJSON: () => void;
@@ -20,6 +20,11 @@ interface TopBarProps {
     onToggleIndividuals: () => void;
     searchTerm: string;
     onSearchChange: (term: string) => void;
+    // Reasoner props
+    isReasonerActive: boolean;
+    onRunReasoner: () => void;
+    showInferred: boolean;
+    onToggleInferred: () => void;
 }
 
 const TopBar: React.FC<TopBarProps> = ({ 
@@ -39,7 +44,11 @@ const TopBar: React.FC<TopBarProps> = ({
     showIndividuals,
     onToggleIndividuals,
     searchTerm,
-    onSearchChange
+    onSearchChange,
+    isReasonerActive,
+    onRunReasoner,
+    showInferred,
+    onToggleInferred
 }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
 
@@ -58,7 +67,7 @@ const TopBar: React.FC<TopBarProps> = ({
       <div className="flex items-center gap-4">
          
          {/* Group 1: Views */}
-         <div className="hidden md:flex gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700/50">
+         <div className="hidden xl:flex gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700/50">
             <button 
                 onClick={() => onViewChange('design')}
                 className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'design' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
@@ -92,14 +101,6 @@ const TopBar: React.FC<TopBarProps> = ({
                 Peirce
             </button>
             <button 
-                onClick={() => onViewChange('graph')}
-                className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'graph' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                title="Simple Force Graph"
-            >
-                <Network size={12} />
-                Graph
-            </button>
-            <button 
                 onClick={() => onViewChange('mindmap')}
                 className={`px-3 py-1.5 text-xs font-medium rounded shadow-sm transition-all flex items-center gap-1 ${currentView === 'mindmap' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
                 title="Hierarchy Mindmap"
@@ -127,14 +128,38 @@ const TopBar: React.FC<TopBarProps> = ({
 
          <div className="h-6 w-px bg-slate-700 mx-1"></div>
 
-         {/* Group 2: Visibility */}
-         <button 
-            onClick={onToggleIndividuals}
-            className={`flex items-center gap-2 text-sm font-medium transition-colors ${showIndividuals ? 'text-pink-400 hover:text-pink-300' : 'text-slate-500 hover:text-slate-400'}`}
-            title={showIndividuals ? "Hide Individuals" : "Show Individuals"}
-         >
-            {showIndividuals ? <Eye size={16} /> : <EyeOff size={16} />}
-         </button>
+         {/* Group 2: Reasoner */}
+         <div className="flex items-center gap-2">
+             <button 
+                onClick={onRunReasoner}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all border ${
+                    isReasonerActive 
+                    ? 'bg-amber-500/10 border-amber-500/50 text-amber-400' 
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500'
+                }`}
+                title="Run HermiT-like Reasoner"
+             >
+                 {isReasonerActive ? <CheckCircle2 size={14} /> : <Brain size={14} />}
+                 {isReasonerActive ? 'Reasoner Active' : 'Start Reasoner'}
+             </button>
+             
+             {isReasonerActive && (
+                 <div className="flex items-center bg-slate-900 rounded-md border border-slate-700 p-0.5">
+                     <button
+                        onClick={() => onToggleInferred()}
+                        className={`px-2 py-1 text-[10px] font-bold rounded transition-colors ${!showInferred ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+                     >
+                         Asserted
+                     </button>
+                     <button
+                        onClick={() => onToggleInferred()}
+                        className={`px-2 py-1 text-[10px] font-bold rounded transition-colors ${showInferred ? 'bg-amber-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+                     >
+                         Inferred
+                     </button>
+                 </div>
+             )}
+         </div>
 
          <div className="h-6 w-px bg-slate-700 mx-1"></div>
 
@@ -146,7 +171,6 @@ const TopBar: React.FC<TopBarProps> = ({
                 title="Validate Ontology"
              >
                 <ShieldCheck size={16} />
-                <span className="hidden xl:inline">Validate</span>
              </button>
 
              <button 
@@ -155,7 +179,6 @@ const TopBar: React.FC<TopBarProps> = ({
                 title="Calculate DL Expressivity"
              >
                 <Calculator size={16} />
-                <span className="hidden xl:inline">Calc</span>
              </button>
 
              <button 
@@ -164,7 +187,6 @@ const TopBar: React.FC<TopBarProps> = ({
                 title="DL Query"
              >
                 <Search size={16} />
-                <span className="hidden xl:inline">Query</span>
              </button>
 
              <button 
@@ -173,7 +195,6 @@ const TopBar: React.FC<TopBarProps> = ({
                 title="SWRL Rules"
              >
                 <ScrollText size={16} />
-                <span className="hidden xl:inline">Rules</span>
              </button>
 
              <button 
@@ -182,16 +203,6 @@ const TopBar: React.FC<TopBarProps> = ({
                 title="Description Logic Axioms"
              >
                 <Sigma size={16} />
-                <span className="hidden xl:inline">Axioms</span>
-             </button>
-
-             <button 
-                onClick={onOpenDatalog}
-                className="flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
-                title="Datalog Translation (Logic Programming)"
-             >
-                <Terminal size={16} />
-                <span className="hidden xl:inline">Datalog</span>
              </button>
          </div>
 
@@ -248,38 +259,12 @@ const TopBar: React.FC<TopBarProps> = ({
 
          <div className="h-6 w-px bg-slate-700 mx-1"></div>
 
-         {/* Group 5: Search & Settings */}
-         <div className="relative group hidden lg:block">
-             <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                 <Search size={14} className="text-slate-500 group-focus-within:text-blue-400 transition-colors" />
-             </div>
-             <input 
-                type="text" 
-                placeholder="Find item..." 
-                className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-md pl-8 pr-8 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 w-32 focus:w-48 transition-all"
-                value={searchTerm}
-                onChange={(e) => onSearchChange(e.target.value)}
-             />
-             {searchTerm && (
-                 <button 
-                    onClick={() => onSearchChange('')}
-                    className="absolute inset-y-0 right-0 pr-2 flex items-center text-slate-500 hover:text-white"
-                 >
-                     <X size={12} />
-                 </button>
-             )}
-         </div>
-
          <button 
             onClick={onOpenSettings}
             className="text-slate-300 hover:text-white p-2 rounded-full hover:bg-slate-800 transition-colors"
             title="Settings"
          >
             <Settings size={20} />
-         </button>
-
-         <button className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-bold shadow-lg transition-all transform hover:scale-105">
-            Share
          </button>
       </div>
     </div>

@@ -1,4 +1,5 @@
-import { Node, Edge } from 'reactflow';
+
+import { Node, Edge, MarkerType } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
 
 export type QueryType = 'subclasses' | 'superclasses' | 'instances' | 'equivalent';
@@ -141,10 +142,6 @@ const resolveExpression = (expr: string): Set<string> | null => {
         const sets = parts.map(p => resolveExpression(p)).filter(s => s !== null) as Set<string>[];
         if (sets.length === 0) return new Set();
         
-        // Find entities that exist in ALL sets
-        // (Simplified Intersection logic: works for Instances and Subclasses if they appear in all result sets)
-        // Note: For finding Subclasses of (A and B), we ideally want classes C where C sub A AND C sub B.
-        // This logic finds existing nodes that satisfy all conditions.
         const allCandidates = new Set<string>();
         sets.forEach(s => s.forEach(id => allCandidates.add(id)));
         
@@ -176,10 +173,6 @@ const resolveExpression = (expr: string): Set<string> | null => {
         const result = new Set<string>();
         if (!targetNodes) return result;
 
-        // Find nodes that have an outgoing edge 'propLabel' pointing to any 'targetNodes'
-        // OR have an axiom saying they do.
-        
-        // A. Check explicit edges
         Object.keys(outgoingEdges).forEach(sourceId => {
             const edges = outgoingEdges[sourceId];
             const hasEdge = edges.some(e => 
@@ -189,15 +182,10 @@ const resolveExpression = (expr: string): Set<string> | null => {
             if (hasEdge) result.add(sourceId);
         });
 
-        // B. Check Axioms (e.g. Professor: teaches some Course)
         nodeMap.forEach(node => {
             node.data.methods.forEach(m => {
                 if (m.name === 'SubClassOf') {
-                    // Primitive string match: "teaches some Course"
-                    // In a real reasoner this would be parsed deeper, but here we match the expression
                     if (m.returnType.includes(`${propLabel} some`)) {
-                        // Check if the target in the string roughly matches our target expression
-                        // Simplified: if target is "Course" and axiom is "teaches some Course" -> Match
                         if (m.returnType.includes(targetExpr)) {
                             result.add(node.id);
                         }
@@ -219,7 +207,6 @@ const resolveExpression = (expr: string): Set<string> | null => {
         const result = new Set<string>();
         if (!targetId) return result;
 
-        // Check explicit edges
         Object.keys(outgoingEdges).forEach(sourceId => {
             const edges = outgoingEdges[sourceId];
             const hasEdge = edges.some(e => 
@@ -250,8 +237,6 @@ export const executeDLQuery = (query: string, queryType: QueryType): Node<UMLNod
 
     const lowerQuery = query.toLowerCase().trim();
 
-    // 0. Meta-Queries (Get all entities of a type)
-    // These bypass the standard DL parser to provide list functionality
     if (['owl:class', 'class', 'classes'].includes(lowerQuery)) {
         return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_CLASS);
     }
@@ -268,16 +253,12 @@ export const executeDLQuery = (query: string, queryType: QueryType): Node<UMLNod
         return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_DATATYPE);
     }
 
-    // 1. Resolve Expression
     let targetClasses = resolveExpression(query);
 
-    // 2. Handle owl:Thing (Universal)
     if (!targetClasses && (lowerQuery === 'thing' || lowerQuery === 'owl:thing')) {
         if (queryType === 'instances') {
-             // Instances of Thing = All Individuals
              return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL);
         } else {
-             // Subclasses of Thing = All Classes (Simplified)
              return Array.from(nodeMap.values()).filter(n => n.data.type === ElementType.OWL_CLASS);
         }
     }
@@ -287,35 +268,21 @@ export const executeDLQuery = (query: string, queryType: QueryType): Node<UMLNod
     const resultIds = new Set<string>();
 
     if (queryType === 'instances') {
-        // Find instances of ANY of the target classes
-        // OR if the result of resolveExpression was ALREADY individuals (e.g. via "value" restriction or direct lookup)
-        
         targetClasses.forEach(id => {
             const node = nodeMap.get(id);
-            // If the resolved node is an Individual, add it directly
             if (node?.data.type === ElementType.OWL_NAMED_INDIVIDUAL) {
                 resultIds.add(id);
             }
-            // If it's a class, find its instances
             const insts = instances[id];
             if (insts) insts.forEach(i => resultIds.add(i));
         });
     }
     else if (queryType === 'subclasses') {
         targetClasses.forEach(clsId => {
-            // Add explicit subclasses
             const children = superClassOf[clsId]; 
             if (children) children.forEach(c => resultIds.add(c));
-            
-            // Note: resolveExpression might return "Implicit Classes" logic by returning nodes that fit criteria
-            // If the query was "teaches some Course", resolveExpression returns "Professor".
-            // "Professor" is arguably a subclass of the anonymous class expression "teaches some Course".
-            // So we also include the resolved nodes themselves if they are Classes.
             const node = nodeMap.get(clsId);
             if (node?.data.type === ElementType.OWL_CLASS) {
-                // Determine if we should include the node itself as a 'result' of the query logic?
-                // Standard DL Query "Subclasses of X" usually doesn't include X unless "Descendant" mode.
-                // But if X is an expression, we want Named Classes that are SubClasses of Expr.
                 resultIds.add(clsId);
             }
         });
@@ -324,8 +291,6 @@ export const executeDLQuery = (query: string, queryType: QueryType): Node<UMLNod
          targetClasses.forEach(clsId => {
             const parents = subClassOf[clsId];
             if (parents) parents.forEach(p => resultIds.add(p));
-            
-            // See note above
             const node = nodeMap.get(clsId);
             if (node?.data.type === ElementType.OWL_CLASS) {
                  resultIds.add(clsId);
@@ -334,4 +299,104 @@ export const executeDLQuery = (query: string, queryType: QueryType): Node<UMLNod
     }
 
     return Array.from(resultIds).map(id => nodeMap.get(id)!).filter(n => !!n);
+};
+
+// --- 3. Compute Full Inferred Edge Set (The HermiT-like Output) ---
+
+export const computeInferredEdges = (nodes: Node<UMLNodeData>[], explicitEdges: Edge[]): Edge[] => {
+    // 1. Run Classification
+    const index = classifyOntology(nodes, explicitEdges);
+    
+    const inferredEdges: Edge[] = [];
+    const exists = new Set<string>(explicitEdges.map(e => `${e.source}-${e.target}-${e.label}`));
+
+    const addEdge = (s: string, t: string, label: string) => {
+        const key = `${s}-${t}-${label}`;
+        if (!exists.has(key)) {
+            inferredEdges.push({
+                id: `inferred-${s}-${t}-${label}-${Math.random()}`,
+                source: s,
+                target: t,
+                label: label,
+                type: 'smoothstep',
+                animated: true, // Visually distinguish inferred edges
+                style: { stroke: '#fbbf24', strokeWidth: 1.5, strokeDasharray: '5,5' },
+                labelStyle: { fill: '#fbbf24', fontStyle: 'italic' },
+                markerEnd: { type: MarkerType.ArrowClosed, color: '#fbbf24' },
+                data: { isInferred: true }
+            });
+            exists.add(key);
+        }
+    };
+
+    // A. Output SubClassOf Hierarchy (Transitive)
+    Object.entries(index.subClassOf).forEach(([childId, parents]) => {
+        parents.forEach(parentId => {
+            // Check if this is a direct SubClass (heuristic) or purely inferred
+            // For full closure, we output everything.
+            if (childId !== parentId) { // Avoid self-loops
+                addEdge(childId, parentId, 'rdfs:subClassOf');
+            }
+        });
+    });
+
+    // B. Output Type Assertions (Realization)
+    Object.entries(index.types).forEach(([indivId, classes]) => {
+        classes.forEach(classId => {
+            addEdge(indivId, classId, 'rdf:type');
+        });
+    });
+
+    // C. Property Inference (Domain/Range/Inverse)
+    // Domain: P domain D. x P y -> x type D.
+    // We iterate asserted property assertions
+    explicitEdges.forEach(e => {
+        if (!['rdf:type', 'subClassOf', 'rdfs:subClassOf'].includes(e.label as string)) {
+            // Find property node to get domain/range
+            const propNode = nodes.find(n => n.data.label === e.label || n.data.label === (e.label as string).split(':')[1]);
+            
+            if (propNode) {
+                // Domain
+                propNode.data.methods.forEach(m => {
+                    if (m.name.toLowerCase() === 'domain') {
+                        const domainId = index.labelToId[m.returnType];
+                        if (domainId) {
+                            // If x P y, then x Type Domain
+                            addEdge(e.source, domainId, 'rdf:type');
+                        }
+                    }
+                    if (m.name.toLowerCase() === 'range') {
+                        const rangeId = index.labelToId[m.returnType];
+                        if (rangeId) {
+                            // If x P y, then y Type Range
+                            addEdge(e.target, rangeId, 'rdf:type');
+                        }
+                    }
+                    if (m.name.toLowerCase() === 'inverseof') {
+                        // If x P y, then y InvP x
+                        // We assume InverseOf points to a named property
+                        const invPropName = m.returnType;
+                        // Add inferred edge: y InvP x
+                        // Note: we don't have IDs for property names easily if they aren't nodes, but addEdge handles ID strings
+                        // We add the edge to the graph using the label
+                        inferredEdges.push({
+                            id: `inferred-inv-${e.id}`,
+                            source: e.target,
+                            target: e.source,
+                            label: invPropName,
+                            type: 'smoothstep',
+                            animated: true,
+                            style: { stroke: '#a78bfa', strokeWidth: 1.5, strokeDasharray: '5,5' }, // different color for inverse
+                            labelStyle: { fill: '#a78bfa', fontStyle: 'italic' },
+                            markerEnd: { type: MarkerType.ArrowClosed, color: '#a78bfa' },
+                            data: { isInferred: true }
+                        });
+                    }
+                });
+            }
+        }
+    });
+
+    // Combine original explicit + new inferred
+    return [...explicitEdges, ...inferredEdges];
 };

@@ -1,7 +1,8 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ChevronRight, ChevronDown, Database, User, Tag, ArrowRightLeft, FileType, Box, Layers } from 'lucide-react';
+import { ChevronRight, ChevronDown, Database, User, Tag, ArrowRightLeft, FileType, Box, Layers, Brain } from 'lucide-react';
 
 interface TreeVisualizationProps {
     nodes: Node<UMLNodeData>[];
@@ -13,6 +14,7 @@ interface TreeNode {
     id: string;
     label: string;
     type: ElementType;
+    isInferred?: boolean; // New flag
     children: TreeNode[];
 }
 
@@ -24,9 +26,6 @@ const TreeNodeItem: React.FC<{ node: TreeNode; level: number; searchTerm: string
     const isMatch = searchTerm && node.label.toLowerCase().includes(searchTerm.toLowerCase());
     const isDimmed = searchTerm && !isMatch;
 
-    // Auto-open if children have match? (Recursive search logic omitted for simplicity, relying on user exploration)
-    // Simple highlight logic
-    
     const getIcon = () => {
         switch (node.type) {
             case ElementType.OWL_CLASS: return <Database size={14} className="text-purple-400" />;
@@ -53,9 +52,12 @@ const TreeNodeItem: React.FC<{ node: TreeNode; level: number; searchTerm: string
                     )}
                 </div>
                 {getIcon()}
-                <span className={`text-sm truncate ${isMatch ? 'text-yellow-200 font-bold' : (node.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'text-pink-200' : 'text-slate-200')}`}>
+                <span className={`text-sm truncate ${isMatch ? 'text-yellow-200 font-bold' : (node.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'text-pink-200' : 'text-slate-200')} ${node.isInferred ? 'italic text-amber-300' : ''}`}>
                     {node.label}
                 </span>
+                {node.isInferred && (
+                    <Brain size={10} className="text-amber-500 ml-1" title="Inferred by Reasoner" />
+                )}
                 {node.type !== ElementType.OWL_NAMED_INDIVIDUAL && (
                     <span className="text-[10px] text-slate-600 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         {hasChildren ? `(${node.children.length})` : ''}
@@ -106,9 +108,9 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
         const nodeMap = new Map<string, Node<UMLNodeData>>(nodes.map(n => [n.id, n]));
         
         // Relationships
-        const subClassOf = new Map<string, string[]>(); // Parent -> Children
+        const subClassOf = new Map<string, { id: string, isInferred: boolean }[]>(); // Parent -> Children
         const subPropOf = new Map<string, string[]>();
-        const classInstances = new Map<string, string[]>(); // Class -> Individuals
+        const classInstances = new Map<string, { id: string, isInferred: boolean }[]>(); // Class -> Individuals
         
         // Track child status to find roots
         const isChildClass = new Set<string>();
@@ -118,11 +120,13 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
             const label = (e.label as string) || '';
             const s = e.source;
             const t = e.target;
+            const isInferred = (e.data && e.data.isInferred) || false;
 
             // Inheritance
             if (['subClassOf', 'rdfs:subClassOf'].includes(label)) {
                 if (!subClassOf.has(t)) subClassOf.set(t, []);
-                subClassOf.get(t)!.push(s);
+                // If the edge is inferred, the relationship is inferred
+                subClassOf.get(t)!.push({ id: s, isInferred });
                 isChildClass.add(s);
             }
             else if (['subPropertyOf', 'rdfs:subPropertyOf'].includes(label)) {
@@ -133,35 +137,42 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
             // Instantiation
             else if (['rdf:type', 'a'].includes(label)) {
                 if (!classInstances.has(t)) classInstances.set(t, []);
-                classInstances.get(t)!.push(s);
+                classInstances.get(t)!.push({ id: s, isInferred });
             }
         });
 
         // Recursive Builder
-        const buildClassTree = (classId: string, visited: Set<string> = new Set()): TreeNode => {
+        const buildClassTree = (classId: string, visited: Set<string> = new Set(), relInferred = false): TreeNode => {
             const n = nodeMap.get(classId)!;
             // Prevent cycles
             if (visited.has(classId)) {
-                return { id: classId, label: `${n.data.label} (cycle)`, type: n.data.type, children: [] };
+                return { id: classId, label: `${n.data.label} (cycle)`, type: n.data.type, children: [], isInferred: relInferred };
             }
             const newVisited = new Set(visited).add(classId);
 
             // Subclasses
             const childClasses = (subClassOf.get(classId) || [])
-                .map(cid => nodeMap.get(cid))
-                .filter(Boolean)
-                .map(c => buildClassTree(c!.id, newVisited));
+                .map(item => {
+                    const node = nodeMap.get(item.id);
+                    if (!node) return null;
+                    return buildClassTree(node.id, newVisited, item.isInferred);
+                })
+                .filter(Boolean) as TreeNode[];
             
             // Instances (Nested in Class Tree)
             const childInstances = (classInstances.get(classId) || [])
-                .map(iid => nodeMap.get(iid))
-                .filter(Boolean)
-                .map(i => ({
-                    id: i!.id,
-                    label: i!.data.label,
-                    type: ElementType.OWL_NAMED_INDIVIDUAL,
-                    children: []
-                }));
+                .map(item => {
+                    const node = nodeMap.get(item.id);
+                    if (!node) return null;
+                    return {
+                        id: node.id,
+                        label: node.data.label,
+                        type: ElementType.OWL_NAMED_INDIVIDUAL,
+                        children: [],
+                        isInferred: item.isInferred
+                    };
+                })
+                .filter(Boolean) as TreeNode[];
 
             // Sort: Classes then Instances, alphabetical
             const children = [
@@ -173,10 +184,12 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
                 id: n.id,
                 label: n.data.label,
                 type: n.data.type,
+                isInferred: relInferred,
                 children
             };
         };
 
+        // Note: Props tree simpler for now
         const buildPropTree = (propId: string, visited: Set<string> = new Set()): TreeNode => {
             const n = nodeMap.get(propId)!;
             if (visited.has(propId)) return { id: propId, label: n.data.label, type: n.data.type, children: [] };
@@ -242,7 +255,7 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
                         Ontology Hierarchy
                     </h2>
                     <p className="text-sm text-slate-500 mt-1">
-                        Hierarchical view of classes, properties, and individuals.
+                        Hierarchical view. Inferred relationships are marked in <span className="text-amber-400 italic">gold</span>.
                     </p>
                 </div>
 

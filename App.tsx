@@ -44,6 +44,7 @@ import { parseFunctionalSyntax } from './services/functionalSyntaxParser';
 import { parseManchesterSyntax } from './services/manchesterSyntaxParser';
 import { parseTurtle } from './services/rdfParser';
 import { parseRdfXml } from './services/rdfXmlParser';
+import { computeInferredEdges } from './services/reasonerService';
 
 const nodeTypes = {
   umlNode: UMLNode,
@@ -56,6 +57,11 @@ const Flow = () => {
   const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept'>('design');
   const [showIndividuals, setShowIndividuals] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Reasoner State
+  const [isReasonerActive, setIsReasonerActive] = useState(false);
+  const [showInferred, setShowInferred] = useState(false);
+  const [inferredEdges, setInferredEdges] = useState<Edge[]>([]);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -73,6 +79,28 @@ const Flow = () => {
       defaultPrefix: 'ex',
       rules: []
   });
+
+  // When model changes, invalidate inferred state
+  useEffect(() => {
+      if (isReasonerActive) {
+          setIsReasonerActive(false);
+          setShowInferred(false);
+          setInferredEdges([]);
+      }
+  }, [nodes, edges]);
+
+  const handleRunReasoner = useCallback(() => {
+      // 1. Compute Inferences
+      const inferred = computeInferredEdges(nodes, edges);
+      setInferredEdges(inferred);
+      setIsReasonerActive(true);
+      setShowInferred(true);
+  }, [nodes, edges]);
+
+  // Determine which edges to pass to visualizations
+  const activeEdges = useMemo(() => {
+      return showInferred ? inferredEdges : edges;
+  }, [showInferred, edges, inferredEdges]);
 
   // --- Filtering & Search Logic for Visibility ---
   
@@ -94,11 +122,16 @@ const Flow = () => {
   }, [nodes, showIndividuals]);
 
   const visibleEdges = useMemo(() => {
-      if (showIndividuals) return edges;
+      // If showing inferred, we use activeEdges (which are already computed). 
+      // Then filter by individual visibility if needed.
+      const baseEdges = activeEdges;
+      
+      if (showIndividuals) return baseEdges;
+      
       const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
       // Only show edges where both source and target are visible
-      return edges.filter(e => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target));
-  }, [edges, visibleNodes, showIndividuals]);
+      return baseEdges.filter(e => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target));
+  }, [activeEdges, visibleNodes, showIndividuals]);
 
   const onConnect = useCallback((params: Connection) => {
       setEdges((eds) => addEdge({ 
@@ -359,6 +392,10 @@ const Flow = () => {
         onToggleIndividuals={() => setShowIndividuals(!showIndividuals)}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
+        isReasonerActive={isReasonerActive}
+        onRunReasoner={handleRunReasoner}
+        showInferred={showInferred}
+        onToggleInferred={() => setShowInferred(!showInferred)}
       />
       
       <div className="flex flex-1 overflow-hidden">
@@ -368,7 +405,7 @@ const Flow = () => {
                 <div className="flex-1 h-full relative" onDrop={onDrop} onDragOver={onDragOver}>
                     <ReactFlow
                         nodes={visibleNodes}
-                        edges={visibleEdges}
+                        edges={visibleEdges} // Uses inferred if active
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
                         onConnect={onConnect}
@@ -405,6 +442,7 @@ const Flow = () => {
                         />
                         <Panel position="top-right" className="bg-slate-800/80 backdrop-blur-sm p-2 rounded text-xs text-slate-400 border border-slate-700/50 shadow-sm pointer-events-none select-none">
                             {projectMetadata.name} • {projectMetadata.defaultPrefix || 'ex'}
+                            {showInferred && <span className="ml-2 text-amber-400 font-bold">• Inferred View</span>}
                         </Panel>
                     </ReactFlow>
                 </div>
@@ -434,7 +472,7 @@ const Flow = () => {
             <div className="flex-1 h-full">
                 <GraphVisualization 
                     nodes={visibleNodes} 
-                    edges={visibleEdges} 
+                    edges={visibleEdges} // Inferred support
                     searchTerm={searchTerm}
                 />
             </div>
@@ -444,7 +482,7 @@ const Flow = () => {
             <div className="flex-1 h-full">
                 <ConceptGraph 
                     nodes={visibleNodes} 
-                    edges={visibleEdges} 
+                    edges={visibleEdges} // Inferred support
                     searchTerm={searchTerm}
                 />
             </div>
@@ -454,7 +492,7 @@ const Flow = () => {
             <div className="flex-1 h-full">
                 <MindmapVisualization 
                     nodes={visibleNodes} 
-                    edges={visibleEdges}
+                    edges={visibleEdges} // Inferred support
                     searchTerm={searchTerm}
                 />
             </div>
@@ -464,7 +502,7 @@ const Flow = () => {
             <div className="flex-1 h-full">
                 <TreeVisualization 
                     nodes={visibleNodes} 
-                    edges={visibleEdges} 
+                    edges={visibleEdges} // Inferred support
                     searchTerm={searchTerm}
                 />
             </div>
@@ -474,7 +512,7 @@ const Flow = () => {
             <div className="flex-1 h-full">
                 <UMLVisualization 
                     nodes={visibleNodes} 
-                    edges={visibleEdges} 
+                    edges={visibleEdges} // Inferred support
                     searchTerm={searchTerm}
                 />
             </div>
@@ -484,7 +522,7 @@ const Flow = () => {
             <div className="flex-1 h-full">
                 <PeirceVisualization 
                     nodes={visibleNodes} 
-                    edges={visibleEdges} 
+                    edges={visibleEdges} // Inferred support
                 />
             </div>
         )}

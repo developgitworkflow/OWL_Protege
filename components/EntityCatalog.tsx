@@ -36,7 +36,7 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
             if (n.data.type !== currentTabInfo.type) return false;
             if (searchTerm && !n.data.label.toLowerCase().includes(searchTerm.toLowerCase())) return false;
             return true;
-        }).sort((a, b) => a.data.label.localeCompare(b.data.label));
+        }).sort((a, b) => a.data.label.toLowerCase().localeCompare(b.data.label.toLowerCase()));
     }, [nodes, activeTab, searchTerm]);
 
     // --- Data Extraction Helpers ---
@@ -59,7 +59,7 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                     values: parentEdges.map(e => ({ 
                         label: getNodeLabel(e.target), 
                         inferred: e.data?.isInferred 
-                    })) 
+                    })).sort((a, b) => a.label.localeCompare(b.label)) 
                 });
             }
             // Disjointness
@@ -68,7 +68,7 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                  const disjoints = disjointEdges.map(e => ({
                      label: e.source === node.id ? getNodeLabel(e.target) : getNodeLabel(e.source),
                      inferred: e.data?.isInferred
-                 }));
+                 })).sort((a, b) => a.label.localeCompare(b.label));
                  rels.push({ type: 'Disjoint', values: disjoints });
             }
         }
@@ -83,7 +83,7 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                     values: typeEdges.map(e => ({
                         label: getNodeLabel(e.target),
                         inferred: e.data?.isInferred
-                    })) 
+                    })).sort((a, b) => a.label.localeCompare(b.label)) 
                 });
             }
         }
@@ -91,12 +91,12 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
         // 3. Properties
         if (node.data.type === ElementType.OWL_OBJECT_PROPERTY || node.data.type === ElementType.OWL_DATA_PROPERTY) {
             // Characteristics
-            const chars = node.data.attributes.map(a => ({ label: a.name, inferred: false }));
+            const chars = node.data.attributes.map(a => ({ label: a.name, inferred: false })).sort((a, b) => a.label.localeCompare(b.label));
             if (chars.length > 0) rels.push({ type: 'Flags', values: chars });
             
             // Domains/Ranges (Inferred edges might exist for these if reasoning expanded them, but usually they are axioms)
-            const domains = node.data.methods.filter(m => m.name.toLowerCase() === 'domain').map(m => ({ label: m.returnType, inferred: false }));
-            const ranges = node.data.methods.filter(m => m.name.toLowerCase() === 'range').map(m => ({ label: m.returnType, inferred: false }));
+            const domains = node.data.methods.filter(m => m.name.toLowerCase() === 'domain').map(m => ({ label: m.returnType, inferred: false })).sort((a, b) => a.label.localeCompare(b.label));
+            const ranges = node.data.methods.filter(m => m.name.toLowerCase() === 'range').map(m => ({ label: m.returnType, inferred: false })).sort((a, b) => a.label.localeCompare(b.label));
             
             if (domains.length > 0) rels.push({ type: 'Domain', values: domains });
             if (ranges.length > 0) rels.push({ type: 'Range', values: ranges });
@@ -282,6 +282,13 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                                         const rels = getRelationships(node);
                                         const description = getDescription(node);
                                         const isUnsatisfiable = unsatisfiableNodeIds.includes(node.id);
+                                        
+                                        // Sort axioms alphabetically for display consistency
+                                        const sortedMethods = [...node.data.methods].sort((a, b) => {
+                                            const typeCompare = a.name.localeCompare(b.name);
+                                            if (typeCompare !== 0) return typeCompare;
+                                            return a.returnType.localeCompare(b.returnType);
+                                        });
 
                                         return (
                                             <tr key={node.id} className="group hover:bg-slate-800/30 transition-colors">
@@ -344,12 +351,12 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                                                     )}
                                                     
                                                     {/* Axioms */}
-                                                    {node.data.methods.length > 0 && (
+                                                    {sortedMethods.length > 0 && (
                                                         <div className="space-y-1.5">
                                                             <div className="text-[10px] uppercase font-bold text-slate-600 mb-1 flex items-center gap-1">
                                                                 <BookOpen size={10} /> Formal Definition
                                                             </div>
-                                                            {node.data.methods.slice(0, 4).map((m, mIdx) => {
+                                                            {sortedMethods.slice(0, 4).map((m, mIdx) => {
                                                                 const { prefix, target, color } = getHumanReadableAxiom(m);
                                                                 const dlString = getDLAxiom(m, node.data.label);
                                                                 
@@ -367,15 +374,15 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({ nodes, edges, isReasonerA
                                                                     </div>
                                                                 );
                                                             })}
-                                                            {node.data.methods.length > 4 && (
+                                                            {sortedMethods.length > 4 && (
                                                                 <span className="text-[9px] text-slate-500 pl-2">
-                                                                    ... and {node.data.methods.length - 4} more axioms
+                                                                    ... and {sortedMethods.length - 4} more axioms
                                                                 </span>
                                                             )}
                                                         </div>
                                                     )}
                                                     
-                                                    {!description && node.data.methods.length === 0 && (
+                                                    {!description && sortedMethods.length === 0 && (
                                                         <span className="text-[10px] text-slate-600 italic">No description or axioms</span>
                                                     )}
                                                 </td>

@@ -95,6 +95,9 @@ function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [confirmConfig, setConfirmConfig] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
 
+  // Hooks
+  const { screenToFlowPosition } = useReactFlow();
+
   // --- Handlers ---
 
   const addToast = (message: string, type: ToastType = 'info') => {
@@ -141,6 +144,56 @@ function App() {
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
   }, []);
+
+  // --- Drag & Drop Handlers ---
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+
+      const type = event.dataTransfer.getData('application/reactflow');
+      const elementType = event.dataTransfer.getData('application/elementType') as ElementType;
+
+      // check if the dropped element is valid
+      if (typeof type === 'undefined' || !type || !elementType) {
+        return;
+      }
+
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      let label = 'New Entity';
+      if (elementType === ElementType.OWL_CLASS) label = 'NewClass';
+      else if (elementType === ElementType.OWL_NAMED_INDIVIDUAL) label = 'NewIndividual';
+      else if (elementType === ElementType.OWL_OBJECT_PROPERTY) label = 'newProp';
+      else if (elementType === ElementType.OWL_DATA_PROPERTY) label = 'newDataProp';
+      else if (elementType === ElementType.OWL_DATATYPE) label = 'string';
+
+      const newNode: Node<UMLNodeData> = {
+        id: `node-${Date.now()}`,
+        type,
+        position,
+        data: { 
+            label: label, 
+            type: elementType,
+            attributes: [],
+            methods: [] 
+        },
+      };
+
+      setNodes((nds) => nds.concat(newNode));
+      setSelectedNodeId(newNode.id);
+      setSelectedEdgeId(null);
+      addToast(`Created ${label}`, 'success');
+    },
+    [screenToFlowPosition, setNodes]
+  );
 
   const handleNavigate = (view: string, id?: string) => {
     setViewMode(view as any);
@@ -492,6 +545,8 @@ function App() {
                         onNodeClick={onNodeClick}
                         onEdgeClick={onEdgeClick}
                         onPaneClick={onPaneClick}
+                        onDrop={onDrop}
+                        onDragOver={onDragOver}
                         nodeTypes={nodeTypes}
                         fitView
                         className="bg-slate-950"
@@ -621,6 +676,7 @@ function App() {
                 <PropertiesPanel 
                     selectedNode={selectedNode}
                     selectedEdge={selectedEdge}
+                    allNodes={nodes}
                     onUpdateNode={handleUpdateNode}
                     onUpdateEdge={handleUpdateEdge}
                     onDeleteNode={handleDeleteNode}

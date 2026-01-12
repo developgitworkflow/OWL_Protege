@@ -1,13 +1,14 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Node as FlowNode, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Annotation, Method } from '../types';
-import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag, ArrowRightLeft } from 'lucide-react';
+import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag, ArrowRightLeft, Sparkles, Command } from 'lucide-react';
 import AnnotationManager from './AnnotationManager';
 
 interface PropertiesPanelProps {
   selectedNode: FlowNode<UMLNodeData> | null;
   selectedEdge?: Edge | null;
+  allNodes: FlowNode<UMLNodeData>[];
   onUpdateNode: (id: string, data: UMLNodeData) => void;
   onUpdateEdge?: (id: string, label: string) => void;
   onDeleteNode: (id: string) => void;
@@ -36,18 +37,11 @@ const VISIBILITY_OPTIONS = [
     { value: '~', label: 'Package', icon: Box, color: 'text-blue-400', desc: 'Visible in package' },
 ];
 
-const MANCHESTER_TEMPLATES = [
-    { label: 'Intersection (AND)', code: ' and ', desc: 'Combine classes (A and B)' },
-    { label: 'Union (OR)', code: ' or ', desc: 'Choice of classes (A or B)' },
-    { label: 'Complement (NOT)', code: 'not ', desc: 'Negation (not A)' },
-    { label: 'Existential (Some)', code: ' some ', desc: 'At least one relation (p some C)' },
-    { label: 'Universal (Only)', code: ' only ', desc: 'All relations must be type (p only C)' },
-    { label: 'Value', code: ' value ', desc: 'Specific instance (p value i)' },
-    { label: 'Min Card.', code: ' min 1 ', desc: 'At least n (p min 1 C)' },
-    { label: 'Max Card.', code: ' max 1 ', desc: 'At most n (p max 1 C)' },
-    { label: 'Exact Card.', code: ' exactly 1 ', desc: 'Exactly n (p exactly 1 C)' },
-    { label: 'Self', code: ' some self', desc: 'Reflexive (p some self)' },
+const MANCHESTER_KEYWORDS = [
+    'some', 'only', 'value', 'min', 'max', 'exactly', 'that', 'not', 'and', 'or', 'self'
 ];
+
+// --- Subcomponents ---
 
 const VisibilitySelector: React.FC<{ value: string; onChange: (val: string) => void }> = ({ value, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -99,7 +93,161 @@ const VisibilitySelector: React.FC<{ value: string; onChange: (val: string) => v
     );
 };
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selectedEdge, onUpdateNode, onUpdateEdge, onDeleteNode, onDeleteEdge, onCreateIndividual, onClose }) => {
+// --- Smart Axiom Input ---
+
+interface AxiomInputProps {
+    value: string;
+    onChange: (val: string) => void;
+    placeholder?: string;
+    allNodes: FlowNode<UMLNodeData>[];
+}
+
+const AxiomInput: React.FC<AxiomInputProps> = ({ value, onChange, placeholder, allNodes }) => {
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [cursorIdx, setCursorIdx] = useState(0);
+    const [matchToken, setMatchToken] = useState('');
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const suggestions = useMemo(() => {
+        if (!matchToken) return [];
+        const term = matchToken.toLowerCase();
+        
+        const entities = allNodes
+            .filter(n => n.data.label.toLowerCase().includes(term))
+            .map(n => ({ label: n.data.label, type: n.data.type, isKeyword: false }));
+            
+        const keywords = MANCHESTER_KEYWORDS
+            .filter(k => k.startsWith(term))
+            .map(k => ({ label: k, type: 'keyword', isKeyword: true }));
+            
+        return [...keywords, ...entities].slice(0, 5);
+    }, [matchToken, allNodes]);
+
+    const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const val = e.target.value;
+        const pos = e.target.selectionEnd;
+        onChange(val);
+
+        // Detect word before cursor
+        const left = val.slice(0, pos);
+        const match = left.match(/([a-zA-Z0-9_:]+)$/);
+        
+        if (match) {
+            setMatchToken(match[1]);
+            setShowSuggestions(true);
+            setCursorIdx(0);
+        } else {
+            setShowSuggestions(false);
+        }
+    };
+
+    const insertToken = (token: string) => {
+        if (!textareaRef.current) return;
+        const pos = textareaRef.current.selectionEnd;
+        const val = value;
+        const left = val.slice(0, pos);
+        const right = val.slice(pos);
+        
+        // If replacing a token
+        const match = left.match(/([a-zA-Z0-9_:]+)$/);
+        let newLeft = left;
+        if (match && showSuggestions) {
+            newLeft = left.slice(0, match.index) + token;
+        } else {
+            newLeft = left + (left.endsWith(' ') ? '' : ' ') + token;
+        }
+        
+        onChange(newLeft + (right.startsWith(' ') ? '' : ' ') + right);
+        setShowSuggestions(false);
+        textareaRef.current.focus();
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (showSuggestions && suggestions.length > 0) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setCursorIdx(i => (i + 1) % suggestions.length);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setCursorIdx(i => (i - 1 + suggestions.length) % suggestions.length);
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                insertToken(suggestions[cursorIdx].label);
+            } else if (e.key === 'Escape') {
+                setShowSuggestions(false);
+            }
+        }
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+        if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+            setShowSuggestions(false);
+        }
+    };
+
+    useEffect(() => {
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const getTypeColor = (type: string) => {
+        if (type === 'keyword') return 'text-amber-400';
+        if (type === ElementType.OWL_CLASS) return 'text-purple-400';
+        if (type === ElementType.OWL_NAMED_INDIVIDUAL) return 'text-pink-400';
+        return 'text-blue-400';
+    };
+
+    return (
+        <div className="relative w-full group/input" ref={containerRef}>
+            {/* Syntax Toolbar */}
+            <div className="flex gap-1 mb-1.5 opacity-0 group-focus-within/input:opacity-100 group-hover/input:opacity-100 transition-opacity absolute bottom-full left-0 bg-slate-900/90 p-1 rounded-t-md border border-b-0 border-slate-700 pointer-events-none group-focus-within/input:pointer-events-auto">
+                {['some', 'only', 'and', 'or', 'not'].map(kw => (
+                    <button 
+                        key={kw} 
+                        onClick={() => insertToken(kw)}
+                        className="px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-400 hover:text-amber-300 hover:bg-slate-800 rounded transition-colors"
+                    >
+                        {kw}
+                    </button>
+                ))}
+            </div>
+
+            <textarea
+                ref={textareaRef}
+                value={value}
+                onChange={handleInput}
+                onKeyDown={handleKeyDown}
+                placeholder={placeholder}
+                rows={1}
+                className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-[11px] text-slate-300 font-mono focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 resize-none overflow-hidden min-h-[28px]"
+                style={{ height: Math.max(28, value.split('\n').length * 18) + 'px' }}
+            />
+
+            {/* Suggestions Dropdown */}
+            {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 w-full z-50 mt-1 bg-slate-800 border border-slate-700 rounded-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-75">
+                    {suggestions.map((item, i) => (
+                        <button
+                            key={i}
+                            onClick={() => insertToken(item.label)}
+                            className={`w-full text-left px-3 py-1.5 text-[10px] flex items-center justify-between font-mono transition-colors ${i === cursorIdx ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-700'}`}
+                        >
+                            <span>{item.label}</span>
+                            <span className={`text-[8px] uppercase tracking-wider ${i === cursorIdx ? 'text-blue-200' : getTypeColor(item.type)}`}>
+                                {item.isKeyword ? 'KW' : item.type.replace('owl_', '').replace('named_', '')}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- Main Component ---
+
+const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selectedEdge, allNodes, onUpdateNode, onUpdateEdge, onDeleteNode, onDeleteEdge, onCreateIndividual, onClose }) => {
   const [localData, setLocalData] = useState<UMLNodeData | null>(null);
   const [edgeLabel, setEdgeLabel] = useState('');
   const [activeAttrType, setActiveAttrType] = useState<string | null>(null);
@@ -265,7 +413,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
   };
 
   // --- Axioms / Methods Helper ---
-  const addMethod = (type: string, defaultTarget = 'Target') => {
+  const addMethod = (type: string, defaultTarget = '') => {
     const newMethod = { 
         id: `method-${Date.now()}-${Math.random()}`, 
         name: type, 
@@ -293,15 +441,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
       onUpdateNode(selectedNode.id, newData);
   };
 
-  const appendToMethodTarget = (methodId: string, textToAppend: string) => {
-      const method = localData.methods.find(m => m.id === methodId);
-      if (method) {
-          const current = method.returnType === 'Target' ? '' : method.returnType;
-          const newValue = `${current.trim()} ${textToAppend} `;
-          updateMethod(methodId, 'returnType', newValue);
-      }
-  };
-
   // --- Render Helpers ---
 
   const renderAxiomGroup = (title: string, types: string[], icon?: React.ReactNode, placeholder = 'Target', ordered = false) => {
@@ -325,11 +464,11 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
                       <div key={method.id} className="bg-slate-950 border border-slate-800 rounded-lg p-2 group hover:border-slate-700 transition-colors">
                           <div className="flex items-start gap-2">
                               <div className="flex-1">
-                                  <input
-                                      className="w-full bg-transparent text-xs text-slate-200 focus:outline-none placeholder-slate-700 font-mono"
+                                  <AxiomInput
                                       value={method.returnType}
-                                      onChange={(e) => updateMethod(method.id, 'returnType', e.target.value)}
+                                      onChange={(val) => updateMethod(method.id, 'returnType', val)}
                                       placeholder={placeholder}
+                                      allNodes={allNodes}
                                   />
                               </div>
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -606,66 +745,45 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
                     <div className="space-y-2">
                         {localData.methods?.map((method) => (
                              <div key={method.id} className="relative">
-                                 <div className={`bg-slate-950 border border-slate-800 rounded-lg p-2 group hover:border-slate-700 transition-colors flex gap-2 items-center ${showSyntaxHelp === method.id ? 'ring-1 ring-purple-500/50 border-purple-500/30' : ''}`}>
+                                 <div className={`bg-slate-950 border border-slate-800 rounded-lg p-2 group hover:border-slate-700 transition-colors flex gap-2 items-start ${showSyntaxHelp === method.id ? 'ring-1 ring-purple-500/50 border-purple-500/30' : ''}`}>
                                      {/* Optional Visibility for Axioms/Operations */}
-                                     <VisibilitySelector 
-                                        value={method.visibility} 
-                                        onChange={(v) => updateMethod(method.id, 'visibility', v)} 
-                                    />
-
-                                     <input 
-                                         className="w-1/3 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[10px] text-purple-300 font-mono"
-                                         value={method.name}
-                                         onChange={(e) => updateMethod(method.id, 'name', e.target.value)}
-                                     />
-                                     <ArrowRight size={10} className="text-slate-600" />
-                                     <div className="flex-1 relative">
-                                        <input 
-                                            className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[10px] text-slate-300 font-mono"
-                                            value={method.returnType}
-                                            onChange={(e) => updateMethod(method.id, 'returnType', e.target.value)}
-                                            placeholder="Target or Expression"
+                                     <div className="mt-0.5">
+                                        <VisibilitySelector 
+                                            value={method.visibility} 
+                                            onChange={(v) => updateMethod(method.id, 'visibility', v)} 
                                         />
                                      </div>
-                                     
-                                     {/* Manchester Syntax Toggle */}
-                                     {isClassNode && (
-                                         <button 
-                                            onClick={() => setShowSyntaxHelp(showSyntaxHelp === method.id ? null : method.id)}
-                                            className={`p-1 rounded ${showSyntaxHelp === method.id ? 'text-purple-400 bg-purple-900/20' : 'text-slate-600 hover:text-purple-400'}`}
-                                            title="Manchester Syntax Helper"
-                                         >
-                                             <BookOpen size={12} />
-                                         </button>
-                                     )}
 
-                                     <button onClick={() => toggleExpand(method.id)} className={`text-slate-500 hover:text-blue-400 ${expandedId === method.id ? 'text-blue-400' : ''}`}><Quote size={12}/></button>
-                                     <button onClick={() => removeMethod(method.id)} className="text-slate-600 hover:text-red-400"><X size={12}/></button>
-                                 </div>
-                                 
-                                 {/* Manchester Syntax Guide */}
-                                 {showSyntaxHelp === method.id && (
-                                     <div className="mt-1 mb-3 bg-slate-900 border border-slate-700 rounded-md p-2 shadow-xl animate-in slide-in-from-top-1 fade-in z-20">
-                                         <div className="flex justify-between items-center mb-2 pb-1 border-b border-slate-800">
-                                             <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1">
-                                                 <BookOpen size={10} /> Class Expression Syntax
-                                             </span>
-                                             <button onClick={() => setShowSyntaxHelp(null)} className="text-slate-500 hover:text-slate-300"><X size={10} /></button>
+                                     <div className="flex-1 flex flex-col gap-1.5">
+                                         <div className="flex gap-2 items-center">
+                                            <select 
+                                                className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[10px] text-purple-300 font-bold font-mono focus:outline-none focus:border-purple-500"
+                                                value={method.name}
+                                                onChange={(e) => updateMethod(method.id, 'name', e.target.value)}
+                                            >
+                                                <option value="SubClassOf">SubClassOf</option>
+                                                <option value="EquivalentTo">EquivalentTo</option>
+                                                <option value="DisjointWith">DisjointWith</option>
+                                                <option value="Type">Type (Instance)</option>
+                                                <option value="SameAs">SameAs</option>
+                                            </select>
+                                            <ArrowRight size={10} className="text-slate-600" />
                                          </div>
-                                         <div className="grid grid-cols-2 gap-1 max-h-48 overflow-y-auto pr-1">
-                                             {MANCHESTER_TEMPLATES.map((tpl, i) => (
-                                                 <button 
-                                                    key={i}
-                                                    onClick={() => appendToMethodTarget(method.id, tpl.code)}
-                                                    className="text-left px-2 py-1.5 rounded bg-slate-800 hover:bg-slate-700 hover:text-purple-300 group transition-colors"
-                                                 >
-                                                     <div className="text-[10px] font-mono text-purple-400 group-hover:text-purple-200">{tpl.label}</div>
-                                                     <div className="text-[9px] text-slate-500 truncate">{tpl.desc}</div>
-                                                 </button>
-                                             ))}
+                                         <div className="relative">
+                                            <AxiomInput 
+                                                value={method.returnType}
+                                                onChange={(val) => updateMethod(method.id, 'returnType', val)}
+                                                placeholder="Expression (e.g. hasPart some Wheel)"
+                                                allNodes={allNodes}
+                                            />
                                          </div>
                                      </div>
-                                 )}
+                                     
+                                     <div className="flex flex-col gap-1">
+                                        <button onClick={() => toggleExpand(method.id)} className={`text-slate-500 hover:text-blue-400 ${expandedId === method.id ? 'text-blue-400' : ''}`}><Quote size={14}/></button>
+                                        <button onClick={() => removeMethod(method.id)} className="text-slate-600 hover:text-red-400"><X size={14}/></button>
+                                     </div>
+                                 </div>
 
                                  {expandedId === method.id && (
                                     <div className="mt-2 bg-slate-900 border border-slate-700 z-10 p-2 rounded shadow-xl">

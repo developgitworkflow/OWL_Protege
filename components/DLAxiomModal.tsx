@@ -1,6 +1,6 @@
 
-import React, { useState, useMemo, useRef } from 'react';
-import { X, Sigma, BookOpen, Database, User, ArrowRightLeft, Info, Plus, Check, ListFilter } from 'lucide-react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { X, Sigma, BookOpen, Database, User, ArrowRightLeft, Info, Plus, Check, ListFilter, Tag, Command } from 'lucide-react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
 
@@ -11,6 +11,10 @@ interface DLAxiomModalProps {
   edges: Edge[];
   onUpdateOntology: (nodes: Node<UMLNodeData>[], edges: Edge[]) => void;
 }
+
+const MANCHESTER_KEYWORDS = [
+    'and', 'or', 'not', 'some', 'only', 'value', 'min', 'max', 'exactly', 'that', 'self'
+];
 
 // --- DL Conversion Helpers ---
 
@@ -123,6 +127,11 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
   const [newPredicate, setNewPredicate] = useState('SubClassOf');
   const [newObject, setNewObject] = useState('');
 
+  // Intellisense State
+  const [suggestions, setSuggestions] = useState<{label: string, type: string}[]>([]);
+  const [activeInput, setActiveInput] = useState<'subject' | 'object' | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
   const handleMouseMove = (e: React.MouseEvent, text: string) => {
       if (!modalRef.current) return;
       const rect = modalRef.current.getBoundingClientRect();
@@ -138,6 +147,105 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
   const insertSymbol = (sym: string) => {
       setNewObject(prev => prev + sym);
   };
+
+  // --- Intellisense Logic ---
+
+  const getEntitySuggestions = (query: string) => {
+      const q = query.toLowerCase();
+      return nodes
+          .filter(n => n.data.label.toLowerCase().includes(q))
+          .map(n => ({ 
+              label: n.data.label, 
+              type: n.data.type === ElementType.OWL_CLASS ? 'Class' : 
+                    n.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'Individual' : 'Property' 
+          }));
+  };
+
+  const handleSubjectChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value;
+      setNewSubject(val);
+      if (val.length > 0) {
+          const matches = getEntitySuggestions(val);
+          setSuggestions(matches.slice(0, 8));
+          setActiveInput('subject');
+          setSelectedIndex(0);
+      } else {
+          setSuggestions([]);
+          setActiveInput(null);
+      }
+  };
+
+  const handleObjectChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value;
+      setNewObject(val);
+      
+      // Suggest based on the last word being typed
+      // Split by spaces or parens, but keep delimiters to reconstruct logic
+      const words = val.split(/([\s()]+)/);
+      const lastToken = words[words.length - 1];
+      
+      if (lastToken && lastToken.trim().length > 0) {
+          const q = lastToken.toLowerCase();
+          const entityMatches = getEntitySuggestions(lastToken);
+          const keywordMatches = MANCHESTER_KEYWORDS
+              .filter(k => k.startsWith(q))
+              .map(k => ({ label: k, type: 'Keyword' }));
+          
+          const allMatches = [...keywordMatches, ...entityMatches].slice(0, 8);
+          if (allMatches.length > 0) {
+              setSuggestions(allMatches);
+              setActiveInput('object');
+              setSelectedIndex(0);
+          } else {
+              setSuggestions([]);
+              setActiveInput(null);
+          }
+      } else {
+          setSuggestions([]);
+          setActiveInput(null);
+      }
+  };
+
+  const applySuggestion = (suggestion: {label: string}) => {
+      if (activeInput === 'subject') {
+          setNewSubject(suggestion.label);
+      } else if (activeInput === 'object') {
+          // Replace only the last token
+          const words = newObject.split(/(\s+|[()])/);
+          // Find last non-empty token index
+          let i = words.length - 1;
+          while (i >= 0 && !words[i]) i--; 
+          
+          if (i >= 0) {
+              words[i] = suggestion.label + ' '; // Add space for convenience
+              setNewObject(words.join(''));
+          } else {
+              setNewObject(suggestion.label + ' ');
+          }
+      }
+      setSuggestions([]);
+      setActiveInput(null);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (suggestions.length > 0) {
+          if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              setSelectedIndex(prev => (prev + 1) % suggestions.length);
+          } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              setSelectedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
+          } else if (e.key === 'Enter' || e.key === 'Tab') {
+              e.preventDefault();
+              applySuggestion(suggestions[selectedIndex]);
+          } else if (e.key === 'Escape') {
+              setSuggestions([]);
+              setActiveInput(null);
+          }
+      }
+  };
+
+  // --- End Intellisense ---
 
   const handleAddAxiom = () => {
       if (!newSubject.trim() || !newObject.trim()) return;
@@ -348,6 +456,17 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
       return { tbox, rbox, abox };
   }, [nodes, edges]);
 
+  // Helper to get suggestion icon
+  const getSuggestionIcon = (type: string) => {
+      switch(type) {
+          case 'Class': return <Database size={10} className="text-purple-400" />;
+          case 'Individual': return <User size={10} className="text-pink-400" />;
+          case 'Property': return <ArrowRightLeft size={10} className="text-blue-400" />;
+          case 'Keyword': return <Command size={10} className="text-amber-400" />;
+          default: return <Info size={10} />;
+      }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -429,13 +548,31 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                             <h3 className="text-xs font-bold text-slate-300 uppercase">Construct Axiom</h3>
                             <button onClick={() => setIsAdding(false)} className="text-slate-500 hover:text-white"><X size={14}/></button>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <input 
-                                className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 w-1/4 outline-none focus:border-blue-500 placeholder-slate-600"
-                                placeholder="Subject (e.g. Person)"
-                                value={newSubject}
-                                onChange={(e) => setNewSubject(e.target.value)}
-                            />
+                        <div className="flex items-center gap-2 relative">
+                            {/* Subject Input */}
+                            <div className="relative w-1/4">
+                                <input 
+                                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder-slate-600"
+                                    placeholder="Subject (e.g. Person)"
+                                    value={newSubject}
+                                    onChange={handleSubjectChange}
+                                    onKeyDown={handleKeyDown}
+                                />
+                                {activeInput === 'subject' && suggestions.length > 0 && (
+                                    <div className="absolute top-full left-0 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 mt-1 max-h-40 overflow-y-auto">
+                                        {suggestions.map((s, i) => (
+                                            <button 
+                                                key={i} 
+                                                className={`w-full text-left px-2 py-1.5 text-xs flex items-center gap-2 ${i === selectedIndex ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
+                                                onClick={() => applySuggestion(s)}
+                                            >
+                                                {getSuggestionIcon(s.type)}
+                                                {s.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                             
                             <select 
                                 className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-blue-400 font-bold outline-none focus:border-blue-500"
@@ -448,15 +585,33 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                                 <option value="Type">: (Instance Of)</option>
                             </select>
 
+                            {/* Object Input */}
                             <div className="flex-1 relative group">
                                 <input 
                                     className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500 font-mono placeholder-slate-600"
                                     placeholder="Expression (e.g. ∃hasChild.Person)"
                                     value={newObject}
-                                    onChange={(e) => setNewObject(e.target.value)}
+                                    onChange={handleObjectChange}
+                                    onKeyDown={handleKeyDown}
                                 />
+                                
+                                {activeInput === 'object' && suggestions.length > 0 && (
+                                    <div className="absolute top-full left-0 min-w-[200px] bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 mt-1 max-h-40 overflow-y-auto">
+                                        {suggestions.map((s, i) => (
+                                            <button 
+                                                key={i} 
+                                                className={`w-full text-left px-2 py-1.5 text-xs flex items-center gap-2 ${i === selectedIndex ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
+                                                onClick={() => applySuggestion(s)}
+                                            >
+                                                {getSuggestionIcon(s.type)}
+                                                <span className="font-mono">{s.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
                                 {/* Symbol Palette */}
-                                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-focus-within:opacity-100 transition-opacity bg-slate-950/80 p-0.5 rounded">
+                                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-focus-within:opacity-100 transition-opacity bg-slate-950/80 p-0.5 rounded pointer-events-none group-hover:pointer-events-auto">
                                     <button onClick={() => insertSymbol('∃')} className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-blue-600 rounded text-[10px] text-white">∃</button>
                                     <button onClick={() => insertSymbol('∀')} className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-blue-600 rounded text-[10px] text-white">∀</button>
                                     <button onClick={() => insertSymbol('⊓')} className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-blue-600 rounded text-[10px] text-white">⊓</button>

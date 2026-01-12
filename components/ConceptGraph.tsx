@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, Layers, X, Brain, ArrowRight, Tag, Info, BookOpen, Quote, Key, GitCommit, Split, Shield, Globe, List, FolderTree, Box } from 'lucide-react';
+import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, Layers, X, Brain, ArrowRight, Tag, Info, BookOpen, Quote, Key, GitCommit, Split, Shield, Globe, List, FolderTree, Box, Sigma, User } from 'lucide-react';
 
 interface ConceptGraphProps {
     nodes: Node<UMLNodeData>[];
@@ -28,6 +28,7 @@ interface SimNode extends d3.SimulationNodeDatum {
     isProperty: boolean;
     x?: number;
     y?: number;
+    iri?: string;
 }
 
 interface SimLink extends d3.SimulationLinkDatum<SimNode> {
@@ -67,10 +68,55 @@ const THEME = {
     bg: '#0f172a'            // Slate-950
 };
 
+// --- DL Helper Functions ---
+const toDL = (expr: string): string => {
+    if (!expr) return '';
+    let dl = expr;
+    dl = dl.replace(/\band\b/gi, '⊓');
+    dl = dl.replace(/\bor\b/gi, '⊔');
+    dl = dl.replace(/\bnot\b/gi, '¬');
+    dl = dl.replace(/\bsome\b/gi, '∃');
+    dl = dl.replace(/\bonly\b/gi, '∀');
+    dl = dl.replace(/\bvalue\b/gi, '∋');
+    dl = dl.replace(/\bmin\s+(\d+)/gi, '≥$1');
+    dl = dl.replace(/\bmax\s+(\d+)/gi, '≤$1');
+    dl = dl.replace(/\bexactly\s+(\d+)/gi, '=$1');
+    dl = dl.replace(/\bself\b/gi, 'Self');
+    
+    // Clean up spaces around operators
+    dl = dl.replace(/\s*⊓\s*/g, ' ⊓ ');
+    dl = dl.replace(/\s*⊔\s*/g, ' ⊔ ');
+    
+    return dl;
+};
+
+const formatDLAxiom = (methodName: string, subject: string, objectStr: string) => {
+    const type = methodName.toLowerCase().replace(/[^a-z]/g, '');
+    const o = toDL(objectStr);
+    
+    switch (type) {
+        case 'subclassof': return `${subject} ⊑ ${o}`;
+        case 'equivalentto':
+        case 'equivalentclass': return `${subject} ≡ ${o}`;
+        case 'disjointwith': return `${subject} ⊓ ${o} ⊑ ⊥`;
+        
+        case 'subpropertyof': return `${subject} ⊑ ${o}`;
+        case 'inverseof': return `${subject} ≡ ${o}⁻`;
+        case 'domain': return `∃${subject}.⊤ ⊑ ${o}`;
+        case 'range': return `⊤ ⊑ ∀${subject}.${o}`;
+        
+        case 'type': return `${o}(${subject})`;
+        case 'sameas': return `${subject} = ${o}`;
+        case 'differentfrom': return `${subject} ≠ ${o}`;
+        
+        default: return `${subject} ${methodName} ${o}`;
+    }
+};
+
 const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = '', selectedNodeId, onNavigate }) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const [tooltip, setTooltip] = useState<{x: number, y: number, content: string} | null>(null);
+    const [tooltip, setTooltip] = useState<{x: number, y: number, content: React.ReactNode} | null>(null);
     const [showAttributes, setShowAttributes] = useState(false);
     const [selectedEntity, setSelectedEntity] = useState<SimNode | null>(null);
 
@@ -118,7 +164,8 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                 textColor: THEME.text,
                 isProperty: false,
                 x: n.position.x + 100,
-                y: n.position.y + 100
+                y: n.position.y + 100,
+                iri: n.data.iri
             };
             
             simNodes.push(sNode);
@@ -428,16 +475,82 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
         node.on('mouseenter', (event, d) => {
             const rect = containerRef.current?.getBoundingClientRect();
-            if (rect) setTooltip({ x: event.clientX - rect.left, y: event.clientY - rect.top, content: d.label });
-        }).on('mouseleave', () => setTooltip(null));
+            if (rect) {
+                setTooltip({
+                    x: event.clientX - rect.left,
+                    y: event.clientY - rect.top,
+                    content: (
+                        <div className="flex flex-col gap-1">
+                            <div className="font-bold text-sm">{d.label}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{d.iri || d.id}</div>
+                            <div className="text-[10px] bg-slate-800 rounded px-1 w-fit border border-slate-700 flex items-center gap-1">
+                                {d.type === 'class' ? <Database size={10} className="text-indigo-400"/> : <User size={10} className="text-pink-400"/>}
+                                {d.type === 'class' ? 'Class' : 'Individual'}
+                            </div>
+                        </div>
+                    )
+                });
+            }
+        }).on("mouseleave", () => setTooltip(null));
 
         simulation.on("tick", () => {
             linkPath.attr("d", (d: any) => `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`);
+            linkLabelGroup.attr("transform", (d: any) => `translate(${(d.source.x + d.target.x)/2},${(d.source.y + d.target.y)/2})`);
             node.attr("transform", d => `translate(${d.x},${d.y})`);
+
+            // --- Update Group Boxes ---
+            const padding = 40;
+
+            // Classes Box
+            const classes = simNodes.filter(n => n.type === 'class');
+            if (classes.length > 0) {
+                const xMin = d3.min(classes, n => (n.x || 0) - (n.width || 0)/2) || 0;
+                const xMax = d3.max(classes, n => (n.x || 0) + (n.width || 0)/2) || 0;
+                const yMin = d3.min(classes, n => (n.y || 0) - (n.height || 0)/2) || 0;
+                const yMax = d3.max(classes, n => (n.y || 0) + (n.height || 0)/2) || 0;
+                
+                classBoxGroup.style("display", "block");
+                classBoxRect
+                    .attr("x", xMin - padding)
+                    .attr("y", yMin - padding - 10)
+                    .attr("width", Math.max(200, xMax - xMin + padding * 2))
+                    .attr("height", yMax - yMin + padding * 2 + 10);
+                
+                classBoxLabel
+                    .attr("x", xMin - padding + 10)
+                    .attr("y", yMin - padding - 20);
+            } else {
+                classBoxGroup.style("display", "none");
+            }
+
+            // Individuals Box
+            const indivs = simNodes.filter(n => n.type === 'individual');
+            if (indivs.length > 0) {
+                const xMin = d3.min(indivs, n => (n.x || 0) - (n.radius || 20)) || 0;
+                const xMax = d3.max(indivs, n => (n.x || 0) + (n.radius || 20)) || 0;
+                const yMin = d3.min(indivs, n => (n.y || 0) - (n.radius || 20)) || 0;
+                const yMax = d3.max(indivs, n => (n.y || 0) + (n.radius || 20)) || 0;
+                
+                indivBoxGroup.style("display", "block");
+                indivBoxRect
+                    .attr("x", xMin - padding)
+                    .attr("y", yMin - padding - 10)
+                    .attr("width", Math.max(200, xMax - xMin + padding * 2))
+                    .attr("height", yMax - yMin + padding * 2 + 10);
+                
+                indivBoxLabel
+                    .attr("x", xMin - padding + 10)
+                    .attr("y", yMin - padding - 20);
+            } else {
+                indivBoxGroup.style("display", "none");
+            }
         });
 
-        return () => { simulation.stop(); };
-    }, [nodes, edges, searchTerm, showAttributes, selectedNodeId]);
+        return () => {
+            simulation.stop();
+        };
+
+    }, [nodes, edges, searchTerm, showAttributes, selectedNodeId]); // Re-run on selection
 
     const handleZoomIn = () => { if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 1.3); };
     const handleZoomOut = () => { if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 0.7); };
@@ -446,6 +559,20 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
              const width = containerRef.current.clientWidth;
              const height = containerRef.current.clientHeight;
              d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().transform as any, d3.zoomIdentity.translate(width/2, height/2).scale(1).translate(-width/2, -height/2));
+        }
+    };
+
+    const handleDownload = () => {
+        if (!containerRef.current) return;
+        const svg = containerRef.current.querySelector('svg');
+        if (svg) {
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'ontomap.svg';
+            link.click();
         }
     };
 
@@ -513,6 +640,20 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
     }, [selectedEntity, nodes, edges]);
 
     const getNodeLabel = (id: string) => nodes.find(n => n.id === id)?.data.label || id;
+
+    // Focus Logic
+    useEffect(() => {
+        if (selectedNodeId && svgRef.current && containerRef.current && simulationRef.current) {
+            const node = simulationRef.current.nodes().find(n => n.originalId === selectedNodeId);
+            if (node && node.x !== undefined && node.y !== undefined) {
+                const width = containerRef.current.clientWidth;
+                const height = containerRef.current.clientHeight;
+                const scale = 1.2;
+                const transform = d3.zoomIdentity.translate(width / 2, height / 2).scale(scale).translate(-node.x, -node.y);
+                d3.select(svgRef.current).transition().duration(750).call(d3.zoom<SVGSVGElement, unknown>().transform as any, transform);
+            }
+        }
+    }, [selectedNodeId]);
 
     return (
         <div ref={containerRef} className="relative w-full h-full bg-slate-950 overflow-hidden">
@@ -630,6 +771,10 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                                                 <span className="text-indigo-400 font-bold text-[10px] uppercase">{method.name}</span>
                                             </div>
                                             <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">{highlightSyntax(method.returnType)}</div>
+                                            <div className="mt-1 pt-1 border-t border-indigo-900/20 text-[10px] text-slate-500 font-serif flex items-center gap-1">
+                                                <Sigma size={10} /> <span className="italic">DL:</span>
+                                                <span className="text-slate-400">{formatDLAxiom(method.name, selectedEntity.label, method.returnType)}</span>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -648,6 +793,12 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                                                 <span className={`font-bold text-[10px] uppercase ${method.isCharacteristic ? 'text-emerald-400' : 'text-blue-400'}`}>{method.name}{method.isCharacteristic ? ' Property' : ''}</span>
                                             </div>
                                             {!method.isCharacteristic && <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">{highlightSyntax(method.returnType)}</div>}
+                                            {!method.isCharacteristic && (
+                                                <div className="mt-1 pt-1 border-t border-blue-900/20 text-[10px] text-slate-500 font-serif flex items-center gap-1">
+                                                    <Sigma size={10} /> <span className="italic">DL:</span>
+                                                    <span className="text-slate-400">{formatDLAxiom(method.name, selectedEntity.label, method.returnType)}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -664,6 +815,10 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                                                 <span className="text-pink-400 font-bold text-[10px] uppercase">{method.name}</span>
                                             </div>
                                             <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">{highlightSyntax(method.returnType)}</div>
+                                            <div className="mt-1 pt-1 border-t border-pink-900/20 text-[10px] text-slate-500 font-serif flex items-center gap-1">
+                                                <Sigma size={10} /> <span className="italic">DL:</span>
+                                                <span className="text-slate-400">{formatDLAxiom(method.name, selectedEntity.label, method.returnType)}</span>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -698,10 +853,13 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
             {/* Tooltip */}
             {tooltip && !selectedEntity && (
-                <div className="absolute px-2 py-1 bg-slate-800 text-white text-xs rounded border border-slate-700 pointer-events-none z-50 transform -translate-x-1/2 -translate-y-full mt-[-10px]" style={{ left: tooltip.x, top: tooltip.y }}>
+                <div className="absolute z-50 bg-slate-900/95 border border-slate-700 p-3 rounded-lg shadow-2xl pointer-events-none transform -translate-x-1/2 min-w-[150px] text-white animate-in fade-in zoom-in-95 duration-75" style={{ left: tooltip.x, top: tooltip.y - 15 }}>
                     {tooltip.content}
+                    {/* Tooltip Arrow */}
+                    <div className="absolute left-1/2 -bottom-1.5 w-3 h-3 bg-slate-900 border-r border-b border-slate-700 transform rotate-45 -translate-x-1/2"></div>
                 </div>
             )}
+            <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing touch-none" />
         </div>
     );
 };

@@ -1,6 +1,5 @@
-
 import React, { useMemo, useState, useEffect } from 'react';
-import type { Node, Edge } from 'reactflow';
+import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ProjectData } from '../types';
 import { generateFunctionalSyntax } from '../services/functionalSyntaxGenerator';
 import { generateManchesterSyntax } from '../services/manchesterSyntaxGenerator';

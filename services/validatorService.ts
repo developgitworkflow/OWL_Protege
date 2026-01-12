@@ -1,5 +1,5 @@
 
-import type { Node, Edge } from 'reactflow';
+import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Attribute, Method, ProjectData } from '../types';
 
 export type IssueSeverity = 'error' | 'warning' | 'info';

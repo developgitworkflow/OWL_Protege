@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import type { Node as FlowNode, Edge } from 'reactflow';
+import { Node as FlowNode, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Annotation, Method } from '../types';
-import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag, ArrowRightLeft, Sparkles, Command, AlertCircle, Layers, Settings, Database, Network } from 'lucide-react';
+import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag, ArrowRightLeft, Sparkles, Command, AlertCircle, Layers, Settings, Database } from 'lucide-react';
 import AnnotationManager from './AnnotationManager';
 import { validateManchesterSyntax } from '../services/manchesterValidator';
 
@@ -10,7 +10,6 @@ interface PropertiesPanelProps {
   selectedNode: FlowNode<UMLNodeData> | null;
   selectedEdge?: Edge | null;
   allNodes: FlowNode<UMLNodeData>[];
-  allEdges: Edge[];
   onUpdateNode: (id: string, data: UMLNodeData) => void;
   onUpdateEdge?: (id: string, label: string) => void;
   onDeleteNode: (id: string) => void;
@@ -264,7 +263,7 @@ const AxiomInput: React.FC<AxiomInputProps> = ({ value, onChange, placeholder, a
 
 // --- Main Component ---
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selectedEdge, allNodes, allEdges, onUpdateNode, onUpdateEdge, onDeleteNode, onDeleteEdge, onCreateIndividual, onClose }) => {
+const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selectedEdge, allNodes, onUpdateNode, onUpdateEdge, onDeleteNode, onDeleteEdge, onCreateIndividual, onClose }) => {
   const [localData, setLocalData] = useState<UMLNodeData | null>(null);
   const [edgeLabel, setEdgeLabel] = useState('');
   const [activeAttrType, setActiveAttrType] = useState<string | null>(null);
@@ -533,21 +532,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
 
   const displayType = localData.type.replace('owl_', '').replace(/_/g, ' ');
 
-  // Computed Connected Edges
-  const connectedEdges = useMemo(() => {
-      if (!selectedNode || !allEdges) return [];
-      return allEdges.filter(e => e.source === selectedNode.id || e.target === selectedNode.id);
-  }, [selectedNode, allEdges]);
-
-  // Extract explicit SubClassOf axioms for "Parents" section
-  const parentAxioms = localData.methods.filter(m => m.name === 'SubClassOf');
-  const otherAxioms = localData.methods.filter(m => m.name !== 'SubClassOf');
-
-  const getNodeLabel = (id: string) => {
-      const n = allNodes.find(n => n.id === id);
-      return n ? n.data.label : id;
-  };
-
   return (
     <div ref={panelRef} className="w-full h-full overflow-y-auto flex flex-col font-sans text-sm text-slate-200">
       
@@ -596,45 +580,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
             </div>
         </div>
 
-        {/* 1. Inheritance (Parents) Section - NEW */}
-        {isClassNode && (
-            <div className="pt-4 border-t border-slate-800">
-                {renderAxiomGroup('Parents (SubClassOf)', ['SubClassOf'], <GitMerge size={12} className="rotate-180"/>, 'Parent Class')}
-            </div>
-        )}
-
-        {/* 2. Relations (Edges) Section - NEW */}
-        <div className="pt-4 border-t border-slate-800 space-y-2">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                <Network size={12} /> Relations
-            </h3>
-            {connectedEdges.length > 0 ? (
-                <div className="space-y-2">
-                    {connectedEdges.map(edge => {
-                        const isSource = edge.source === selectedNode.id;
-                        const otherId = isSource ? edge.target : edge.source;
-                        return (
-                            <div key={edge.id} className="flex items-center justify-between text-xs bg-slate-950 border border-slate-800 rounded p-2">
-                                <div className="flex items-center gap-2">
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${isSource ? 'bg-blue-900/30 text-blue-300' : 'bg-pink-900/30 text-pink-300'}`}>
-                                        {isSource ? 'OUT' : 'IN'}
-                                    </span>
-                                    <span className="text-slate-300 font-bold">{edge.label || 'relates'}</span>
-                                </div>
-                                <div className="flex items-center gap-1 text-slate-400">
-                                    <ArrowRight size={10} className={isSource ? '' : 'rotate-180'} />
-                                    <span>{getNodeLabel(otherId)}</span>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            ) : (
-                <div className="text-[10px] text-slate-600 italic px-2">No connected edges</div>
-            )}
-        </div>
-
-        {/* 3. Axioms Section (Remaining) */}
+        {/* 1. Axioms Section */}
         <div className="pt-4 border-t border-slate-800 space-y-4">
             {isObjectProperty ? (
                 // Object Property Axioms
@@ -648,17 +594,17 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
                     {renderAxiomGroup('Property Chains', ['PropertyChainAxiom'], <GitCommit size={12} />, 'prop1 o prop2', true)}
                 </>
             ) : (
-                // General Axioms (Classes) - Excluding SubClassOf which is handled in Parents
+                // General Axioms (Classes)
                 <div className="space-y-3">
                     <div className="flex justify-between items-end">
                         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                            <Layers size={12} /> Other Axioms
+                            <Layers size={12} /> Axioms
                         </h3>
-                        <button onClick={() => addMethod('EquivalentTo')} className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs font-medium hover:bg-blue-500/10 px-2 py-1 rounded transition-colors"><Plus size={14} /> Add</button>
+                        <button onClick={() => addMethod('SubClassOf')} className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs font-medium hover:bg-blue-500/10 px-2 py-1 rounded transition-colors"><Plus size={14} /> Add</button>
                     </div>
                     
                     <div className="space-y-2">
-                        {otherAxioms.length > 0 ? otherAxioms.map((method) => (
+                        {localData.methods?.map((method) => (
                              <div key={method.id} className="relative">
                                  <div className={`bg-slate-950 border border-slate-800 rounded-lg p-2 group hover:border-slate-700 transition-colors flex gap-2 items-start ${showSyntaxHelp === method.id ? 'ring-1 ring-purple-500/50 border-purple-500/30' : ''}`}>
                                      {/* Optional Visibility for Axioms/Operations */}
@@ -676,6 +622,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
                                                 value={method.name}
                                                 onChange={(e) => updateMethod(method.id, 'name', e.target.value)}
                                             >
+                                                <option value="SubClassOf">SubClassOf</option>
                                                 <option value="EquivalentTo">EquivalentTo</option>
                                                 <option value="DisjointWith">DisjointWith</option>
                                                 <option value="Type">Type (Instance)</option>
@@ -687,7 +634,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
                                             <AxiomInput 
                                                 value={method.returnType}
                                                 onChange={(val) => updateMethod(method.id, 'returnType', val)}
-                                                placeholder="Expression"
+                                                placeholder="Expression (e.g. hasPart some Wheel)"
                                                 allNodes={allNodes}
                                             />
                                          </div>
@@ -705,13 +652,13 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
                                     </div>
                                 )}
                              </div>
-                        )) : <div className="text-[10px] text-slate-700 italic px-2">None</div>}
+                        ))}
                     </div>
                 </div>
             )}
         </div>
 
-        {/* 4. Data Properties / Characteristics Section */}
+        {/* 2. Data Properties / Characteristics Section */}
         <div className="pt-4 border-t border-slate-800">
             {isObjectProperty ? (
                  <div className="space-y-2">
@@ -826,7 +773,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
             )}
         </div>
 
-        {/* 5. Instances Section */}
+        {/* 3. Instances Section */}
         {isClassNode && (
             <div className="space-y-3 pt-4 border-t border-slate-800">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
@@ -855,7 +802,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
             </div>
         )}
 
-        {/* 6. Annotations Section */}
+        {/* 4. Annotations Section */}
         <div className="pt-4 border-t border-slate-800">
             <AnnotationManager 
                 annotations={localData.annotations} 

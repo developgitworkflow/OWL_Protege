@@ -1,4 +1,3 @@
-
 import { SWRLRule } from "../types";
 
 // Helper to format atoms for Functional Syntax
@@ -60,8 +59,7 @@ const parseAtom = (atomStr: string, defaultPrefix: string): string => {
 export const convertRuleToFunctional = (rule: SWRLRule, defaultPrefix: string): string => {
     // Expected format: Body -> Head
     // Body and Head are `^` separated atoms
-    // Use unicode code points for arrow (\u2192) to ensure safety
-    const parts = rule.expression.split(/->|\u2192/);
+    const parts = rule.expression.split(/->|→/);
     if (parts.length !== 2) return ''; // Invalid rule structure
 
     const bodyStr = parts[0].trim();
@@ -69,8 +67,7 @@ export const convertRuleToFunctional = (rule: SWRLRule, defaultPrefix: string): 
 
     const parseAtoms = (str: string) => {
         if (!str) return '';
-        // Split by ^ or Logical AND symbol (\u2227)
-        return str.split(/\^|\u2227/)
+        return str.split(/\^|∧/)
             .map(s => parseAtom(s, defaultPrefix))
             .filter(s => s)
             .join(' ');

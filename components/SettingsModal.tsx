@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { X, Settings, Download, Upload, Save, Globe, Plus, Trash2, Link as LinkIcon, FilePlus, Wrench, ShieldCheck, Calculator, Search, ScrollText, Sigma, Terminal, Activity, CloudDownload, FileCode, FileType, Database, Braces } from 'lucide-react';
+import { X, Settings, Download, Upload, Save, Globe, Plus, Trash2, Link as LinkIcon, FilePlus, Wrench, ShieldCheck, Calculator, Search, ScrollText, Sigma, Terminal, Activity, CloudDownload } from 'lucide-react';
 import { ProjectData } from '../types';
 import AnnotationManager from './AnnotationManager';
 
@@ -10,7 +10,8 @@ interface SettingsModalProps {
   projectData: ProjectData;
   onUpdateProjectData: (data: ProjectData) => void;
   onNewProject: () => void;
-  onExport: (format: 'json' | 'rdf' | 'turtle' | 'manchester' | 'functional') => void;
+  onExportJSON: () => void;
+  onExportTurtle: () => void;
   onImportJSON: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onOpenImportUrl: () => void;
   // Tools
@@ -29,7 +30,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   projectData, 
   onUpdateProjectData,
   onNewProject,
-  onExport,
+  onExportJSON,
+  onExportTurtle,
   onImportJSON,
   onOpenImportUrl,
   onValidate,
@@ -77,14 +79,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       { id: 'swrl', label: 'SWRL Rules', icon: ScrollText, desc: 'Edit Semantic Web Rule Language definitions.', action: onOpenSWRL, color: 'text-amber-400' },
       { id: 'axioms', label: 'Logical Axioms', icon: Sigma, desc: 'View TBox, RBox, and ABox axioms explicitly.', action: onOpenDLAxioms, color: 'text-indigo-400' },
       { id: 'datalog', label: 'Datalog Export', icon: Terminal, desc: 'Translate ontology to Datalog rules.', action: onOpenDatalog, color: 'text-green-400' },
-  ];
-
-  const exportOptions = [
-      { id: 'rdf', label: 'RDF/XML', ext: '.owl', desc: 'Standard W3C Exchange Format. Default for Protégé.', icon: FileCode, color: 'text-orange-400' },
-      { id: 'turtle', label: 'Turtle', ext: '.ttl', desc: 'Human-readable RDF format. Concise and common.', icon: FileType, color: 'text-green-400' },
-      { id: 'manchester', label: 'Manchester', ext: '.omn', desc: 'User-friendly syntax for Description Logics.', icon: FileType, color: 'text-purple-400' },
-      { id: 'functional', label: 'Functional', ext: '.ofn', desc: 'OWL 2 Structural Specification Syntax.', icon: Braces, color: 'text-slate-400' },
-      { id: 'json', label: 'Project JSON', ext: '.json', desc: 'Full project backup including visual layout.', icon: Database, color: 'text-blue-400' },
   ];
 
   return (
@@ -318,23 +312,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             <h3 className="text-md font-medium text-white mb-3 flex items-center gap-2">
                                 <Download size={18} /> Export Data
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {exportOptions.map((opt) => (
-                                    <button 
-                                        key={opt.id}
-                                        onClick={() => onExport(opt.id as any)}
-                                        className="p-3 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-750 hover:border-blue-500 transition-all text-left group relative overflow-hidden"
-                                    >
-                                        <div className="flex items-center justify-between mb-1">
-                                            <div className="flex items-center gap-2">
-                                                <opt.icon size={16} className={opt.color} />
-                                                <span className="font-semibold text-slate-200 text-sm">{opt.label}</span>
-                                            </div>
-                                            <span className="text-[10px] font-mono text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">{opt.ext}</span>
-                                        </div>
-                                        <p className="text-[10px] text-slate-500 leading-snug">{opt.desc}</p>
-                                    </button>
-                                ))}
+                            <div className="grid grid-cols-2 gap-4">
+                                <button 
+                                    onClick={onExportJSON}
+                                    className="p-4 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 hover:border-blue-500 transition-all text-left group"
+                                >
+                                    <div className="font-semibold text-slate-200 group-hover:text-blue-400 mb-1">JSON Project</div>
+                                    <p className="text-xs text-slate-500">Full project backup including layout positions and metadata.</p>
+                                </button>
+                                <button 
+                                    onClick={onExportTurtle}
+                                    className="p-4 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 hover:border-green-500 transition-all text-left group"
+                                >
+                                    <div className="font-semibold text-slate-200 group-hover:text-green-400 mb-1">Turtle (RDF .ttl)</div>
+                                    <p className="text-xs text-slate-500">Standard semantic web format (.ttl) for use in Protégé, etc.</p>
+                                </button>
                             </div>
                         </div>
 

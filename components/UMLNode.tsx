@@ -1,7 +1,6 @@
 
 import React, { memo } from 'react';
-import { Handle, Position } from 'reactflow';
-import type { NodeProps } from 'reactflow';
+import { Handle, Position, NodeProps } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
 import { Database, User, FileType, ArrowRightLeft, Tag, Info } from 'lucide-react';
 

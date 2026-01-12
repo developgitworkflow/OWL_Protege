@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, RefreshCw, Maximize, Workflow, Database, User, Tag, ArrowRightLeft, FileType } from 'lucide-react';
+import { ZoomIn, ZoomOut, RefreshCw, Maximize, Workflow, Database, User, Tag, ArrowRightLeft } from 'lucide-react';
 
 interface GraphVisualizationProps {
     nodes: Node<UMLNodeData>[];
@@ -19,9 +19,9 @@ interface SimNode extends d3.SimulationNodeDatum {
     label: string;
     type: ElementType;
     iri?: string;
+    description?: string;
     color: string;
     radius: number;
-    // D3 state
     x?: number;
     y?: number;
     vx?: number;
@@ -50,41 +50,24 @@ const COLORS = {
 const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, searchTerm = '', selectedNodeId, onNavigate }) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const wrapperRef = useRef<SVGGElement>(null); // The g element that gets transformed
+    const wrapperRef = useRef<SVGGElement | null>(null);
     
-    // State to keep track of simulation instances and data
     const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
     const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-    
-    // Tooltip State
     const [tooltip, setTooltip] = useState<{x: number, y: number, node: SimNode} | null>(null);
 
-    // --- 1. Initialization (Run Once) ---
+    // --- Initialization & Data Update ---
     useEffect(() => {
-        if (!svgRef.current || !wrapperRef.current || !containerRef.current) return;
+        if (!svgRef.current || !containerRef.current) return;
 
         const svg = d3.select(svgRef.current);
         const width = containerRef.current.clientWidth;
         const height = containerRef.current.clientHeight;
 
-        // A. Setup Zoom
-        const zoom = d3.zoom<SVGSVGElement, unknown>()
-            .scaleExtent([0.1, 4])
-            .on("zoom", (event) => {
-                d3.select(wrapperRef.current).attr("transform", event.transform);
-            });
-        
-        zoomBehaviorRef.current = zoom;
-        svg.call(zoom);
-        
-        // Initial centering
-        svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8));
+        // Clear previous render to prevent duplication (Blackbox pattern)
+        svg.selectAll("*").remove();
 
-        // B. Define Filters/Markers
-        const defs = d3.select(svgRef.current).select("defs");
-        // Clear existing defs carefully
-        defs.selectAll("*").remove();
-
+        const defs = svg.append("defs");
         // Glow Filter
         const glow = defs.append("filter").attr("id", "glow");
         glow.append("feGaussianBlur").attr("stdDeviation", "3.5").attr("result", "coloredBlur");
@@ -97,7 +80,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
             defs.append("marker")
                 .attr("id", id)
                 .attr("viewBox", "0 -5 10 10")
-                .attr("refX", 24) // Offset for node radius
+                .attr("refX", 24)
                 .attr("refY", 0)
                 .attr("markerWidth", 6)
                 .attr("markerHeight", 6)
@@ -110,32 +93,33 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
         createMarker("arrow-active", "#f8fafc");
         createMarker("arrow-inferred", "#fbbf24");
 
-        // C. Initialize Simulation
-        const simulation = d3.forceSimulation<SimNode, SimLink>()
-            .force("link", d3.forceLink<SimNode, SimLink>().id(d => d.id).distance(150))
-            .force("charge", d3.forceManyBody().strength(-500))
-            .force("center", d3.forceCenter(0, 0)) // Center at 0,0 relative to group
-            .force("collide", d3.forceCollide().radius((d: any) => d.radius + 20).iterations(2));
+        // Main Wrapper
+        const g = svg.append("g");
+        wrapperRef.current = g.node();
 
-        simulationRef.current = simulation;
+        // Layers
+        const linkLayer = g.append("g").attr("class", "links");
+        const labelLayer = g.append("g").attr("class", "labels");
+        const nodeLayer = g.append("g").attr("class", "nodes");
 
-        return () => {
-            simulation.stop();
-        };
-    }, []);
-
-    // --- 2. Data Update Loop ---
-    useEffect(() => {
-        if (!simulationRef.current || !wrapperRef.current) return;
-
-        const simulation = simulationRef.current;
-        const g = d3.select(wrapperRef.current);
-
-        // --- Data Merge Strategy ---
-        // We want to preserve x,y,vx,vy of existing nodes if they still exist
-        const oldNodes = new Map<string, SimNode>();
-        simulation.nodes().forEach(n => oldNodes.set(n.id, n));
+        // Zoom Behavior
+        const zoom = d3.zoom<SVGSVGElement, unknown>()
+            .scaleExtent([0.1, 4])
+            .on("zoom", (event) => {
+                g.attr("transform", event.transform);
+            });
         
+        zoomBehaviorRef.current = zoom;
+        svg.call(zoom);
+        svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8));
+
+        // Data Prep
+        const oldNodes = new Map<string, SimNode>();
+        if (simulationRef.current) {
+            simulationRef.current.nodes().forEach(n => oldNodes.set(n.id, n));
+            simulationRef.current.stop();
+        }
+
         const newNodes: SimNode[] = nodes.map(n => {
             const old = oldNodes.get(n.id);
             return {
@@ -143,9 +127,9 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
                 label: n.data.label,
                 type: n.data.type,
                 iri: n.data.iri,
+                description: n.data.description,
                 color: COLORS[n.data.type] || COLORS['default'],
                 radius: n.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? 20 : 30,
-                // Inherit pos if exists, else random spread around center
                 x: old ? old.x : (Math.random() - 0.5) * 50,
                 y: old ? old.y : (Math.random() - 0.5) * 50,
                 vx: old ? old.vx : 0,
@@ -161,65 +145,54 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
             isInferred: e.data?.isInferred || false
         }));
 
-        // Update Simulation Data
-        simulation.nodes(newNodes);
-        (simulation.force("link") as d3.ForceLink<SimNode, SimLink>).links(newLinks);
-        simulation.alpha(0.3).restart(); // Gentle restart
+        // Simulation
+        const simulation = d3.forceSimulation<SimNode, SimLink>(newNodes)
+            .force("link", d3.forceLink<SimNode, SimLink>(newLinks).id(d => d.id).distance(150))
+            .force("charge", d3.forceManyBody().strength(-500))
+            .force("center", d3.forceCenter(0, 0)) 
+            .force("collide", d3.forceCollide().radius((d: any) => d.radius + 20).iterations(2));
 
-        // --- Rendering (Enter/Update/Exit) ---
+        simulationRef.current = simulation;
+
+        // --- Render Elements ---
 
         // 1. Links
-        const linkGroup = g.select(".links").size() === 0 ? g.append("g").attr("class", "links") : g.select(".links");
-        
-        const link = ((linkGroup as any).selectAll("path.link-path") as any)
-            .data(newLinks, (d: any) => d.id);
-
-        const linkEnter = link.enter().append("path")
+        const linkSelection = linkLayer.selectAll<SVGPathElement, SimLink>("path.link-path")
+            .data(newLinks, (d) => d.id)
+            .join("path")
             .attr("class", "link-path")
             .attr("fill", "none")
-            .attr("stroke-width", 2);
+            .attr("stroke-width", 2)
+            .attr("stroke", d => d.isInferred ? "#fbbf24" : "#475569")
+            .attr("stroke-dasharray", d => d.isInferred ? "4,4" : "")
+            .attr("marker-end", d => d.isInferred ? "url(#arrow-inferred)" : "url(#arrow-std)");
 
-        const linkMerge = linkEnter.merge(link)
-            .attr("stroke", (d: any) => d.isInferred ? "#fbbf24" : "#475569")
-            .attr("stroke-dasharray", (d: any) => d.isInferred ? "4,4" : "")
-            .attr("marker-end", (d: any) => d.isInferred ? "url(#arrow-inferred)" : "url(#arrow-std)");
-
-        link.exit().remove();
-
-        // 2. Edge Labels
-        const labelGroup = g.select(".labels").size() === 0 ? g.append("g").attr("class", "labels") : g.select(".labels");
-        const edgeLabel = ((labelGroup as any).selectAll("g.edge-label") as any)
-            .data(newLinks, (d: any) => d.id);
-
-        const edgeLabelEnter = edgeLabel.enter().append("g")
+        // 2. Labels
+        const labelGroupSelection = labelLayer.selectAll<SVGGElement, SimLink>("g.edge-label")
+            .data(newLinks, (d) => d.id)
+            .join("g")
             .attr("class", "edge-label")
-            .style("pointer-events", "none"); // Let clicks pass through to links if needed
+            .style("pointer-events", "none");
 
-        edgeLabelEnter.append("rect")
+        labelGroupSelection.append("rect")
             .attr("rx", 4)
             .attr("ry", 4)
             .attr("fill", "#0f172a")
             .attr("fill-opacity", 0.8)
-            .attr("stroke-width", 1);
+            .attr("stroke-width", 1)
+            .attr("stroke", d => d.isInferred ? "#fbbf24" : "#475569");
 
-        edgeLabelEnter.append("text")
+        labelGroupSelection.append("text")
             .attr("text-anchor", "middle")
             .attr("dy", "0.35em")
             .attr("font-size", "10px")
-            .attr("font-weight", "500");
-
-        const edgeLabelMerge = edgeLabelEnter.merge(edgeLabel);
-        
-        edgeLabelMerge.select("rect")
-            .attr("stroke", (d: any) => d.isInferred ? "#fbbf24" : "#475569");
-
-        edgeLabelMerge.select("text")
-            .text((d: any) => d.label)
-            .attr("fill", (d: any) => d.isInferred ? "#fbbf24" : "#cbd5e1")
-            .each(function(this: SVGTextElement) {
-                // Dynamic sizing for bg rect
+            .attr("font-weight", "500")
+            .text(d => d.label)
+            .attr("fill", d => d.isInferred ? "#fbbf24" : "#cbd5e1")
+            .each(function(d) {
                 const bbox = this.getBBox();
                 const padX = 8, padY = 4;
+                // Update parent rect size based on text
                 const parent = d3.select(this.parentNode as any);
                 parent.select("rect")
                     .attr("x", -bbox.width/2 - padX/2)
@@ -228,14 +201,10 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
                     .attr("height", bbox.height + padY);
             });
 
-        edgeLabel.exit().remove();
-
         // 3. Nodes
-        const nodeGroup = g.select(".nodes").size() === 0 ? g.append("g").attr("class", "nodes") : g.select(".nodes");
-        const node = ((nodeGroup as any).selectAll("g.node") as any)
-            .data(newNodes, (d: any) => d.id);
-
-        const nodeEnter = node.enter().append("g")
+        const nodeGroupSelection = nodeLayer.selectAll<SVGGElement, SimNode>("g.node")
+            .data(newNodes, (d) => d.id)
+            .join("g")
             .attr("class", "node")
             .style("cursor", "pointer")
             .call(d3.drag<SVGGElement, SimNode>()
@@ -252,48 +221,32 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
                 })
             );
 
-        // Circle
-        nodeEnter.append("circle")
-            .attr("r", (d: any) => d.radius)
+        nodeGroupSelection.append("circle")
+            .attr("r", d => d.radius)
             .attr("stroke", "#fff")
             .attr("stroke-width", 2)
-            .attr("fill", (d: any) => d.color);
+            .attr("fill", d => d.color);
 
-        // Icon/Text fallback
-        nodeEnter.append("text")
-            .attr("class", "node-icon")
-            .attr("dy", "0.35em")
-            .attr("text-anchor", "middle")
-            .attr("fill", "#fff")
-            .attr("font-family", "lucide") // Assuming font is loaded or fallback
-            .attr("font-size", (d: any) => d.radius)
-            .style("pointer-events", "none");
-
-        // Label (Below)
-        nodeEnter.append("text")
+        nodeGroupSelection.append("text")
             .attr("class", "node-label")
-            .attr("dy", (d: any) => d.radius + 12)
+            .attr("dy", d => d.radius + 12)
             .attr("text-anchor", "middle")
             .attr("font-size", "12px")
             .attr("fill", "#f1f5f9")
             .attr("font-weight", "600")
             .style("text-shadow", "0 2px 4px rgba(0,0,0,0.8)")
             .style("pointer-events", "none")
-            .text((d: any) => d.label.length > 15 ? d.label.substring(0,12) + '...' : d.label);
+            .text(d => d.label.length > 15 ? d.label.substring(0,12) + '...' : d.label);
 
-        const nodeMerge = nodeEnter.merge(node);
-
-        // --- Interactions ---
-        // Ensure state setters are not called with D3 arguments
-        nodeMerge.on("click", (e: any, d: any) => {
+        // Interactions
+        nodeGroupSelection.on("click", (e, d) => {
             e.stopPropagation();
             if (onNavigate) onNavigate('graph', d.id);
         });
 
-        nodeMerge.on("mouseenter", (e: any, d: any) => {
+        nodeGroupSelection.on("mouseenter", (e, d) => {
             const rect = containerRef.current?.getBoundingClientRect();
             if(rect) {
-                // Strictly construct the object to avoid passing 'e' or 'd' directly
                 setTooltip({ 
                     x: e.clientX - rect.left, 
                     y: e.clientY - rect.top, 
@@ -302,13 +255,17 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
             }
             
             // Highlight connections
-            linkMerge.transition().style("opacity", (l: any) => 
+            linkSelection.transition().style("opacity", l => 
                 (l.source as SimNode).id === d.id || (l.target as SimNode).id === d.id ? 1 : 0.1
-            ).attr("stroke", (l: any) => 
+            ).attr("stroke", l => 
                 (l.source as SimNode).id === d.id || (l.target as SimNode).id === d.id ? "#fff" : (l.isInferred ? "#fbbf24" : "#475569")
             );
             
-            nodeMerge.transition().style("opacity", (n: any) => {
+            labelGroupSelection.transition().style("opacity", l => 
+                (l.source as SimNode).id === d.id || (l.target as SimNode).id === d.id ? 1 : 0.1
+            );
+            
+            nodeGroupSelection.transition().style("opacity", n => {
                 const isNeighbor = newLinks.some(l => 
                     ((l.source as SimNode).id === d.id && (l.target as SimNode).id === n.id) || 
                     ((l.target as SimNode).id === d.id && (l.source as SimNode).id === n.id)
@@ -317,58 +274,56 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
             });
         });
         
-        // Define mouseleave separately to be safe with state setter
-        nodeMerge.on("mouseleave", () => {
+        nodeGroupSelection.on("mouseleave", () => {
             setTooltip(null);
-            linkMerge.transition().style("opacity", 1).attr("stroke", (d: any) => d.isInferred ? "#fbbf24" : "#475569");
-            nodeMerge.transition().style("opacity", 1);
+            linkSelection.transition().style("opacity", 1).attr("stroke", d => d.isInferred ? "#fbbf24" : "#475569");
+            labelGroupSelection.transition().style("opacity", 1);
+            nodeGroupSelection.transition().style("opacity", 1);
         });
 
-        // --- Selection Highlighting ---
-        nodeMerge.select("circle")
-            .attr("stroke", (d: any) => d.id === selectedNodeId ? "#fff" : "#fff")
-            .attr("stroke-width", (d: any) => d.id === selectedNodeId ? 4 : 2)
-            .style("filter", (d: any) => d.id === selectedNodeId ? "url(#glow)" : null);
+        // Apply Selection Style
+        nodeGroupSelection.select("circle")
+            .attr("stroke", d => d.id === selectedNodeId ? "#fff" : "#fff")
+            .attr("stroke-width", d => d.id === selectedNodeId ? 4 : 2)
+            .style("filter", d => d.id === selectedNodeId ? "url(#glow)" : null);
 
-        // --- Search Highlighting ---
+        // Apply Search Filter
         if (searchTerm) {
             const lower = searchTerm.toLowerCase();
-            nodeMerge.style("opacity", (d: any) => d.label.toLowerCase().includes(lower) ? 1 : 0.1);
-            nodeMerge.select("circle").attr("stroke", (d: any) => d.label.toLowerCase().includes(lower) ? "#facc15" : "#fff");
-        } else {
-            nodeMerge.style("opacity", 1);
+            nodeGroupSelection.style("opacity", d => d.label.toLowerCase().includes(lower) ? 1 : 0.1);
+            nodeGroupSelection.select("circle").attr("stroke", d => d.label.toLowerCase().includes(lower) ? "#facc15" : "#fff");
         }
 
-        node.exit().remove();
-
-        // --- Tick Function ---
+        // Ticker
         simulation.on("tick", () => {
-            linkMerge.attr("d", (d: any) => {
+            linkSelection.attr("d", d => {
                 const s = d.source as SimNode;
                 const t = d.target as SimNode;
-                // Basic straight line
                 return `M${s.x},${s.y} L${t.x},${t.y}`;
             });
 
-            edgeLabelMerge.attr("transform", (d: any) => {
+            labelGroupSelection.attr("transform", d => {
                 const s = d.source as SimNode;
                 const t = d.target as SimNode;
                 return `translate(${(s.x! + t.x!) / 2}, ${(s.y! + t.y!) / 2})`;
             });
 
-            nodeMerge.attr("transform", (d: any) => `translate(${d.x},${d.y})`);
+            nodeGroupSelection.attr("transform", d => `translate(${d.x},${d.y})`);
         });
 
-    }, [nodes, edges, searchTerm, selectedNodeId]); // Re-run when data changes
+        return () => {
+            simulation.stop();
+        };
 
-    // --- 3. External Focus Control ---
+    }, [nodes, edges, searchTerm, selectedNodeId]);
+
+    // --- External Focus Control ---
     useEffect(() => {
         if (selectedNodeId && zoomBehaviorRef.current && svgRef.current && containerRef.current && simulationRef.current) {
             const node = simulationRef.current.nodes().find(n => n.id === selectedNodeId);
             if (node) {
                 const width = containerRef.current.clientWidth;
                 const height = containerRef.current.clientHeight;
-                // Smooth transition to center on node
                 d3.select(svgRef.current).transition().duration(1000).call(
                     zoomBehaviorRef.current.transform,
                     d3.zoomIdentity.translate(width / 2, height / 2).scale(1.2).translate(-node.x!, -node.y!)
@@ -377,7 +332,6 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
         }
     }, [selectedNodeId]);
 
-    // --- Controls Handlers ---
     const handleZoomIn = useCallback(() => {
         if (svgRef.current && zoomBehaviorRef.current) d3.select(svgRef.current).transition().call(zoomBehaviorRef.current.scaleBy, 1.3);
     }, []);
@@ -388,7 +342,6 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
         if (svgRef.current && zoomBehaviorRef.current && wrapperRef.current && containerRef.current) {
             const bounds = wrapperRef.current.getBBox();
             if (bounds.width === 0 || bounds.height === 0) return;
-            
             const width = containerRef.current.clientWidth;
             const height = containerRef.current.clientHeight;
             const dx = bounds.width;
@@ -396,25 +349,16 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
             const x = bounds.x + dx / 2;
             const y = bounds.y + dy / 2;
             const scale = Math.max(0.1, Math.min(2, 0.85 / Math.max(dx / width, dy / height)));
-            const translate = [width / 2 - scale * x, height / 2 - scale * y];
-
             d3.select(svgRef.current).transition().duration(750).call(
                 zoomBehaviorRef.current.transform,
-                d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale)
+                d3.zoomIdentity.translate(width / 2 - scale * x, height / 2 - scale * y).scale(scale)
             );
         }
     }, []);
 
     return (
         <div ref={containerRef} className="relative w-full h-full bg-slate-950 overflow-hidden group/canvas">
-            <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing touch-none">
-                <defs></defs>
-                <g ref={wrapperRef}>
-                    <g className="links"></g>
-                    <g className="labels"></g>
-                    <g className="nodes"></g>
-                </g>
-            </svg>
+            <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing touch-none" />
 
             {/* Controls */}
             <div className="absolute bottom-6 left-6 z-10 flex flex-col gap-2">
@@ -454,6 +398,11 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
                             <span className="font-bold text-sm text-white">{tooltip.node.label}</span>
                         </div>
                         <span className="text-[10px] text-slate-400 font-mono break-all">{tooltip.node.iri || tooltip.node.id}</span>
+                        {tooltip.node.description && (
+                            <div className="mt-2 pt-2 border-t border-slate-700/50">
+                                <p className="text-[10px] text-slate-300 italic leading-snug">"{tooltip.node.description}"</p>
+                            </div>
+                        )}
                     </div>
                     {onNavigate && (
                         <div className="pt-2 border-t border-slate-700/50 flex justify-center pointer-events-auto">

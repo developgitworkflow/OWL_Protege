@@ -1,5 +1,5 @@
 
-import type { Node, Edge } from 'reactflow';
+import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, ProjectData } from '../types';
 
 export const generateManchesterSyntax = (nodes: Node<UMLNodeData>[], edges: Edge[], metadata: ProjectData): string => {

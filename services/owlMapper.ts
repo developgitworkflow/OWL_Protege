@@ -1,5 +1,5 @@
 
-import type { Node, Edge } from 'reactflow';
+import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, ProjectData } from '../types';
 
 // Table 3.2: OWL 2 RDF-Based Vocabulary

@@ -19,7 +19,8 @@ const THEME = {
     nodeText: '#f8fafc', // slate-50
     nodeSub: '#64748b', // slate-500
     cutStroke: '#475569', // slate-600
-    spot: '#ec4899', // pink-500
+    // Updated Spot (Individual) Color
+    spot: '#14b8a6', // Teal-500
     predicate: '#60a5fa', // blue-400
     panelBg: '#1e293b', // slate-800
     panelBorder: '#334155' // slate-700
@@ -362,7 +363,8 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges,
                             Existential Graphs
                         </h1>
                         <div className="space-y-2 text-xs opacity-80">
-                            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-pink-500"></div> Individual (Spot)</div>
+                            {/* Updated Legend Color */}
+                            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-teal-500"></div> Individual (Spot)</div>
                             <div className="flex items-center gap-2"><span className="font-bold text-slate-200">Term</span> Class / Rhema</div>
                             <div className="flex items-center gap-2"><div className="w-6 h-0.5 bg-slate-400"></div> Line of Identity</div>
                             <div className="flex items-center gap-2"><div className="w-6 h-0.5 border-t-2 border-amber-400 border-dashed"></div> Inferred</div>

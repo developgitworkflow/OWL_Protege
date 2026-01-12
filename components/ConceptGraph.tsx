@@ -45,8 +45,9 @@ const THEME = {
     class: '#3b82f6',        // Blue-500
     classStroke: '#60a5fa',  // Blue-400
     
-    individual: '#a855f7',   // Purple-500
-    individualStroke: '#c084fc', // Purple-400
+    // Updated Individual Color
+    individual: '#14b8a6',   // Teal-500 (Previously Purple/Pink)
+    individualStroke: '#2dd4bf', // Teal-400
     
     datatype: '#f59e0b',     // Amber-500
     datatypeStroke: '#fbbf24', // Amber-400
@@ -375,13 +376,13 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
         const indivBoxGroup = boxLayer.append("g").style("display", "none");
         const indivBoxRect = indivBoxGroup.append("rect")
-            .attr("fill", "rgba(168, 85, 247, 0.05)") 
-            .attr("stroke", "rgba(168, 85, 247, 0.2)")
+            .attr("fill", "rgba(20, 184, 166, 0.05)") 
+            .attr("stroke", "rgba(20, 184, 166, 0.2)")
             .attr("stroke-width", 1)
             .attr("stroke-dasharray", "8,4")
             .attr("rx", 24);
         const indivBoxLabel = indivBoxGroup.append("text")
-            .attr("fill", "rgba(168, 85, 247, 0.6)")
+            .attr("fill", "rgba(20, 184, 166, 0.6)")
             .attr("font-size", "14px")
             .attr("font-weight", "bold")
             .attr("text-anchor", "start")
@@ -561,7 +562,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                             <div className="font-bold text-sm">{d.label}</div>
                             <div className="text-[10px] text-slate-400 font-mono">{d.iri || d.id}</div>
                             <div className="text-[10px] bg-slate-800 rounded px-1 w-fit border border-slate-700 flex items-center gap-1">
-                                {d.type === 'class' ? <Database size={10} className="text-indigo-400"/> : <User size={10} className="text-pink-400"/>}
+                                {d.type === 'class' ? <Database size={10} className="text-indigo-400"/> : <User size={10} className="text-teal-400"/>}
                                 {d.type === 'class' ? 'Class' : 'Individual'}
                             </div>
                         </div>
@@ -744,7 +745,8 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                     <div className="flex items-center gap-2"><span className="w-3 h-2 rounded bg-blue-400 border border-white/80"></span> Object Property</div>
                     <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-amber-500 border border-white/80"></span> Datatype</div>
                     <div className="flex items-center gap-2"><span className="w-3 h-2 rounded bg-emerald-500 border border-white/80"></span> Data Property</div>
-                    <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-purple-500 border border-white/80"></span> Individual</div>
+                    {/* Updated Legend Color */}
+                    <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-teal-500 border border-white/80"></span> Individual</div>
                     <div className="flex items-center gap-2"><div className="w-3 h-0 border-t border-dashed border-slate-400"></div> Instantiation</div>
                     <div className="flex items-center gap-2"><div className="w-3 h-0 border-t border-dashed border-amber-400"></div> Inferred</div>
                     {showAttributes && <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-slate-600 border border-slate-400"></span> Literal</div>}
@@ -886,13 +888,14 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                             <div>
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2"><Globe size={12} /> ABox (Assertions)</h3>
                                 <div className="space-y-1">
+                                    {/* Updated ABox Background color */}
                                     {selectedDetails.abox.map(method => (
-                                        <div key={method.id} className="text-xs bg-pink-950/20 p-2 rounded border border-pink-900/30">
+                                        <div key={method.id} className="text-xs bg-teal-950/20 p-2 rounded border border-teal-900/30">
                                             <div className="flex items-baseline gap-2 mb-0.5">
-                                                <span className="text-pink-400 font-bold text-[10px] uppercase">{method.name}</span>
+                                                <span className="text-teal-400 font-bold text-[10px] uppercase">{method.name}</span>
                                             </div>
                                             <div className="text-slate-300 font-mono text-[11px] break-words leading-relaxed">{highlightSyntax(method.returnType)}</div>
-                                            <div className="mt-1 pt-1 border-t border-pink-900/20 text-[10px] text-slate-500 font-serif flex items-center gap-1">
+                                            <div className="mt-1 pt-1 border-t border-teal-900/20 text-[10px] text-slate-500 font-serif flex items-center gap-1">
                                                 <Sigma size={10} /> <span className="italic">DL:</span>
                                                 <span className="text-slate-400">{formatDLAxiom(method.name, selectedEntity.label, method.returnType)}</span>
                                             </div>

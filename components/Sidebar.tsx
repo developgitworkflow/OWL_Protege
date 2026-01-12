@@ -43,7 +43,8 @@ const Sidebar: React.FC<SidebarProps> = ({ selectedNode }) => {
   const getSelectionIcon = (type: ElementType) => {
       switch(type) {
           case ElementType.OWL_CLASS: return <Database size={16} className="text-purple-400" />;
-          case ElementType.OWL_NAMED_INDIVIDUAL: return <User size={16} className="text-pink-400" />;
+          // Updated Individual Color
+          case ElementType.OWL_NAMED_INDIVIDUAL: return <User size={16} className="text-teal-400" />;
           case ElementType.OWL_OBJECT_PROPERTY: return <ArrowRightLeft size={16} className="text-blue-400" />;
           case ElementType.OWL_DATA_PROPERTY: return <Tag size={16} className="text-green-400" />;
           case ElementType.OWL_DATATYPE: return <FileType size={16} className="text-amber-400" />;
@@ -89,11 +90,12 @@ const Sidebar: React.FC<SidebarProps> = ({ selectedNode }) => {
                 desc="A relationship between an individual and a literal value." 
             />
 
+            {/* Updated Individual Color */}
             <ToolboxItem 
                 type={ElementType.OWL_NAMED_INDIVIDUAL} 
                 label="Individual" 
                 icon={User} 
-                color="text-pink-400" 
+                color="text-teal-400" 
                 desc="A specific instance or object." 
             />
 

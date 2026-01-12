@@ -23,9 +23,10 @@ const THEME = {
     classFill: '#1e1b4b',      // Indigo-950
     classText: '#e0e7ff',      // Indigo-100
     
-    indivStroke: '#ec4899',    // Pink-500
-    indivFill: '#500724',      // Pink-950
-    indivText: '#fce7f3',      // Pink-100
+    // Updated Individual Colors (Teal)
+    indivStroke: '#14b8a6',    // Teal-500
+    indivFill: '#134e4a',      // Teal-950
+    indivText: '#ccfbf1',      // Teal-100
     
     // Edges
     edgeDefault: '#475569',    // Slate-600
@@ -514,8 +515,9 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
                             <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
                             <span>Class</span>
                         </div>
+                        {/* Updated Individual Color */}
                         <div className="flex items-center gap-3">
-                            <div className="w-2 h-2 rounded-full bg-pink-600 shadow-[0_0_8px_rgba(236,72,153,0.5)]"></div>
+                            <div className="w-2 h-2 rounded-full bg-teal-600 shadow-[0_0_8px_rgba(20,184,166,0.5)]"></div>
                             <span>Individual</span>
                         </div>
                         <div className="flex items-center gap-3 opacity-60">
@@ -546,7 +548,7 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
                         <div className="flex items-start gap-3">
                             <div className={`p-2 rounded-lg ${
                                 tooltip.data.type === ElementType.OWL_CLASS ? 'bg-indigo-500/20 text-indigo-400' :
-                                tooltip.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'bg-pink-500/20 text-pink-400' :
+                                tooltip.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'bg-teal-500/20 text-teal-400' :
                                 'bg-slate-800 text-slate-400'
                             }`}>
                                 {tooltip.data.type === ElementType.OWL_CLASS ? <Database size={16} /> : 

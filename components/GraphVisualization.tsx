@@ -40,7 +40,7 @@ interface SimLink extends d3.SimulationLinkDatum<SimNode> {
 
 const COLORS = {
     [ElementType.OWL_CLASS]: '#6366f1', // Indigo
-    [ElementType.OWL_NAMED_INDIVIDUAL]: '#ec4899', // Pink
+    [ElementType.OWL_NAMED_INDIVIDUAL]: '#14b8a6', // Teal-500 (Previously Pink)
     [ElementType.OWL_OBJECT_PROPERTY]: '#3b82f6', // Blue
     [ElementType.OWL_DATA_PROPERTY]: '#10b981', // Emerald
     [ElementType.OWL_DATATYPE]: '#f59e0b', // Amber
@@ -188,7 +188,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
 
         labelGroupSelection.append("text")
             .attr("text-anchor", "middle")
-            .attr("dy", "0.35em")
+            .attr("dy", "0.3em")
             .attr("font-size", "10px")
             .attr("font-weight", "500")
             .text(d => d.label)
@@ -380,7 +380,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
                     <h3 className="font-bold mb-2 text-slate-500 uppercase tracking-wider text-[10px]">Model Elements</h3>
                     <div className="space-y-2">
                         <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-indigo-500"></div> Class</div>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-pink-500"></div> Individual</div>
+                        {/* Updated Individual Color in Legend */}
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-teal-500"></div> Individual</div>
                         <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div> Object Property</div>
                         <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500"></div> Data Property</div>
                     </div>
@@ -396,7 +397,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
                     <div className="flex flex-col gap-1 mb-2">
                         <div className="flex items-center gap-2">
                             {tooltip.node.type === ElementType.OWL_CLASS && <Database size={14} className="text-indigo-400" />}
-                            {tooltip.node.type === ElementType.OWL_NAMED_INDIVIDUAL && <User size={14} className="text-pink-400" />}
+                            {/* Updated Individual Icon Color */}
+                            {tooltip.node.type === ElementType.OWL_NAMED_INDIVIDUAL && <User size={14} className="text-teal-400" />}
                             {tooltip.node.type === ElementType.OWL_OBJECT_PROPERTY && <ArrowRightLeft size={14} className="text-blue-400" />}
                             {tooltip.node.type === ElementType.OWL_DATA_PROPERTY && <Tag size={14} className="text-emerald-400" />}
                             <span className="font-bold text-sm text-white">{tooltip.node.label}</span>

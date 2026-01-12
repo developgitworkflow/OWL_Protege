@@ -176,7 +176,8 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
                 .attr("r", 10)
                 .style("fill", (d: any) => {
                     if (d.data.type === ElementType.OWL_CLASS) return "#6366f1"; // Indigo
-                    if (d.data.type === ElementType.OWL_NAMED_INDIVIDUAL) return "#ec4899"; // Pink
+                    // Updated Individual Color
+                    if (d.data.type === ElementType.OWL_NAMED_INDIVIDUAL) return "#14b8a6"; // Teal
                     return "#64748b";
                 })
                 .style("stroke", (d: any) => d.data.isInferred ? "#fbbf24" : "#1e293b")

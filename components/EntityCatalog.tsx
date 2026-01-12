@@ -38,7 +38,8 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({
         { id: 'classes', label: 'Classes', icon: Database, color: 'text-purple-400', border: 'border-purple-500', type: ElementType.OWL_CLASS },
         { id: 'objectProps', label: 'Object Properties', icon: ArrowRightLeft, color: 'text-blue-400', border: 'border-blue-500', type: ElementType.OWL_OBJECT_PROPERTY },
         { id: 'dataProps', label: 'Data Properties', icon: Tag, color: 'text-green-400', border: 'border-green-500', type: ElementType.OWL_DATA_PROPERTY },
-        { id: 'individuals', label: 'Individuals', icon: User, color: 'text-pink-400', border: 'border-pink-500', type: ElementType.OWL_NAMED_INDIVIDUAL },
+        // Updated Individual Tab Color
+        { id: 'individuals', label: 'Individuals', icon: User, color: 'text-teal-400', border: 'border-teal-500', type: ElementType.OWL_NAMED_INDIVIDUAL },
         { id: 'datatypes', label: 'Datatypes', icon: FileType, color: 'text-amber-400', border: 'border-amber-500', type: ElementType.OWL_DATATYPE },
     ];
 

@@ -169,7 +169,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
         // 1. Links
         const linkGroup = g.select(".links").size() === 0 ? g.append("g").attr("class", "links") : g.select(".links");
         
-        const link = (linkGroup.selectAll("path.link-path") as any)
+        // TS Fix: Cast parent selection to any to allow string argument in selectAll
+        const link = ((linkGroup as any).selectAll("path.link-path") as any)
             .data(newLinks, (d: any) => d.id);
 
         const linkEnter = link.enter().append("path")
@@ -186,7 +187,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
 
         // 2. Edge Labels
         const labelGroup = g.select(".labels").size() === 0 ? g.append("g").attr("class", "labels") : g.select(".labels");
-        const edgeLabel = (labelGroup.selectAll("g.edge-label") as any)
+        // TS Fix: Cast parent selection to any to allow string argument in selectAll
+        const edgeLabel = ((labelGroup as any).selectAll("g.edge-label") as any)
             .data(newLinks, (d: any) => d.id);
 
         const edgeLabelEnter = edgeLabel.enter().append("g")
@@ -230,7 +232,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
 
         // 3. Nodes
         const nodeGroup = g.select(".nodes").size() === 0 ? g.append("g").attr("class", "nodes") : g.select(".nodes");
-        const node = (nodeGroup.selectAll("g.node") as any)
+        // TS Fix: Cast parent selection to any to allow string argument in selectAll
+        const node = ((nodeGroup as any).selectAll("g.node") as any)
             .data(newNodes, (d: any) => d.id);
 
         const nodeEnter = node.enter().append("g")

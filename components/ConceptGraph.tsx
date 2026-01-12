@@ -118,6 +118,7 @@ const formatDLAxiom = (methodName: string, subject: string, objectStr: string) =
 const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = '', selectedNodeId, onNavigate }) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
     const [tooltip, setTooltip] = useState<{x: number, y: number, content: React.ReactNode} | null>(null);
     const [showAttributes, setShowAttributes] = useState(false);
     const [selectedEntity, setSelectedEntity] = useState<SimNode | null>(null);
@@ -336,6 +337,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         const g = svg.append("g");
 
         const zoom = d3.zoom<SVGSVGElement, unknown>().scaleExtent([0.1, 4]).on("zoom", (e) => g.attr("transform", e.transform));
+        zoomRef.current = zoom;
         svg.call(zoom);
 
         const simulation = d3.forceSimulation(simNodes)
@@ -640,8 +642,8 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
     }, [nodes, edges, searchTerm, showAttributes, selectedNodeId]); // Re-run on selection
 
-    const handleZoomIn = () => { if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 1.3); };
-    const handleZoomOut = () => { if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 0.7); };
+    const handleZoomIn = () => { if (svgRef.current && zoomRef.current) d3.select(svgRef.current).transition().call(zoomRef.current.scaleBy, 1.3); };
+    const handleZoomOut = () => { if (svgRef.current && zoomRef.current) d3.select(svgRef.current).transition().call(zoomRef.current.scaleBy, 0.7); };
     const handleFit = () => {
         if (svgRef.current && containerRef.current) {
              const width = containerRef.current.clientWidth;

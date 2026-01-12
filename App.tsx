@@ -428,17 +428,15 @@ function App() {
   };
 
   const handleRunReasoner = () => {
-      setIsReasonerActive((prev) => {
-          const newState = !prev;
-          if (newState) {
-              addToast('Reasoner activated. Inferences computed.', 'success');
-              setShowInferred(true); // Auto-show inferred edges when running
-          } else {
-              addToast('Reasoner deactivated.', 'info');
-              setShowInferred(false);
-          }
-          return newState;
-      });
+      const newState = !isReasonerActive;
+      setIsReasonerActive(newState);
+      if (newState) {
+          addToast('Reasoner activated. Inferences computed.', 'success');
+          setShowInferred(true); // Auto-show inferred edges when running
+      } else {
+          addToast('Reasoner deactivated.', 'info');
+          setShowInferred(false);
+      }
   };
 
   const handleValidate = () => {

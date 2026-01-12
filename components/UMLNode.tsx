@@ -7,50 +7,52 @@ import { Database, User, FileType, ArrowRightLeft, Tag, Info } from 'lucide-reac
 const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
   const getIcon = () => {
     switch(data.type) {
-        case ElementType.OWL_CLASS: return <Database className="w-4 h-4 mr-2 text-purple-400" />;
-        case ElementType.OWL_OBJECT_PROPERTY: return <ArrowRightLeft className="w-4 h-4 mr-2 text-blue-400" />;
-        case ElementType.OWL_DATA_PROPERTY: return <Tag className="w-4 h-4 mr-2 text-green-400" />;
-        case ElementType.OWL_NAMED_INDIVIDUAL: return <User className="w-4 h-4 mr-2 text-pink-400" />;
-        case ElementType.OWL_DATATYPE: return <FileType className="w-4 h-4 mr-2 text-slate-400" />;
-        default: return <Database className="w-4 h-4 mr-2 text-slate-500" />;
+        case ElementType.OWL_CLASS: return <Database className="w-3.5 h-3.5 text-white/90" />;
+        case ElementType.OWL_OBJECT_PROPERTY: return <ArrowRightLeft className="w-3.5 h-3.5 text-white/90" />;
+        case ElementType.OWL_DATA_PROPERTY: return <Tag className="w-3.5 h-3.5 text-white/90" />;
+        case ElementType.OWL_NAMED_INDIVIDUAL: return <User className="w-3.5 h-3.5 text-white/90" />;
+        case ElementType.OWL_DATATYPE: return <FileType className="w-3.5 h-3.5 text-white/90" />;
+        default: return <Database className="w-3.5 h-3.5 text-white/90" />;
     }
   };
 
   const getTooltipText = () => {
       switch(data.type) {
-          case ElementType.OWL_CLASS: return "Class: A set of individuals sharing common characteristics.";
-          case ElementType.OWL_OBJECT_PROPERTY: return "Object Property: A relationship between two individuals.";
-          case ElementType.OWL_DATA_PROPERTY: return "Data Property: A relationship between an individual and a literal value.";
-          case ElementType.OWL_NAMED_INDIVIDUAL: return "Individual: A specific instance or object.";
-          case ElementType.OWL_DATATYPE: return "Datatype: A set of data values (e.g., integers, strings).";
+          case ElementType.OWL_CLASS: return "Class";
+          case ElementType.OWL_OBJECT_PROPERTY: return "Object Property";
+          case ElementType.OWL_DATA_PROPERTY: return "Data Property";
+          case ElementType.OWL_NAMED_INDIVIDUAL: return "Individual";
+          case ElementType.OWL_DATATYPE: return "Datatype";
           default: return "";
       }
   };
 
-  const getHeaderStyle = () => {
-      if (data.type === ElementType.OWL_CLASS) return 'bg-purple-900/30 text-purple-200 border-purple-800/50';
-      if (data.type === ElementType.OWL_OBJECT_PROPERTY) return 'bg-blue-900/30 text-blue-200 border-blue-800/50';
-      if (data.type === ElementType.OWL_DATA_PROPERTY) return 'bg-green-900/30 text-green-200 border-green-800/50';
-      if (data.type === ElementType.OWL_NAMED_INDIVIDUAL) return 'bg-pink-900/30 text-pink-200 border-pink-800/50';
-      if (data.type === ElementType.OWL_DATATYPE) return 'bg-slate-700/50 text-slate-200 border-slate-600';
-      return 'bg-slate-800 text-slate-200 border-slate-700';
+  const getGradient = () => {
+      switch(data.type) {
+          case ElementType.OWL_CLASS: return 'bg-gradient-to-r from-purple-600 to-indigo-600 border-purple-500';
+          case ElementType.OWL_OBJECT_PROPERTY: return 'bg-gradient-to-r from-blue-600 to-cyan-600 border-blue-500';
+          case ElementType.OWL_DATA_PROPERTY: return 'bg-gradient-to-r from-emerald-600 to-teal-600 border-emerald-500';
+          case ElementType.OWL_NAMED_INDIVIDUAL: return 'bg-gradient-to-r from-pink-600 to-rose-600 border-pink-500';
+          case ElementType.OWL_DATATYPE: return 'bg-gradient-to-r from-amber-600 to-orange-600 border-amber-500';
+          default: return 'bg-slate-700 border-slate-600';
+      }
   }
 
   // Visual state for selection and search match
   const containerClasses = `
-    uml-node group w-64 bg-slate-800 rounded-md text-xs font-sans transition-all duration-200
+    uml-node group w-64 rounded-lg text-xs font-sans transition-all duration-300 ease-in-out
     ${selected 
-        ? 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] ring-1 ring-blue-500' 
+        ? 'ring-2 ring-white/50 shadow-[0_0_20px_rgba(0,0,0,0.5)] translate-y-[-2px]' 
         : data.isSearchMatch
-            ? 'border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)] ring-2 ring-yellow-400/50 scale-105 z-10'
-            : 'border-slate-600 shadow-lg hover:border-slate-500 hover:shadow-xl'
+            ? 'ring-2 ring-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)] scale-105 z-10'
+            : 'shadow-lg hover:shadow-2xl hover:translate-y-[-2px]'
     }
-    border focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:shadow-xl
+    bg-slate-900 border border-slate-700 overflow-hidden
   `;
 
   // Dynamic Labels based on type
   let section1Label = 'Data Properties';
-  let section2Label = 'Restrictions / Axioms';
+  let section2Label = 'Axioms';
   
   if (data.type === ElementType.OWL_OBJECT_PROPERTY || data.type === ElementType.OWL_DATA_PROPERTY) {
       section1Label = 'Characteristics'; 
@@ -81,103 +83,94 @@ const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
       <Handle 
         type="target" 
         position={Position.Top} 
-        className="!bg-slate-500 !w-3 !h-2 !rounded-sm !border-none group-hover:!bg-blue-400 transition-colors duration-200" 
+        className="!bg-slate-400 !w-2 !h-2 !-top-1 opacity-0 group-hover:opacity-100 transition-opacity" 
       />
       
       {/* Header */}
-      <div className={`relative px-3 py-2 border-b flex flex-col items-center justify-center backdrop-blur-sm rounded-t-md group/header ${getHeaderStyle()}`}>
+      <div className={`relative px-3 py-2 flex flex-col justify-center ${getGradient()}`}>
         
-        {/* Tooltip */}
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-2 bg-slate-900 text-slate-200 text-[10px] rounded shadow-xl border border-slate-700 opacity-0 group-hover/header:opacity-100 transition-opacity pointer-events-none z-50 w-max max-w-[200px] text-center">
+        {/* Type Badge */}
+        <div className="absolute top-1 right-2 text-[9px] uppercase tracking-wider text-white/60 font-bold">
             {getTooltipText()}
-            {/* Arrow */}
-            <div className="absolute left-1/2 -bottom-1 w-2 h-2 bg-slate-900 border-r border-b border-slate-700 transform rotate-45 -translate-x-1/2"></div>
         </div>
 
-        <div className="flex items-center font-bold">
+        <div className="flex items-center gap-2 mb-0.5">
             {getIcon()}
-            <span className="truncate">{data.label}</span>
+            <span className="font-bold text-white text-sm truncate drop-shadow-md">{data.label}</span>
         </div>
-        {data.stereotype && <span className="text-[10px] opacity-75 font-mono text-current">{data.stereotype}</span>}
-        <span className="text-[9px] opacity-60 font-mono text-current mt-0.5 truncate max-w-full" title={data.iri}>{displayIRI}</span>
+        
+        <div className="flex items-center justify-between">
+            <span className="text-[10px] text-white/60 font-mono truncate max-w-[80%]" title={data.iri}>{displayIRI}</span>
+            {data.stereotype && <span className="text-[9px] text-white/80 italic">{`«${data.stereotype}»`}</span>}
+        </div>
       </div>
 
       {/* Annotations Section */}
       {hasAnnotations && (
-        <div className="px-3 py-1.5 border-b border-slate-700 bg-slate-900/30">
+        <div className="px-3 py-2 border-b border-slate-800 bg-slate-800/30">
             {data.annotations && data.annotations.length > 0 ? (
-                data.annotations.map(ann => (
-                     <div key={ann.id} className="flex gap-1 text-[10px] items-start mb-0.5 last:mb-0">
-                        <span className="text-slate-500 font-mono shrink-0">{ann.property}:</span>
-                        <span className="text-slate-300 italic truncate">{ann.value}</span>
-                        {ann.language && <span className="text-slate-600 text-[8px] bg-slate-800 px-1 rounded">{ann.language}</span>}
+                data.annotations.slice(0, 2).map(ann => (
+                     <div key={ann.id} className="flex gap-1.5 text-[10px] items-baseline mb-0.5 last:mb-0">
+                        <span className="text-slate-500 font-mono shrink-0 select-none">{ann.property.split(':').pop()}:</span>
+                        <span className="text-slate-300 italic truncate">{ann.value.replace(/"/g, '')}</span>
                      </div>
                 ))
             ) : (
-                <div className="text-[10px] text-slate-400 italic">
+                <div className="text-[10px] text-slate-400 italic line-clamp-2 leading-relaxed">
                     {data.description}
                 </div>
             )}
+            {(data.annotations?.length || 0) > 2 && <div className="text-[9px] text-slate-600 mt-0.5">+{data.annotations!.length - 2} more</div>}
         </div>
       )}
 
-      {/* Section 1: Attributes */}
-      <div className="px-3 py-2 border-b border-slate-700 min-h-[20px] bg-slate-800/50">
-        <div className="text-[9px] text-slate-500 uppercase font-semibold mb-1 tracking-wider">{section1Label}</div>
-        {data.attributes && data.attributes.length > 0 ? (
-          data.attributes.map((attr) => (
-            <div key={attr.id} className="flex items-center py-0.5 text-slate-300">
-               {/* Visibility Symbol */}
-               <span className={`font-mono mr-1.5 w-2 text-center ${getVisibilityColor(attr.visibility)}`}>
+      {/* Attributes */}
+      <div className="px-3 py-2 border-b border-slate-800 bg-slate-900">
+        {(data.attributes && data.attributes.length > 0) ? (
+          data.attributes.slice(0, 5).map((attr) => (
+            <div key={attr.id} className="flex items-center py-0.5 text-xs">
+               <span className={`font-mono mr-1.5 w-3 text-center ${getVisibilityColor(attr.visibility)}`}>
                    {attr.visibility}
                </span>
-              <span className="font-semibold mr-1">
+              <span className="text-slate-300 font-medium mr-1 truncate">
                   {attr.isDerived && <span className="text-slate-500 mr-0.5">/</span>}
                   {attr.name}
               </span>
               {attr.type && (
-                  <>
-                    <span className="text-slate-500 mx-1">:</span>
-                    <span className="text-slate-400 italic text-[10px]">{attr.type}</span>
-                  </>
+                  <span className="text-slate-500 text-[10px] ml-auto font-mono truncate max-w-[40%]">{attr.type}</span>
               )}
             </div>
           ))
         ) : (
-          <div className="text-slate-600 italic text-[10px]">Empty</div>
+          <div className="text-[10px] text-slate-700 italic py-1">No {section1Label.toLowerCase()}</div>
         )}
+        {(data.attributes?.length || 0) > 5 && <div className="text-[9px] text-slate-600 mt-1 italic">...and more</div>}
       </div>
 
-      {/* Section 2: Axioms */}
-      <div className="px-3 py-2 min-h-[20px] bg-slate-800/50 rounded-b-md">
-        <div className="text-[9px] text-slate-500 uppercase font-semibold mb-1 tracking-wider">{section2Label}</div>
-        {data.methods && data.methods.length > 0 ? (
-          data.methods.map((method) => (
-            <div key={method.id} className="flex items-center py-0.5 text-slate-300">
-               <div className="flex flex-col leading-tight w-full">
-                   <div className="flex justify-between items-center">
-                        <div className="flex items-center">
-                             {/* Visibility Symbol */}
-                            <span className={`font-mono mr-1.5 w-2 text-center text-[10px] ${getVisibilityColor(method.visibility)}`}>
-                                {method.visibility}
-                            </span>
-                            <span className="font-medium text-slate-300">{method.name}</span>
-                        </div>
-                        {method.isOrdered && <span className="text-[8px] px-1 bg-slate-700 rounded text-slate-400 ml-2">{`{ordered}`}</span>}
-                   </div>
-                   <span className="text-[9px] text-slate-500 break-words pl-4">{method.returnType}</span>
-               </div>
+      {/* Methods / Axioms */}
+      <div className="px-3 py-2 bg-slate-900">
+        {(data.methods && data.methods.length > 0) ? (
+          data.methods.slice(0, 4).map((method) => (
+            <div key={method.id} className="flex flex-col py-1 text-xs border-b border-slate-800/50 last:border-0">
+                <div className="flex justify-between items-center text-slate-400">
+                    <span className="font-mono text-[9px] uppercase tracking-wide">{method.name.slice(0,3)}</span>
+                    <span className={`font-mono ${getVisibilityColor(method.visibility)}`}>{method.visibility}</span>
+                </div>
+                <span className="text-slate-300 text-[10px] font-mono truncate pl-1 border-l-2 border-slate-700 ml-0.5 mt-0.5">
+                    {method.returnType}
+                </span>
             </div>
           ))
         ) : (
-          <div className="text-slate-600 italic text-[10px]">No axioms</div>
+          <div className="text-[10px] text-slate-700 italic py-1">No {section2Label.toLowerCase()}</div>
         )}
+        {(data.methods?.length || 0) > 4 && <div className="text-[9px] text-slate-600 mt-1 italic">...and more</div>}
       </div>
 
       <Handle 
         type="source" 
         position={Position.Bottom} 
-        className="!bg-slate-500 !w-3 !h-2 !rounded-sm !border-none group-hover:!bg-blue-400 transition-colors duration-200" 
+        className="!bg-slate-400 !w-2 !h-2 !-bottom-1 opacity-0 group-hover:opacity-100 transition-opacity" 
       />
     </div>
   );

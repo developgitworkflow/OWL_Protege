@@ -17,7 +17,8 @@
     "n3": "1.17.2",
     "d3": "7.9.0",
     "vitest": "^4.0.16",
-    "mermaid": "10.9.0"
+    "mermaid": "10.9.0",
+    "dagre": "0.8.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

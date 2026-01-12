@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, EyeOff, ShieldCheck, Activity, Calculator, ScrollText, Sigma } from 'lucide-react';
+import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, EyeOff, ShieldCheck, Activity, Calculator, ScrollText, Sigma, ChevronRight } from 'lucide-react';
 
 interface TopBarProps {
     onOpenSettings: () => void;
@@ -65,7 +65,7 @@ const TopBar: React.FC<TopBarProps> = ({
       { id: 'design', label: 'Design', icon: Layers },
       { id: 'entities', label: 'Catalog', icon: List },
       { id: 'uml', label: 'UML', icon: Box },
-      { id: 'owlviz', label: 'Map', icon: Map },
+      { id: 'owlviz', label: 'Hierarchical', icon: Map },
       { id: 'peirce', label: 'Peirce', icon: Feather },
       { id: 'mindmap', label: 'Mindmap', icon: GitGraph },
       { id: 'tree', label: 'Tree', icon: FolderTree },
@@ -73,176 +73,189 @@ const TopBar: React.FC<TopBarProps> = ({
   ];
 
   return (
-    <div className="flex flex-col z-20 shadow-md">
+    <div className="flex flex-col z-20 shadow-xl bg-slate-950 border-b border-slate-800">
         {/* Primary Toolbar */}
-        <div className="h-14 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-4 text-white gap-4">
+        <div className="h-16 flex items-center justify-between px-4 gap-4 bg-slate-900/50 backdrop-blur-md">
         
-        {/* Left: Branding & Sidebar */}
-        <div className="flex items-center gap-3 shrink-0">
-            {showSidebarToggle && (
-                <button 
-                    onClick={onToggleSidebar}
-                    className="text-slate-400 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 rounded p-1"
-                    title={isSidebarOpen ? "Hide Toolbox" : "Show Toolbox"}
-                >
-                    {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
-                </button>
-            )}
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg">
-                <Layers className="text-white w-5 h-5" />
-            </div>
-            <div className="hidden md:block">
-                <h1 className="font-bold text-lg tracking-tight leading-none">Ontology <span className="text-blue-400 font-light">Architect</span></h1>
-            </div>
-        </div>
-
-        {/* Center: Navigation Views */}
-        <div className="flex-1 flex justify-center overflow-x-auto no-scrollbar">
-            <div className="flex items-center gap-1 bg-slate-800/50 p-1 rounded-lg border border-slate-700/50">
-                {views.map(view => (
+            {/* Left: Branding & Sidebar */}
+            <div className="flex items-center gap-4 shrink-0">
+                {showSidebarToggle && (
                     <button 
-                        key={view.id}
-                        onClick={() => onViewChange(view.id as any)}
-                        className={`px-3 py-1.5 text-xs font-medium rounded transition-all flex items-center gap-1.5 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-blue-500 focus:z-10 ${
-                            currentView === view.id 
-                            ? 'bg-blue-600 text-white shadow-sm' 
-                            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-                        }`}
-                        title={view.label}
+                        onClick={onToggleSidebar}
+                        className="text-slate-400 hover:text-white transition-colors focus:outline-none p-1.5 hover:bg-slate-800 rounded-lg"
+                        title={isSidebarOpen ? "Hide Toolbox" : "Show Toolbox"}
                     >
-                        <view.icon size={12} />
-                        <span className="hidden xl:inline">{view.label}</span>
+                        {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
                     </button>
-                ))}
-            </div>
-        </div>
-
-        {/* Right: Actions & Tools */}
-        <div className="flex items-center gap-3 shrink-0">
-            
-            {/* Search */}
-            <div className="relative hidden lg:block">
-                <input 
-                    className="bg-slate-800 border border-slate-700 rounded-full pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 w-40 transition-all focus:w-60 placeholder-slate-500"
-                    placeholder="Search entities..."
-                    value={searchTerm}
-                    onChange={(e) => onSearchChange(e.target.value)}
-                />
-                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-            </div>
-
-            <div className="h-6 w-px bg-slate-700"></div>
-
-            {/* Undo/Redo */}
-            <div className="flex gap-1">
-                <button 
-                    onClick={onUndo} 
-                    disabled={!canUndo}
-                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    title="Undo (Ctrl+Z)"
-                >
-                    <Undo2 size={18} />
-                </button>
-                <button 
-                    onClick={onRedo} 
-                    disabled={!canRedo}
-                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    title="Redo (Ctrl+Y)"
-                >
-                    <Redo2 size={18} />
-                </button>
-            </div>
-
-            <div className="h-6 w-px bg-slate-700"></div>
-
-            {/* Reasoner */}
-            <div className="flex items-center gap-2">
-                <button 
-                    onClick={onRunReasoner}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        isReasonerActive 
-                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-400 hover:bg-amber-500/30 hover:border-amber-400' 
-                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500'
-                    }`}
-                    title={isReasonerActive ? "Stop/Reset Reasoner" : "Run HermiT-like Reasoner"}
-                >
-                    {isReasonerActive ? <CheckCircle2 size={14} /> : <Brain size={14} />}
-                    <span className="hidden sm:inline">{isReasonerActive ? 'Active' : 'Reasoner'}</span>
-                </button>
-                
-                {isReasonerActive && (
-                    <div className="flex items-center bg-slate-900 rounded-md border border-slate-700 p-0.5">
-                        <button
-                            onClick={() => onToggleInferred()}
-                            className={`p-1 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${!showInferred ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
-                            title="Show Asserted"
-                        >
-                            <Layers size={12} />
-                        </button>
-                        <button
-                            onClick={() => onToggleInferred()}
-                            className={`p-1 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${showInferred ? 'bg-amber-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
-                            title="Show Inferred"
-                        >
-                            <Brain size={12} />
-                        </button>
-                    </div>
                 )}
+                <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20 ring-1 ring-white/10">
+                        <Layers className="text-white w-5 h-5" />
+                    </div>
+                    <div className="hidden md:block">
+                        <h1 className="font-bold text-lg tracking-tight leading-none text-slate-100">Ontology <span className="text-blue-400 font-light">Architect</span></h1>
+                        <div className="text-[10px] text-slate-500 font-medium tracking-wider uppercase">Visual Modeling Suite</div>
+                    </div>
+                </div>
             </div>
 
-            <div className="h-6 w-px bg-slate-700"></div>
+            {/* Center: Navigation Views */}
+            <div className="flex-1 flex justify-center overflow-x-auto no-scrollbar mask-gradient">
+                <div className="flex items-center gap-1 bg-slate-950/80 p-1.5 rounded-xl border border-slate-800 shadow-inner">
+                    {views.map(view => (
+                        <button 
+                            key={view.id}
+                            onClick={() => onViewChange(view.id as any)}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 whitespace-nowrap focus:outline-none ${
+                                currentView === view.id 
+                                ? 'bg-slate-800 text-blue-400 shadow-sm ring-1 ring-slate-700' 
+                                : 'text-slate-500 hover:text-slate-200 hover:bg-slate-900'
+                            }`}
+                            title={view.label}
+                        >
+                            <view.icon size={14} className={currentView === view.id ? "text-blue-400" : "opacity-70"} />
+                            <span className="hidden xl:inline">{view.label}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
 
-            {/* Settings Main Action */}
-            <button 
-                onClick={onOpenSettings}
-                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-3 py-1.5 rounded-md text-xs font-bold border border-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                title="Settings, Project & Import/Export"
-            >
-                <Settings size={14} />
-            </button>
-        </div>
+            {/* Right: Actions & Tools */}
+            <div className="flex items-center gap-3 shrink-0">
+                
+                {/* Search */}
+                <div className="relative hidden lg:block group">
+                    <input 
+                        className="bg-slate-900 border border-slate-700 rounded-full pl-9 pr-4 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 w-48 transition-all group-hover:bg-slate-800 placeholder-slate-500"
+                        placeholder="Search..."
+                        value={searchTerm}
+                        onChange={(e) => onSearchChange(e.target.value)}
+                    />
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
+                </div>
+
+                <div className="h-8 w-px bg-slate-800 mx-1"></div>
+
+                {/* History */}
+                <div className="flex bg-slate-900 rounded-lg border border-slate-800 p-0.5">
+                    <button 
+                        onClick={onUndo} 
+                        disabled={!canUndo}
+                        className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                        title="Undo (Ctrl+Z)"
+                    >
+                        <Undo2 size={16} />
+                    </button>
+                    <button 
+                        onClick={onRedo} 
+                        disabled={!canRedo}
+                        className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                        title="Redo (Ctrl+Y)"
+                    >
+                        <Redo2 size={16} />
+                    </button>
+                </div>
+
+                <div className="h-8 w-px bg-slate-800 mx-1"></div>
+
+                {/* Reasoner */}
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={onRunReasoner}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border shadow-sm ${
+                            isReasonerActive 
+                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20' 
+                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-600'
+                        }`}
+                        title={isReasonerActive ? "Stop/Reset Reasoner" : "Run HermiT-like Reasoner"}
+                    >
+                        {isReasonerActive ? <CheckCircle2 size={16} /> : <Brain size={16} />}
+                        <span className="hidden sm:inline">{isReasonerActive ? 'Active' : 'Reasoner'}</span>
+                    </button>
+                    
+                    {isReasonerActive && (
+                        <div className="flex items-center bg-slate-900 rounded-lg border border-slate-800 p-0.5">
+                            <button
+                                onClick={() => onToggleInferred()}
+                                className={`p-1.5 rounded-md transition-all ${!showInferred ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                                title="Show Asserted"
+                            >
+                                <Layers size={14} />
+                            </button>
+                            <button
+                                onClick={() => onToggleInferred()}
+                                className={`p-1.5 rounded-md transition-all ${showInferred ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                                title="Show Inferred"
+                            >
+                                <Brain size={14} />
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {/* Settings */}
+                <button 
+                    onClick={onOpenSettings}
+                    className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full border border-slate-700 transition-all shadow-sm"
+                    title="Settings"
+                >
+                    <Settings size={18} />
+                </button>
+            </div>
         </div>
 
-        {/* Secondary Toolbar (Ontology Tools) */}
-        <div className="h-10 bg-slate-950 border-b border-slate-800 flex items-center px-4 gap-4 overflow-x-auto no-scrollbar">
-            <div className="flex items-center gap-2 border-r border-slate-800 pr-4">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Visibility</span>
+        {/* Secondary Toolbar (Grouped Tools) */}
+        <div className="h-11 bg-slate-950 flex items-center px-4 gap-6 overflow-x-auto no-scrollbar text-xs border-t border-slate-900">
+            
+            {/* View Group */}
+            <div className="flex items-center gap-3">
+                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                    <Eye size={10} /> View
+                </span>
                 <button 
                     onClick={onToggleIndividuals}
-                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${showIndividuals ? 'bg-pink-900/20 text-pink-400 border border-pink-900/30' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'}`}
-                    title={showIndividuals ? "Hide Individuals" : "Show Individuals"}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-colors border ${showIndividuals ? 'bg-pink-500/10 text-pink-400 border-pink-500/20' : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-900 hover:text-slate-300'}`}
                 >
-                    {showIndividuals ? <Eye size={12} /> : <EyeOff size={12} />}
-                    Individuals
+                    {showIndividuals ? "Individuals On" : "Individuals Off"}
                 </button>
             </div>
 
-            <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Analysis</span>
-                <button onClick={onValidate} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-emerald-400 hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <ShieldCheck size={12} /> Validate
+            <div className="h-4 w-px bg-slate-800"></div>
+
+            {/* Analysis Group */}
+            <div className="flex items-center gap-1">
+                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mr-2 flex items-center gap-1">
+                    <Activity size={10} /> Analysis
+                </span>
+                <button onClick={onValidate} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-emerald-400 hover:bg-slate-900 transition-colors">
+                    <ShieldCheck size={14} /> Validate
                 </button>
-                <button onClick={onOpenMetrics} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-cyan-400 hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <Activity size={12} /> Metrics
+                <button onClick={onOpenMetrics} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-cyan-400 hover:bg-slate-900 transition-colors">
+                    <Activity size={14} /> Metrics
                 </button>
-                <button onClick={onOpenExpressivity} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-pink-400 hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <Calculator size={12} /> Complexity
+                <button onClick={onOpenExpressivity} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-pink-400 hover:bg-slate-900 transition-colors">
+                    <Calculator size={14} /> Complexity
                 </button>
             </div>
 
-            <div className="flex items-center gap-2 border-l border-slate-800 pl-4">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Logic</span>
-                <button onClick={onOpenDLQuery} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-purple-400 hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <Search size={12} /> DL Query
+            <div className="h-4 w-px bg-slate-800"></div>
+
+            {/* Logic Group */}
+            <div className="flex items-center gap-1">
+                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mr-2 flex items-center gap-1">
+                    <Terminal size={10} /> Logic
+                </span>
+                <button onClick={onOpenDLQuery} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-purple-400 hover:bg-slate-900 transition-colors">
+                    <Search size={14} /> Query
                 </button>
-                <button onClick={onOpenSWRL} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-amber-400 hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <ScrollText size={12} /> SWRL
+                <button onClick={onOpenSWRL} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-amber-400 hover:bg-slate-900 transition-colors">
+                    <ScrollText size={14} /> SWRL
                 </button>
-                <button onClick={onOpenDLAxioms} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-indigo-400 hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <Sigma size={12} /> Axioms
+                <button onClick={onOpenDLAxioms} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-indigo-400 hover:bg-slate-900 transition-colors">
+                    <Sigma size={14} /> Axioms
                 </button>
-                <button onClick={onOpenDatalog} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-emerald-400 hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <Terminal size={12} /> Datalog
+                <button onClick={onOpenDatalog} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-emerald-400 hover:bg-slate-900 transition-colors">
+                    <Terminal size={14} /> Datalog
                 </button>
             </div>
         </div>

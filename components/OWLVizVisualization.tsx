@@ -1,9 +1,10 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
+import dagre from 'dagre';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, Maximize, Download, RefreshCw, Layers, Database, User } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize, Download, ArrowDown, ArrowRight, Layout, Settings2, Share2, Layers } from 'lucide-react';
 
 interface OWLVizVisualizationProps {
     nodes: Node<UMLNodeData>[];
@@ -12,431 +13,392 @@ interface OWLVizVisualizationProps {
     selectedNodeId?: string | null;
 }
 
-interface SimNode extends d3.SimulationNodeDatum {
+// Modern Dark Theme matching the app's aesthetic
+const THEME = {
+    bg: '#020617',         // slate-950
+    
+    // Node Colors
+    classStroke: '#6366f1',    // Indigo-500
+    classFill: '#1e1b4b',      // Indigo-950
+    classText: '#e0e7ff',      // Indigo-100
+    
+    indivStroke: '#ec4899',    // Pink-500
+    indivFill: '#500724',      // Pink-950
+    indivText: '#fce7f3',      // Pink-100
+    
+    // Edges
+    edgeDefault: '#475569',    // Slate-600
+    edgeInferred: '#fbbf24',   // Amber-400
+    
+    // Selection
+    selection: '#facc15',      // Yellow-400
+};
+
+interface LayoutNode {
     id: string;
     label: string;
     type: ElementType;
-    iri?: string;
-    color: string;
-    width?: number;
-    height?: number;
-    radius?: number;
+    width: number;
+    height: number;
     x?: number;
     y?: number;
-    fx?: number | null;
-    fy?: number | null;
 }
 
-interface SimLink extends d3.SimulationLinkDatum<SimNode> {
-    source: string | SimNode;
-    target: string | SimNode;
+interface LayoutEdge {
+    source: string;
+    target: string;
     label: string;
-    type: 'subclass' | 'type' | 'relation';
+    points?: { x: number, y: number }[];
     isInferred: boolean;
+    type: 'subclass' | 'instance' | 'relation';
 }
-
-const THEME = {
-    classFill: '#1e293b', // slate-800
-    classStroke: '#6366f1', // indigo-500
-    indivFill: '#831843', // pink-900
-    indivStroke: '#ec4899', // pink-500
-    text: '#f8fafc',
-    line: '#94a3b8',
-    lineInferred: '#fbbf24',
-    bg: '#0f172a'
-};
 
 const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges, searchTerm = '', selectedNodeId }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
     const svgRef = useRef<SVGSVGElement>(null);
-    const [tooltip, setTooltip] = useState<{x: number, y: number, content: React.ReactNode} | null>(null);
-    
-    // Simulation refs to maintain state across renders without re-simulating unnecessarily
-    const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
-    const simNodes = useRef<SimNode[]>([]);
-    const simLinks = useRef<SimLink[]>([]);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    
+    const [direction, setDirection] = useState<'TB' | 'LR'>('TB');
+    const [graphData, setGraphData] = useState<{ nodes: LayoutNode[], edges: LayoutEdge[] } | null>(null);
 
+    // --- Layout Calculation (Dagre) ---
     useEffect(() => {
-        if (!svgRef.current || !containerRef.current) return;
+        const g = new dagre.graphlib.Graph();
+        g.setGraph({ 
+            rankdir: direction, 
+            nodesep: 60, 
+            ranksep: 80, 
+            marginx: 50, 
+            marginy: 50,
+            edgesep: 30 
+        });
+        g.setDefaultEdgeLabel(() => ({}));
 
-        const width = containerRef.current.clientWidth;
-        const height = containerRef.current.clientHeight;
-
-        // --- Data Preparation ---
+        // 1. Filter Relevant Nodes
         const relevantNodes = nodes.filter(n => 
             n.data.type === ElementType.OWL_CLASS || 
             n.data.type === ElementType.OWL_NAMED_INDIVIDUAL
         );
-        const nodeSet = new Set(relevantNodes.map(n => n.id));
+        const nodeIds = new Set(relevantNodes.map(n => n.id));
 
-        simNodes.current = relevantNodes.map(n => {
-            const isClass = n.data.type === ElementType.OWL_CLASS;
-            // Approximate text width
-            const textLen = n.data.label.length * 8 + 20;
-            return {
-                id: n.id,
-                label: n.data.label,
-                type: n.data.type,
-                iri: n.data.iri,
-                color: isClass ? THEME.classStroke : THEME.indivStroke,
-                width: Math.max(90, textLen),
-                height: 35,
-                radius: isClass ? 0 : 22, // 0 implies rect for classes
-                x: n.position.x + width/2 - 200, // Offset initial pos
-                y: n.position.y + height/2 - 200
-            };
+        // 2. Add Nodes
+        relevantNodes.forEach(n => {
+            // Estimate width/height
+            const labelLen = n.data.label.length;
+            const width = Math.max(120, labelLen * 8 + 30);
+            const height = 40; 
+            g.setNode(n.id, { label: n.data.label, width, height, type: n.data.type });
         });
 
-        simLinks.current = [];
+        // 3. Add Edges
+        const relevantEdges: LayoutEdge[] = [];
         
-        // 1. Edges
         edges.forEach(e => {
-            if (!nodeSet.has(e.source) || !nodeSet.has(e.target)) return;
-            
-            let type: SimLink['type'] = 'relation';
+            if (!nodeIds.has(e.source) || !nodeIds.has(e.target)) return;
+
             let label = e.label as string || '';
             const lowerLabel = label.toLowerCase();
-
-            if (['subclassof', 'rdfs:subclassof'].includes(lowerLabel)) type = 'subclass';
-            else if (['rdf:type', 'a'].includes(lowerLabel)) type = 'type';
+            const isInferred = e.data?.isInferred || false;
             
-            label = label.replace('owl:', '').replace('rdf:', '').replace('rdfs:', '');
+            let type: LayoutEdge['type'] = 'relation';
+            
+            if (['subclassof', 'rdfs:subclassof'].includes(lowerLabel)) {
+                type = 'subclass';
+                // Parent -> Child for Top-Down hierarchy usually means Parent is Higher (Lower Y)
+                // Dagre: Source -> Target.
+                // We want to draw Child -> Parent arrow.
+                // In Dagre TB, Source is usually top.
+                // If we want Parent at top, we model Parent -> Child in Dagre structure?
+                // Let's model the semantic flow: Child IS_A Parent. 
+                // Visually, Parent is usually Top. So Child (bottom) -> Parent (top).
+                // Dagre ranks depend on edges. A -> B puts A "before" B.
+                // In TB, "before" = Top.
+                // So Parent -> Child in Dagre puts Parent at Top.
+                g.setEdge(e.target, e.source, { minlen: 2 });
+            } 
+            else if (['rdf:type', 'a'].includes(lowerLabel)) {
+                type = 'instance';
+                // Class -> Individual (Class at top)
+                g.setEdge(e.target, e.source, { minlen: 1 });
+            } 
+            else {
+                // Ignore other edges for layout rank to prevent distortion, 
+                // but we might add them as constraints if we wanted strictly.
+                // For now, don't add to Dagre to let them float or add with weight 0
+                // g.setEdge(e.source, e.target, { minlen: 1, weight: 0 }); 
+            }
 
-            simLinks.current.push({
+            relevantEdges.push({
                 source: e.source,
                 target: e.target,
-                label,
+                label: label.replace(/^(owl:|rdf:|rdfs:)/, ''),
+                isInferred,
                 type,
-                isInferred: e.data?.isInferred || false
+                points: []
             });
         });
 
-        // 2. Internal Axioms (SubClassOf only for map structure)
-        // Only if edge doesn't already exist (some internal axioms are redundant with edges)
-        relevantNodes.forEach(n => {
-            n.data.methods.forEach(m => {
-                if (m.name.toLowerCase() === 'subclassof') {
-                    const targetName = m.returnType;
-                    const targetNode = relevantNodes.find(rn => rn.data.label === targetName);
-                    if (targetNode) {
-                        const exists = simLinks.current.some(l => 
-                            (l.source === n.id || (l.source as SimNode).id === n.id) && 
-                            (l.target === targetNode.id || (l.target as SimNode).id === targetNode.id) &&
-                            l.type === 'subclass'
-                        );
-                        if (!exists) {
-                            simLinks.current.push({
-                                source: n.id,
-                                target: targetNode.id,
-                                label: 'subClassOf',
-                                type: 'subclass',
-                                isInferred: false
-                            });
-                        }
-                    }
+        dagre.layout(g);
+
+        // 4. Map back
+        const mappedNodes: LayoutNode[] = [];
+        g.nodes().forEach(v => {
+            const nodeInfo = g.node(v);
+            mappedNodes.push({
+                id: v,
+                label: nodeInfo.label,
+                type: nodeInfo.type,
+                width: nodeInfo.width,
+                height: nodeInfo.height,
+                x: nodeInfo.x,
+                y: nodeInfo.y
+            });
+        });
+
+        // 5. Edges
+        const mappedEdges = relevantEdges.map(e => {
+            // Check if this edge was used in Dagre (reversed or not)
+            const dagreEdgeReversed = g.edge(e.target, e.source);
+            
+            let points: { x: number, y: number }[] = [];
+            
+            if (dagreEdgeReversed) {
+                // Reverse points back to Child -> Parent
+                points = [...dagreEdgeReversed.points].reverse();
+            } else {
+                // Direct calculation for non-layout edges
+                const sNode = mappedNodes.find(n => n.id === e.source);
+                const tNode = mappedNodes.find(n => n.id === e.target);
+                if (sNode && tNode) {
+                    // Simple straight line or curve
+                    points = [
+                        { x: sNode.x!, y: sNode.y! },
+                        { x: tNode.x!, y: tNode.y! }
+                    ];
                 }
-            });
+            }
+            return { ...e, points };
         });
 
-        // --- D3 Render ---
+        setGraphData({ nodes: mappedNodes, edges: mappedEdges });
+
+    }, [nodes, edges, direction]);
+
+    // --- D3 Render ---
+    useEffect(() => {
+        if (!graphData || !svgRef.current) return;
+
         const svg = d3.select(svgRef.current);
         svg.selectAll("*").remove();
 
+        // -- Defs (Glows & Markers) --
         const defs = svg.append("defs");
         
-        const markers = [
-            { id: 'arrow-rel', color: '#64748b', filled: true },
-            { id: 'arrow-sub', color: '#f8fafc', filled: false }, // Hollow triangle
-            { id: 'arrow-inf', color: '#fbbf24', filled: true }
-        ];
+        // Glow Filter
+        const filter = defs.append("filter").attr("id", "node-glow");
+        filter.append("feGaussianBlur").attr("stdDeviation", "2.5").attr("result", "coloredBlur");
+        const feMerge = filter.append("feMerge");
+        feMerge.append("feMergeNode").attr("in", "coloredBlur");
+        feMerge.append("feMergeNode").attr("in", "SourceGraphic");
 
-        markers.forEach(m => {
-            defs.append("marker")
-                .attr("id", m.id)
-                .attr("viewBox", "0 -5 10 10")
-                .attr("refX", 26) // Adjusted for larger nodes
-                .attr("refY", 0)
-                .attr("markerWidth", 8)
-                .attr("markerHeight", 8)
-                .attr("orient", "auto")
-                .append("path")
-                .attr("d", m.id === 'arrow-sub' ? "M0,-5L10,0L0,5Z" : "M0,-5L10,0L0,5")
-                .attr("fill", m.filled ? m.color : "none")
-                .attr("stroke", m.color)
-                .attr("stroke-width", 1.5);
-        });
+        // Markers
+        const markerAttrs = { viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto" };
+        
+        // 1. Subclass (Hollow Triangle)
+        defs.append("marker")
+            .attr("id", "arrow-sub")
+            .attr("viewBox", "0 0 12 12")
+            .attr("refX", 12)
+            .attr("refY", 6)
+            .attr("markerWidth", 10)
+            .attr("markerHeight", 10)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("d", "M0,0 L12,6 L0,12 L2,6 Z") // Triangleish
+            .attr("fill", THEME.bg)
+            .attr("stroke", THEME.edgeDefault)
+            .attr("stroke-width", 1.5);
 
+        // 2. Standard (Filled)
+        defs.append("marker")
+            .attr("id", "arrow-std")
+            .attr("viewBox", "0 0 10 10")
+            .attr("refX", 10)
+            .attr("refY", 5)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("d", "M0,0 L10,5 L0,10 z")
+            .attr("fill", THEME.edgeDefault);
+
+        // 3. Inferred (Amber)
+        defs.append("marker")
+            .attr("id", "arrow-inf")
+            .attr("viewBox", "0 0 10 10")
+            .attr("refX", 10)
+            .attr("refY", 5)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("d", "M0,0 L10,5 L0,10 z")
+            .attr("fill", THEME.edgeInferred);
+
+        // -- Scene --
         const g = svg.append("g");
+        gRef.current = g;
 
+        // Zoom
         const zoom = d3.zoom<SVGSVGElement, unknown>()
-            .scaleExtent([0.1, 4])
-            .on("zoom", (event) => g.attr("transform", event.transform));
+            .scaleExtent([0.1, 3])
+            .on("zoom", (e) => g.attr("transform", e.transform));
         zoomRef.current = zoom;
         svg.call(zoom);
 
-        const simulation = d3.forceSimulation(simNodes.current)
-            .force("link", d3.forceLink(simLinks.current).id((d: any) => d.id).distance(180))
-            .force("charge", d3.forceManyBody().strength(-600))
-            .force("center", d3.forceCenter(width / 2, height / 2))
-            // Separate Y-planes: Individuals bottom, Classes top
-            .force("y", d3.forceY((d: any) => d.type === ElementType.OWL_NAMED_INDIVIDUAL ? height * 0.75 : height * 0.25).strength(0.4))
-            .force("collide", d3.forceCollide().radius((d: any) => (d.width || 40)/1.2).iterations(2));
+        // -- Edges --
+        // Use a Basis curve for smooth hierarchy
+        const lineGen = d3.line<{x: number, y: number}>()
+            .x(d => d.x)
+            .y(d => d.y)
+            .curve(d3.curveBasis);
+
+        const edgeGroup = g.append("g").attr("class", "edges");
         
-        simulationRef.current = simulation;
+        graphData.edges.forEach(e => {
+            if (!e.points || e.points.length < 2) return;
+            
+            const isSub = e.type === 'subclass';
+            const color = e.isInferred ? THEME.edgeInferred : THEME.edgeDefault;
+            const marker = e.isInferred ? "url(#arrow-inf)" : (isSub ? "url(#arrow-sub)" : "url(#arrow-std)");
+            const dash = e.isInferred ? "4,4" : "";
 
-        // --- Layers ---
-        const boxLayer = g.append("g").attr("class", "box-layer");
-        const linkGroup = g.append("g").attr("class", "links");
-        const nodeGroup = g.append("g").attr("class", "nodes");
-
-        // --- Class Group Box ---
-        const classBoxGroup = boxLayer.append("g").style("display", "none");
-        const classBoxRect = classBoxGroup.append("rect")
-            .attr("fill", "rgba(99, 102, 241, 0.03)") 
-            .attr("stroke", "rgba(99, 102, 241, 0.2)")
-            .attr("stroke-width", 1)
-            .attr("stroke-dasharray", "8,4")
-            .attr("rx", 24);
-        const classBoxLabel = classBoxGroup.append("text")
-            .attr("fill", "rgba(99, 102, 241, 0.6)")
-            .attr("font-size", "14px")
-            .attr("font-weight", "bold")
-            .attr("text-anchor", "start")
-            .style("text-transform", "uppercase")
-            .style("letter-spacing", "2px")
-            .text("Classes (TBox)");
-
-        // --- Individual Group Box ---
-        const indivBoxGroup = boxLayer.append("g").style("display", "none");
-        const indivBoxRect = indivBoxGroup.append("rect")
-            .attr("fill", "rgba(236, 72, 153, 0.03)") 
-            .attr("stroke", "rgba(236, 72, 153, 0.2)")
-            .attr("stroke-width", 1)
-            .attr("stroke-dasharray", "8,4")
-            .attr("rx", 24);
-        const indivBoxLabel = indivBoxGroup.append("text")
-            .attr("fill", "rgba(236, 72, 153, 0.6)")
-            .attr("font-size", "14px")
-            .attr("font-weight", "bold")
-            .attr("text-anchor", "start")
-            .style("text-transform", "uppercase")
-            .style("letter-spacing", "2px")
-            .text("Individuals (ABox)");
-
-        const link = linkGroup
-            .selectAll("g")
-            .data(simLinks.current)
-            .join("g")
-            .attr("class", "link-group");
-
-        const linkPath = link.append("path")
-            .attr("fill", "none")
-            .attr("stroke", d => d.isInferred ? THEME.lineInferred : THEME.line)
-            .attr("stroke-width", 1.5)
-            .attr("stroke-dasharray", d => {
-                if (d.isInferred) return "5,5";
-                if (d.type === 'type') return "3,3";
-                return "";
-            })
-            .attr("marker-end", d => {
-                if (d.isInferred) return "url(#arrow-inf)";
-                if (d.type === 'subclass') return "url(#arrow-sub)";
-                return "url(#arrow-rel)";
-            });
-
-        const linkLabelGroup = link.append("g").style("display", d => d.type === 'subclass' ? 'none' : 'block');
-        
-        linkLabelGroup.append("rect")
-            .attr("rx", 3)
-            .attr("ry", 3)
-            .attr("fill", THEME.bg)
-            .attr("fill-opacity", 0.8)
-            .attr("stroke", d => d.isInferred ? THEME.lineInferred : THEME.line)
-            .attr("stroke-width", 0.5);
-
-        linkLabelGroup.append("text")
-            .text(d => d.label)
-            .attr("text-anchor", "middle")
-            .attr("dy", "0.3em")
-            .attr("font-size", "9px")
-            .attr("fill", d => d.isInferred ? THEME.lineInferred : "#94a3b8")
-            .each(function() {
-                const bbox = this.getBBox();
-                (this as any)._bbox = bbox;
-            });
-
-        linkLabelGroup.select("rect")
-            .attr("width", function() { 
-                const parent = (this as unknown as Element).parentNode as Element;
-                return ((parent.querySelector('text') as any)._bbox.width || 0) + 6; 
-            })
-            .attr("height", function() { 
-                const parent = (this as unknown as Element).parentNode as Element;
-                return ((parent.querySelector('text') as any)._bbox.height || 0) + 4; 
-            })
-            .attr("x", function() { 
-                const parent = (this as unknown as Element).parentNode as Element;
-                return -(((parent.querySelector('text') as any)._bbox.width || 0) + 6) / 2; 
-            })
-            .attr("y", function() { 
-                const parent = (this as unknown as Element).parentNode as Element;
-                return -(((parent.querySelector('text') as any)._bbox.height || 0) + 4) / 2; 
-            });
-
-        const node = nodeGroup
-            .selectAll("g")
-            .data(simNodes.current)
-            .join("g")
-            .attr("class", "node-group")
-            .call(d3.drag<any, any>()
-                .on("start", (event, d) => {
-                    if (!event.active) simulation.alphaTarget(0.3).restart();
-                    d.fx = d.x;
-                    d.fy = d.y;
-                })
-                .on("drag", (event, d) => {
-                    d.fx = event.x;
-                    d.fy = event.y;
-                })
-                .on("end", (event, d) => {
-                    if (!event.active) simulation.alphaTarget(0);
-                    d.fx = null;
-                    d.fy = null;
-                })
-            );
-
-        node.filter(d => d.type === ElementType.OWL_CLASS)
-            .append("rect")
-            .attr("width", d => d.width!)
-            .attr("height", d => d.height!)
-            .attr("x", d => -d.width! / 2)
-            .attr("y", d => -d.height! / 2)
-            .attr("rx", 8)
-            .attr("fill", d => d.id === selectedNodeId ? '#facc15' : THEME.classFill) // Highlight
-            .attr("stroke", d => d.id === selectedNodeId ? '#fff' : THEME.classStroke)
-            .attr("stroke-width", d => d.id === selectedNodeId ? 3 : 2)
-            .attr("class", "shadow-sm cursor-grab active:cursor-grabbing hover:fill-slate-700 transition-colors");
-
-        node.filter(d => d.type === ElementType.OWL_NAMED_INDIVIDUAL)
-            .append("circle")
-            .attr("r", 20)
-            .attr("fill", d => d.id === selectedNodeId ? '#facc15' : THEME.indivFill) // Highlight
-            .attr("stroke", d => d.id === selectedNodeId ? '#fff' : THEME.indivStroke)
-            .attr("stroke-width", d => d.id === selectedNodeId ? 3 : 2)
-            .attr("class", "cursor-grab active:cursor-grabbing hover:fill-pink-800 transition-colors");
-
-        node.append("text")
-            .text(d => d.label)
-            .attr("text-anchor", "middle")
-            .attr("dy", "0.35em")
-            .attr("fill", d => d.id === selectedNodeId ? '#000' : THEME.text)
-            .attr("font-size", "11px")
-            .attr("font-weight", "600")
-            .style("pointer-events", "none")
-            .style("text-shadow", "0 1px 2px rgba(0,0,0,0.8)");
-
-        simulation.on("tick", () => {
-            linkPath.attr("d", (d: any) => `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`);
-            linkLabelGroup.attr("transform", (d: any) => `translate(${(d.source.x + d.target.x)/2},${(d.source.y + d.target.y)/2})`);
-            node.attr("transform", d => `translate(${d.x},${d.y})`);
-
-            // --- Update Group Boxes ---
-            const padding = 40;
-
-            // Classes Box
-            const classes = simNodes.current.filter(n => n.type === ElementType.OWL_CLASS);
-            if (classes.length > 0) {
-                const xMin = d3.min(classes, n => (n.x || 0) - (n.width || 0)/2) || 0;
-                const xMax = d3.max(classes, n => (n.x || 0) + (n.width || 0)/2) || 0;
-                const yMin = d3.min(classes, n => (n.y || 0) - (n.height || 0)/2) || 0;
-                const yMax = d3.max(classes, n => (n.y || 0) + (n.height || 0)/2) || 0;
+            // Path
+            edgeGroup.append("path")
+                .datum(e.points)
+                .attr("d", lineGen)
+                .attr("fill", "none")
+                .attr("stroke", color)
+                .attr("stroke-width", 1.5)
+                .attr("stroke-dasharray", dash)
+                .attr("marker-end", marker)
+                .attr("opacity", 0.8);
                 
-                classBoxGroup.style("display", "block");
-                classBoxRect
-                    .attr("x", xMin - padding)
-                    .attr("y", yMin - padding - 10)
-                    .attr("width", Math.max(200, xMax - xMin + padding * 2))
-                    .attr("height", yMax - yMin + padding * 2 + 10);
-                
-                classBoxLabel
-                    .attr("x", xMin - padding + 10)
-                    .attr("y", yMin - padding - 20);
-            } else {
-                classBoxGroup.style("display", "none");
-            }
-
-            // Individuals Box
-            const indivs = simNodes.current.filter(n => n.type === ElementType.OWL_NAMED_INDIVIDUAL);
-            if (indivs.length > 0) {
-                const xMin = d3.min(indivs, n => (n.x || 0) - (n.radius || 20)) || 0;
-                const xMax = d3.max(indivs, n => (n.x || 0) + (n.radius || 20)) || 0;
-                const yMin = d3.min(indivs, n => (n.y || 0) - (n.radius || 20)) || 0;
-                const yMax = d3.max(indivs, n => (n.y || 0) + (n.radius || 20)) || 0;
-                
-                indivBoxGroup.style("display", "block");
-                indivBoxRect
-                    .attr("x", xMin - padding)
-                    .attr("y", yMin - padding - 10)
-                    .attr("width", Math.max(200, xMax - xMin + padding * 2))
-                    .attr("height", yMax - yMin + padding * 2 + 10);
-                
-                indivBoxLabel
-                    .attr("x", xMin - padding + 10)
-                    .attr("y", yMin - padding - 20);
-            } else {
-                indivBoxGroup.style("display", "none");
+            // Label (if not subclass)
+            if (!isSub && e.label) {
+                // Find midpoint roughly
+                const mid = e.points[Math.floor(e.points.length / 2)];
+                if (mid) {
+                    const lg = edgeGroup.append("g")
+                        .attr("transform", `translate(${mid.x}, ${mid.y})`);
+                    
+                    lg.append("rect")
+                        .attr("rx", 4)
+                        .attr("fill", THEME.bg)
+                        .attr("stroke", color)
+                        .attr("stroke-width", 1)
+                        .attr("opacity", 0.9);
+                        
+                    const txt = lg.append("text")
+                        .text(e.label)
+                        .attr("dy", "0.35em")
+                        .attr("text-anchor", "middle")
+                        .attr("font-size", "10px")
+                        .attr("fill", color)
+                        .style("pointer-events", "none");
+                        
+                    // Resize box
+                    const bbox = txt.node()?.getBBox();
+                    if (bbox) {
+                        lg.select("rect")
+                            .attr("x", -bbox.width/2 - 4)
+                            .attr("y", -bbox.height/2 - 2)
+                            .attr("width", bbox.width + 8)
+                            .attr("height", bbox.height + 4);
+                    }
+                }
             }
         });
 
-        node.on("mouseenter", (event, d) => {
-            const rect = containerRef.current?.getBoundingClientRect();
-            if (rect) {
-                setTooltip({
-                    x: event.clientX - rect.left,
-                    y: event.clientY - rect.top,
-                    content: (
-                        <div className="flex flex-col gap-1">
-                            <div className="font-bold text-sm">{d.label}</div>
-                            <div className="text-[10px] text-slate-400 font-mono">{d.iri || d.id}</div>
-                            <div className="text-[10px] bg-slate-800 rounded px-1 w-fit border border-slate-700 flex items-center gap-1">
-                                {d.type === ElementType.OWL_CLASS ? <Database size={10} className="text-indigo-400"/> : <User size={10} className="text-pink-400"/>}
-                                {d.type === ElementType.OWL_CLASS ? 'Class' : 'Individual'}
-                            </div>
-                        </div>
-                    )
-                });
+        // -- Nodes --
+        const nodeGroup = g.append("g").attr("class", "nodes");
+        
+        graphData.nodes.forEach(n => {
+            const isClass = n.type === ElementType.OWL_CLASS;
+            const stroke = isClass ? THEME.classStroke : THEME.indivStroke;
+            const fill = isClass ? THEME.classFill : THEME.indivFill;
+            const textFill = isClass ? THEME.classText : THEME.indivText;
+            
+            const ng = nodeGroup.append("g")
+                .attr("transform", `translate(${n.x}, ${n.y})`)
+                .attr("cursor", "pointer");
+
+            // Glow if selected or matched
+            const isSelected = n.id === selectedNodeId;
+            const isMatch = searchTerm && n.label.toLowerCase().includes(searchTerm.toLowerCase());
+            
+            if (isSelected || isMatch) {
+                ng.style("filter", "url(#node-glow)");
             }
-        }).on("mouseleave", () => setTooltip(null));
 
-        return () => {
-            simulation.stop();
-        };
+            // Shape
+            ng.append("rect")
+                .attr("x", -n.width / 2)
+                .attr("y", -n.height / 2)
+                .attr("width", n.width)
+                .attr("height", n.height)
+                .attr("rx", 8)
+                .attr("ry", 8)
+                .attr("fill", fill)
+                .attr("stroke", isSelected || isMatch ? THEME.selection : stroke)
+                .attr("stroke-width", isSelected ? 2.5 : 1.5)
+                .transition().duration(300);
 
-    }, [nodes, edges, searchTerm, selectedNodeId]); // Re-run on selection
+            // Icon Placeholder (Optional dot)
+            ng.append("circle")
+                .attr("cx", -n.width / 2 + 15)
+                .attr("cy", 0)
+                .attr("r", 4)
+                .attr("fill", stroke);
 
-    // Focus Logic
+            // Label
+            ng.append("text")
+                .text(n.label)
+                .attr("x", 0)
+                .attr("y", 0)
+                .attr("dy", "0.35em")
+                .attr("text-anchor", "middle")
+                .attr("font-size", "12px")
+                .attr("font-weight", "600")
+                .attr("fill", textFill)
+                .style("pointer-events", "none");
+        });
+
+    }, [graphData, selectedNodeId, searchTerm]);
+
+    // Initial Zoom Fit
     useEffect(() => {
-        if (selectedNodeId && svgRef.current && zoomRef.current && containerRef.current) {
-            const node = simNodes.current.find(n => n.id === selectedNodeId);
-            if (node && node.x !== undefined && node.y !== undefined) {
-                const width = containerRef.current.clientWidth;
-                const height = containerRef.current.clientHeight;
-                const scale = 1.2;
-                const transform = d3.zoomIdentity.translate(width / 2, height / 2).scale(scale).translate(-node.x, -node.y);
-                d3.select(svgRef.current).transition().duration(750).call(zoomRef.current.transform, transform);
-            }
+        if (graphData && svgRef.current && containerRef.current && graphData.nodes.length > 0) {
+            handleFit();
         }
-    }, [selectedNodeId]);
+    }, [graphData]);
 
-    const handleZoomIn = () => { if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 1.3); };
-    const handleZoomOut = () => { if (svgRef.current) d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().scaleBy as any, 0.7); };
-    const handleReset = () => {
-        if (svgRef.current && containerRef.current) {
+    const handleZoomIn = () => { if (svgRef.current) d3.select(svgRef.current).transition().call(zoomRef.current!.scaleBy, 1.2); };
+    const handleZoomOut = () => { if (svgRef.current) d3.select(svgRef.current).transition().call(zoomRef.current!.scaleBy, 0.8); };
+    const handleFit = () => {
+        if (svgRef.current && containerRef.current && zoomRef.current && gRef.current) {
+            const bounds = gRef.current.node()?.getBBox();
+            if (!bounds) return;
             const width = containerRef.current.clientWidth;
             const height = containerRef.current.clientHeight;
-            d3.select(svgRef.current).transition().call(d3.zoom<SVGSVGElement, unknown>().transform as any, d3.zoomIdentity.translate(width/2 - 100, height/2 - 100).scale(1));
-            simulationRef.current?.alpha(1).restart();
+            const dx = bounds.width;
+            const dy = bounds.height;
+            const x = bounds.x + dx / 2;
+            const y = bounds.y + dy / 2;
+            const scale = Math.max(0.1, Math.min(2, 0.9 / Math.max(dx / width, dy / height)));
+            const transform = d3.zoomIdentity.translate(width / 2 - scale * x, height / 2 - scale * y).scale(scale);
+            d3.select(svgRef.current).transition().duration(750).call(zoomRef.current.transform, transform);
         }
     };
 
@@ -444,61 +406,105 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
         if (!containerRef.current) return;
         const svg = containerRef.current.querySelector('svg');
         if (svg) {
-            const svgData = new XMLSerializer().serializeToString(svg);
-            const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const serializer = new XMLSerializer();
+            let source = serializer.serializeToString(svg);
+            // Namespace hack for standalone SVG
+            if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+            }
+            const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
             const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
+            const link = document.createElement("a");
             link.href = url;
-            link.download = 'ontomap.svg';
+            link.download = "hierarchical_view.svg";
             link.click();
         }
     };
 
     return (
         <div ref={containerRef} className="relative w-full h-full bg-slate-950 overflow-hidden">
-            <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
-                <div className="bg-slate-900/80 backdrop-blur border border-slate-800 p-2 rounded-lg text-xs text-slate-300 shadow-xl flex flex-col gap-2">
-                    <div className="flex gap-1">
-                        <button onClick={handleZoomIn} className="p-1.5 hover:bg-slate-700 rounded transition-colors"><ZoomIn size={16} /></button>
-                        <button onClick={handleZoomOut} className="p-1.5 hover:bg-slate-700 rounded transition-colors"><ZoomOut size={16} /></button>
-                        <button onClick={handleReset} className="p-1.5 hover:bg-slate-700 rounded transition-colors"><Maximize size={16} /></button>
-                    </div>
-                    <div className="h-px bg-slate-700"></div>
-                    <button onClick={handleDownload} className="flex items-center gap-2 p-1.5 hover:bg-slate-700 rounded transition-colors text-blue-400"><Download size={16} /> SVG</button>
-                </div>
-            </div>
-            
-            {/* Legend Overlay */}
-            <div className="absolute bottom-6 left-6 z-10 pointer-events-none">
-                <div className="bg-slate-900/80 backdrop-blur border border-slate-800 p-4 rounded-lg shadow-2xl">
-                    <h3 className="font-bold text-slate-300 mb-2 flex items-center gap-2 text-xs uppercase tracking-wider">
-                        <Layers size={14} /> Ontology Map
-                    </h3>
-                    <div className="space-y-2 text-xs text-slate-400">
-                        <div className="flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-sm border-2 border-indigo-500 bg-slate-800"></span>
-                            <span>Class (TBox)</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-full border-2 border-pink-500 bg-slate-800"></span>
-                            <span>Individual (ABox)</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="w-3 h-0 border-t-2 border-amber-400 border-dashed"></span>
-                            <span>Inferred</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {tooltip && (
-                <div className="absolute z-50 bg-slate-900/95 border border-slate-700 p-3 rounded-lg shadow-2xl pointer-events-none transform -translate-x-1/2 min-w-[150px] text-white animate-in fade-in zoom-in-95 duration-75" style={{ left: tooltip.x, top: tooltip.y - 15 }}>
-                    {tooltip.content}
-                    {/* Tooltip Arrow */}
-                    <div className="absolute left-1/2 -bottom-1.5 w-3 h-3 bg-slate-900 border-r border-b border-slate-700 transform rotate-45 -translate-x-1/2"></div>
-                </div>
-            )}
+            {/* SVG Canvas */}
             <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing touch-none" />
+
+            {/* Floating Shadcn-like Toolbar */}
+            <div className="absolute top-6 right-6 flex flex-col items-end gap-4 pointer-events-none">
+                
+                {/* Main Controls Panel */}
+                <div className="pointer-events-auto bg-slate-900/80 backdrop-blur-md border border-slate-800 p-1.5 rounded-xl shadow-2xl flex flex-col gap-1 transition-all hover:border-slate-700">
+                    
+                    {/* Direction Toggle Segmented Control */}
+                    <div className="flex bg-slate-950/50 p-1 rounded-lg border border-slate-800/50 mb-1">
+                        <button 
+                            onClick={() => setDirection('TB')}
+                            className={`flex-1 flex items-center justify-center p-1.5 rounded-md text-xs font-medium transition-all ${
+                                direction === 'TB' 
+                                ? 'bg-slate-800 text-indigo-400 shadow-sm' 
+                                : 'text-slate-500 hover:text-slate-300'
+                            }`}
+                            title="Top to Bottom"
+                        >
+                            <ArrowDown size={16} />
+                        </button>
+                        <button 
+                            onClick={() => setDirection('LR')}
+                            className={`flex-1 flex items-center justify-center p-1.5 rounded-md text-xs font-medium transition-all ${
+                                direction === 'LR' 
+                                ? 'bg-slate-800 text-indigo-400 shadow-sm' 
+                                : 'text-slate-500 hover:text-slate-300'
+                            }`}
+                            title="Left to Right"
+                        >
+                            <ArrowRight size={16} />
+                        </button>
+                    </div>
+
+                    <div className="h-px bg-slate-800 mx-1 my-0.5" />
+
+                    <div className="flex flex-col gap-1">
+                        <button onClick={handleZoomIn} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-2 group">
+                            <ZoomIn size={18} /> <span className="text-[10px] w-0 overflow-hidden group-hover:w-auto transition-all duration-300">Zoom In</span>
+                        </button>
+                        <button onClick={handleZoomOut} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-2 group">
+                            <ZoomOut size={18} /> <span className="text-[10px] w-0 overflow-hidden group-hover:w-auto transition-all duration-300">Zoom Out</span>
+                        </button>
+                        <button onClick={handleFit} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-2 group">
+                            <Maximize size={18} /> <span className="text-[10px] w-0 overflow-hidden group-hover:w-auto transition-all duration-300">Fit View</span>
+                        </button>
+                        <div className="h-px bg-slate-800 mx-1 my-0.5" />
+                        <button onClick={handleDownload} className="p-2 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-2 group">
+                            <Download size={18} /> <span className="text-[10px] w-0 overflow-hidden group-hover:w-auto transition-all duration-300">Export</span>
+                        </button>
+                    </div>
+                </div>
+
+                {/* Legend Card */}
+                <div className="pointer-events-auto bg-slate-900/80 backdrop-blur-md border border-slate-800 p-4 rounded-xl shadow-xl max-w-[200px]">
+                    <div className="flex items-center gap-2 mb-3 text-slate-400">
+                        <Layers size={14} />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Hierarchy</span>
+                    </div>
+                    <div className="space-y-2 text-xs font-medium text-slate-300">
+                        <div className="flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
+                            <span>Class</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-pink-600 shadow-[0_0_8px_rgba(236,72,153,0.5)]"></div>
+                            <span>Individual</span>
+                        </div>
+                        <div className="flex items-center gap-3 opacity-60">
+                            <div className="w-6 h-px bg-slate-400 relative">
+                                <div className="absolute right-0 -top-1 border-4 border-transparent border-l-slate-400"></div>
+                            </div>
+                            <span>SubClassOf</span>
+                        </div>
+                        <div className="flex items-center gap-3 opacity-60">
+                            <div className="w-6 h-px border-t border-amber-500 border-dashed relative"></div>
+                            <span className="text-amber-500">Inferred</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

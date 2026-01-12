@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Node as FlowNode, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Annotation, Method } from '../types';
-import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag, ArrowRightLeft, Sparkles, Command, AlertCircle, Layers, Settings, Database } from 'lucide-react';
+import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag, ArrowRightLeft, Sparkles, Command, AlertCircle, Layers, Settings, Database, ChevronDown, ChevronRight } from 'lucide-react';
 import AnnotationManager from './AnnotationManager';
 import { validateManchesterSyntax } from '../services/manchesterValidator';
 
@@ -42,7 +42,35 @@ const MANCHESTER_KEYWORDS = [
     'some', 'only', 'value', 'min', 'max', 'exactly', 'that', 'not', 'and', 'or', 'self'
 ];
 
-// --- Subcomponents ---
+// --- Components ---
+
+const AccordionSection: React.FC<{ 
+    title: string; 
+    icon: React.ReactNode; 
+    children: React.ReactNode; 
+    defaultOpen?: boolean 
+}> = ({ title, icon, children, defaultOpen = false }) => {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
+
+    return (
+        <div className="border border-slate-800 rounded-lg bg-slate-900/50 overflow-hidden mb-3">
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/50 hover:bg-slate-800 transition-colors text-xs font-bold text-slate-300 uppercase tracking-wider"
+            >
+                <div className="flex items-center gap-2">
+                    {icon} {title}
+                </div>
+                {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+            {isOpen && (
+                <div className="p-4 border-t border-slate-800 bg-slate-900">
+                    {children}
+                </div>
+            )}
+        </div>
+    );
+};
 
 const VisibilitySelector: React.FC<{ value: string; onChange: (val: string) => void }> = ({ value, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -64,20 +92,20 @@ const VisibilitySelector: React.FC<{ value: string; onChange: (val: string) => v
         <div className="relative" ref={containerRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`p-1.5 rounded-md border border-slate-800 bg-slate-900 hover:border-slate-600 transition-colors ${current.color}`}
+                className={`p-1.5 rounded-md border border-slate-700 bg-slate-800 hover:border-slate-500 transition-colors ${current.color}`}
                 title={`Visibility: ${current.label}`}
             >
                 <current.icon size={12} />
             </button>
             
             {isOpen && (
-                <div className="absolute top-full left-0 mt-1 w-40 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute top-full left-0 mt-1 w-40 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                     <div className="py-1">
                         {VISIBILITY_OPTIONS.map((opt) => (
                             <button
                                 key={opt.value}
                                 onClick={() => { onChange(opt.value); setIsOpen(false); }}
-                                className="w-full text-left px-3 py-2 text-xs hover:bg-slate-800 flex items-center gap-2 transition-colors group"
+                                className="w-full text-left px-3 py-2 text-xs hover:bg-slate-700 flex items-center gap-2 transition-colors group"
                             >
                                 <opt.icon size={12} className={opt.color} />
                                 <div>
@@ -205,12 +233,12 @@ const AxiomInput: React.FC<AxiomInputProps> = ({ value, onChange, placeholder, a
     return (
         <div className="relative w-full group/input" ref={containerRef}>
             {/* Syntax Toolbar */}
-            <div className="flex gap-1 mb-1.5 opacity-0 group-focus-within/input:opacity-100 group-hover/input:opacity-100 transition-opacity absolute bottom-full left-0 bg-slate-900/90 p-1 rounded-t-md border border-b-0 border-slate-700 pointer-events-none group-focus-within/input:pointer-events-auto z-10">
+            <div className="flex gap-1 mb-1.5 opacity-0 group-focus-within/input:opacity-100 group-hover/input:opacity-100 transition-opacity absolute bottom-full left-0 bg-slate-800 p-1 rounded-t-md border border-b-0 border-slate-700 pointer-events-none group-focus-within/input:pointer-events-auto z-10">
                 {['some', 'only', 'and', 'or', 'not'].map(kw => (
                     <button 
                         key={kw} 
                         onClick={() => insertToken(kw)}
-                        className="px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-400 hover:text-amber-300 hover:bg-slate-800 rounded transition-colors"
+                        className="px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-400 hover:text-amber-300 hover:bg-slate-700 rounded transition-colors"
                     >
                         {kw}
                     </button>
@@ -225,13 +253,13 @@ const AxiomInput: React.FC<AxiomInputProps> = ({ value, onChange, placeholder, a
                     onKeyDown={handleKeyDown}
                     placeholder={placeholder}
                     rows={1}
-                    className={`w-full bg-slate-900 border rounded px-2 py-1.5 text-[11px] text-slate-300 font-mono focus:outline-none focus:ring-1 resize-none overflow-hidden min-h-[28px] ${!validation.isValid && value ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-800 focus:border-blue-500/50 focus:ring-blue-500/20'}`}
-                    style={{ height: Math.max(28, value.split('\n').length * 18) + 'px' }}
+                    className={`w-full bg-slate-950 border rounded px-2 py-2 text-[11px] text-slate-300 font-mono focus:outline-none focus:ring-1 resize-none overflow-hidden min-h-[32px] ${!validation.isValid && value ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-800 focus:border-blue-500/50 focus:ring-blue-500/20'}`}
+                    style={{ height: Math.max(32, value.split('\n').length * 18) + 'px' }}
                 />
                 
                 {/* Validation Icon */}
                 {!validation.isValid && value && (
-                    <div className="absolute right-2 top-1.5 text-red-500 group/err">
+                    <div className="absolute right-2 top-2 text-red-500 group/err">
                         <AlertCircle size={12} />
                         <div className="absolute right-0 top-full mt-1 w-48 bg-red-950 border border-red-800 text-red-200 text-[10px] p-2 rounded shadow-xl opacity-0 group-hover/err:opacity-100 pointer-events-none transition-opacity z-20">
                             {validation.error}
@@ -292,7 +320,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
   // Handle Edge Editing View
   if (selectedEdge) {
       return (
-        <div ref={panelRef} className="w-full h-full overflow-y-auto flex flex-col font-sans text-sm text-slate-200">
+        <div ref={panelRef} className="w-full h-full overflow-y-auto flex flex-col font-sans text-sm text-slate-200 bg-slate-950">
             {/* Header */}
             <div className="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/90 backdrop-blur-sm sticky top-0 z-20">
                 <div className="flex flex-col">
@@ -319,7 +347,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
                         <label className="text-xs text-slate-500">Label (IRI)</label>
                         <input
                             type="text"
-                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
+                            className="w-full bg-slate-900 border border-slate-800 hover:border-slate-700 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
                             value={edgeLabel}
                             onChange={(e) => {
                                 setEdgeLabel(e.target.value);
@@ -343,7 +371,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
                                     setEdgeLabel(p);
                                     if (onUpdateEdge) onUpdateEdge(selectedEdge.id, p);
                                 }}
-                                className="px-3 py-2 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded text-[10px] font-mono text-slate-400 hover:text-blue-300 transition-colors text-left"
+                                className="px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded text-[10px] font-mono text-slate-400 hover:text-blue-300 transition-colors text-left"
                             >
                                 {p}
                             </button>
@@ -463,9 +491,9 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
       const axioms = localData.methods.filter(m => types.includes(m.name));
       
       return (
-          <div className="space-y-2">
+          <div className="space-y-2 mb-4">
               <div className="flex justify-between items-end">
-                  <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 ml-1">
                       {icon} {title}
                   </h4>
                   <button 
@@ -533,7 +561,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
   const displayType = localData.type.replace('owl_', '').replace(/_/g, ' ');
 
   return (
-    <div ref={panelRef} className="w-full h-full overflow-y-auto flex flex-col font-sans text-sm text-slate-200">
+    <div ref={panelRef} className="w-full h-full overflow-y-auto flex flex-col font-sans text-sm text-slate-200 bg-slate-950">
       
       {/* Header */}
       <div className="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/90 backdrop-blur-sm sticky top-0 z-20">
@@ -552,143 +580,138 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
         </button>
       </div>
 
-      <div className="p-5 space-y-6 flex-1">
+      <div className="p-4 space-y-2 flex-1">
         
-        {/* Identity Section */}
-        <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                Identity
-            </h3>
-            <div className="space-y-1">
-                 <label className="text-xs text-slate-500">Label (Display Name)</label>
-                 <input
-                    type="text"
-                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
-                    value={localData.label}
-                    onChange={(e) => handleChange('label', e.target.value)}
-                />
-            </div>
+        {/* 1. Identity Section */}
+        <AccordionSection title="Identity" icon={<Settings size={14} className="text-slate-400"/>} defaultOpen>
+            <div className="space-y-4">
+                <div className="space-y-1">
+                     <label className="text-[10px] font-bold text-slate-500 uppercase">Label</label>
+                     <input
+                        type="text"
+                        className="w-full bg-slate-950 border border-slate-700 hover:border-slate-600 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
+                        value={localData.label}
+                        onChange={(e) => handleChange('label', e.target.value)}
+                    />
+                </div>
 
-            <div className="space-y-1">
-                 <label className="text-xs text-slate-500">IRI (Unique Identifier)</label>
-                 <input
-                    type="text"
-                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
-                    value={localData.iri || `http://example.org/${selectedNode.id}`}
-                    onChange={(e) => handleChange('iri', e.target.value)}
-                />
+                <div className="space-y-1">
+                     <label className="text-[10px] font-bold text-slate-500 uppercase">IRI</label>
+                     <input
+                        type="text"
+                        className="w-full bg-slate-950 border border-slate-700 hover:border-slate-600 focus:border-blue-500 rounded p-2 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-700"
+                        value={localData.iri || `http://example.org/${selectedNode.id}`}
+                        onChange={(e) => handleChange('iri', e.target.value)}
+                    />
+                </div>
             </div>
-        </div>
+        </AccordionSection>
 
-        {/* 1. Axioms Section */}
-        <div className="pt-4 border-t border-slate-800 space-y-4">
-            {isObjectProperty ? (
-                // Object Property Axioms
-                <>
-                    {renderAxiomGroup('Domains (Intersection)', ['Domain'], <ArrowRight size={12} />, 'Class')}
-                    {renderAxiomGroup('Ranges (Intersection)', ['Range'], <ArrowRight size={12} />, 'Class')}
-                    {renderAxiomGroup('Super Properties', ['SubPropertyOf'], <GitMerge size={12} />, 'Property')}
-                    {renderAxiomGroup('Inverse Properties', ['InverseOf'], <GitMerge size={12} className="rotate-180" />, 'Property')}
-                    {renderAxiomGroup('Equivalent Properties', ['EquivalentTo'], <Link2 size={12} />, 'Property')}
-                    {renderAxiomGroup('Disjoint Properties', ['DisjointWith'], <Split size={12} />, 'Property')}
-                    {renderAxiomGroup('Property Chains', ['PropertyChainAxiom'], <GitCommit size={12} />, 'prop1 o prop2', true)}
-                </>
-            ) : (
-                // General Axioms (Classes)
-                <div className="space-y-3">
-                    <div className="flex justify-between items-end">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                            <Layers size={12} /> Axioms
-                        </h3>
-                        <button onClick={() => addMethod('SubClassOf')} className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs font-medium hover:bg-blue-500/10 px-2 py-1 rounded transition-colors"><Plus size={14} /> Add</button>
+        {/* 2. Axioms Section */}
+        {(isObjectProperty || isClassNode) && (
+            <AccordionSection title="Logical Axioms" icon={<Layers size={14} className="text-indigo-400"/>} defaultOpen>
+                {isObjectProperty ? (
+                    // Object Property Axioms
+                    <div className="space-y-4">
+                        {renderAxiomGroup('Domains', ['Domain'], <ArrowRight size={12} />, 'Class')}
+                        {renderAxiomGroup('Ranges', ['Range'], <ArrowRight size={12} />, 'Class')}
+                        {renderAxiomGroup('Super Properties', ['SubPropertyOf'], <GitMerge size={12} />, 'Property')}
+                        {renderAxiomGroup('Inverse Properties', ['InverseOf'], <GitMerge size={12} className="rotate-180" />, 'Property')}
+                        {renderAxiomGroup('Equivalent', ['EquivalentTo'], <Link2 size={12} />, 'Property')}
+                        {renderAxiomGroup('Disjoint', ['DisjointWith'], <Split size={12} />, 'Property')}
+                        {renderAxiomGroup('Chains', ['PropertyChainAxiom'], <GitCommit size={12} />, 'prop1 o prop2', true)}
                     </div>
-                    
-                    <div className="space-y-2">
-                        {localData.methods?.map((method) => (
-                             <div key={method.id} className="relative">
-                                 <div className={`bg-slate-950 border border-slate-800 rounded-lg p-2 group hover:border-slate-700 transition-colors flex gap-2 items-start ${showSyntaxHelp === method.id ? 'ring-1 ring-purple-500/50 border-purple-500/30' : ''}`}>
-                                     {/* Optional Visibility for Axioms/Operations */}
-                                     <div className="mt-0.5">
-                                        <VisibilitySelector 
-                                            value={method.visibility} 
-                                            onChange={(v) => updateMethod(method.id, 'visibility', v)} 
-                                        />
-                                     </div>
-
-                                     <div className="flex-1 flex flex-col gap-1.5">
-                                         <div className="flex gap-2 items-center">
-                                            <select 
-                                                className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[10px] text-purple-300 font-bold font-mono focus:outline-none focus:border-purple-500"
-                                                value={method.name}
-                                                onChange={(e) => updateMethod(method.id, 'name', e.target.value)}
-                                            >
-                                                <option value="SubClassOf">SubClassOf</option>
-                                                <option value="EquivalentTo">EquivalentTo</option>
-                                                <option value="DisjointWith">DisjointWith</option>
-                                                <option value="Type">Type (Instance)</option>
-                                                <option value="SameAs">SameAs</option>
-                                            </select>
-                                            <ArrowRight size={10} className="text-slate-600" />
-                                         </div>
-                                         <div className="relative">
-                                            <AxiomInput 
-                                                value={method.returnType}
-                                                onChange={(val) => updateMethod(method.id, 'returnType', val)}
-                                                placeholder="Expression (e.g. hasPart some Wheel)"
-                                                allNodes={allNodes}
+                ) : (
+                    // General Axioms (Classes)
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-end mb-2">
+                            <span className="text-[10px] text-slate-500">Defines relationships and constraints.</span>
+                            <button onClick={() => addMethod('SubClassOf')} className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs font-medium hover:bg-blue-500/10 px-2 py-1 rounded transition-colors"><Plus size={14} /> Add</button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            {localData.methods?.map((method) => (
+                                 <div key={method.id} className="relative">
+                                     <div className={`bg-slate-950 border border-slate-800 rounded-lg p-2 group hover:border-slate-700 transition-colors flex gap-2 items-start ${showSyntaxHelp === method.id ? 'ring-1 ring-purple-500/50 border-purple-500/30' : ''}`}>
+                                         {/* Optional Visibility for Axioms/Operations */}
+                                         <div className="mt-0.5">
+                                            <VisibilitySelector 
+                                                value={method.visibility} 
+                                                onChange={(v) => updateMethod(method.id, 'visibility', v)} 
                                             />
                                          </div>
+
+                                         <div className="flex-1 flex flex-col gap-1.5">
+                                             <div className="flex gap-2 items-center">
+                                                <select 
+                                                    className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[10px] text-purple-300 font-bold font-mono focus:outline-none focus:border-purple-500"
+                                                    value={method.name}
+                                                    onChange={(e) => updateMethod(method.id, 'name', e.target.value)}
+                                                >
+                                                    <option value="SubClassOf">SubClassOf</option>
+                                                    <option value="EquivalentTo">EquivalentTo</option>
+                                                    <option value="DisjointWith">DisjointWith</option>
+                                                    <option value="Type">Type (Instance)</option>
+                                                    <option value="SameAs">SameAs</option>
+                                                </select>
+                                                <ArrowRight size={10} className="text-slate-600" />
+                                             </div>
+                                             <div className="relative">
+                                                <AxiomInput 
+                                                    value={method.returnType}
+                                                    onChange={(val) => updateMethod(method.id, 'returnType', val)}
+                                                    placeholder="Expression (e.g. hasPart some Wheel)"
+                                                    allNodes={allNodes}
+                                                />
+                                             </div>
+                                         </div>
+                                         
+                                         <div className="flex flex-col gap-1">
+                                            <button onClick={() => toggleExpand(method.id)} className={`text-slate-500 hover:text-blue-400 ${expandedId === method.id ? 'text-blue-400' : ''}`}><Quote size={14}/></button>
+                                            <button onClick={() => removeMethod(method.id)} className="text-slate-600 hover:text-red-400"><X size={14}/></button>
+                                         </div>
                                      </div>
-                                     
-                                     <div className="flex flex-col gap-1">
-                                        <button onClick={() => toggleExpand(method.id)} className={`text-slate-500 hover:text-blue-400 ${expandedId === method.id ? 'text-blue-400' : ''}`}><Quote size={14}/></button>
-                                        <button onClick={() => removeMethod(method.id)} className="text-slate-600 hover:text-red-400"><X size={14}/></button>
-                                     </div>
+
+                                     {expandedId === method.id && (
+                                        <div className="mt-2 bg-slate-900 border border-slate-700 z-10 p-2 rounded shadow-xl">
+                                            <AnnotationManager annotations={method.annotations} onUpdate={(anns) => updateMethod(method.id, 'annotations', anns)} title="Axiom Annotations" compact />
+                                        </div>
+                                    )}
                                  </div>
-
-                                 {expandedId === method.id && (
-                                    <div className="mt-2 bg-slate-900 border border-slate-700 z-10 p-2 rounded shadow-xl">
-                                        <AnnotationManager annotations={method.annotations} onUpdate={(anns) => updateMethod(method.id, 'annotations', anns)} title="Axiom Annotations" compact />
-                                    </div>
-                                )}
-                             </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )}
+            </AccordionSection>
+        )}
 
-        {/* 2. Data Properties / Characteristics Section */}
-        <div className="pt-4 border-t border-slate-800">
+        {/* 3. Attributes / Characteristics Section */}
+        <AccordionSection title={isObjectProperty ? "Characteristics" : "Data Properties"} icon={isObjectProperty ? <Settings size={14} className="text-slate-400"/> : <Tag size={14} className="text-green-400"/>}>
             {isObjectProperty ? (
                  <div className="space-y-2">
-                     <div className="flex justify-between items-end">
-                         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                             <Settings size={12} /> Characteristics
-                         </h3>
+                     <div className="flex justify-between items-end mb-2">
+                         <span className="text-[10px] text-slate-500">Logical flags for the property.</span>
                          <button onClick={addAttribute} className="text-blue-400 hover:bg-blue-500/10 p-1 rounded"><Plus size={14}/></button>
                      </div>
                      <div className="grid grid-cols-2 gap-2">
                          {localData.attributes.map(attr => (
-                             <div key={attr.id} className="bg-slate-950 border border-slate-800 rounded px-2 py-1 flex justify-between items-center group">
+                             <div key={attr.id} className="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 flex justify-between items-center group hover:border-slate-600 transition-colors">
                                  <select 
-                                     className="bg-transparent text-[10px] text-slate-300 outline-none w-full"
+                                     className="bg-transparent text-[10px] text-slate-300 outline-none w-full appearance-none cursor-pointer"
                                      value={attr.name}
                                      onChange={(e) => updateAttribute(attr.id, 'name', e.target.value)}
                                  >
                                      {CHARACTERISTICS.map(c => <option key={c} value={c}>{c}</option>)}
                                  </select>
-                                 <button onClick={() => removeAttribute(attr.id)} className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100"><X size={10}/></button>
+                                 <button onClick={() => removeAttribute(attr.id)} className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><X size={10}/></button>
                              </div>
                          ))}
                      </div>
                  </div>
             ) : (
                 <div className="space-y-3">
-                    <div className="flex justify-between items-end">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                            <Tag size={12} /> Data Properties
-                        </h3>
+                    <div className="flex justify-between items-end mb-2">
+                        <span className="text-[10px] text-slate-500">Attributes with literal values.</span>
                         <button 
                             onClick={addAttribute} 
                             className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs font-medium hover:bg-blue-500/10 px-2 py-1 rounded transition-colors"
@@ -771,44 +794,43 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
                     </div>
                 </div>
             )}
-        </div>
+        </AccordionSection>
 
-        {/* 3. Instances Section */}
+        {/* 4. Instances Section */}
         {isClassNode && (
-            <div className="space-y-3 pt-4 border-t border-slate-800">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                    <User size={12} /> Instances
-                </h3>
-                <div className="flex gap-2">
-                    <input 
-                        className="flex-1 bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder-slate-600"
-                        placeholder="New Individual Name..."
-                        value={newIndivName}
-                        onChange={(e) => setNewIndivName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleCreateIndiv()}
-                    />
-                    <button 
-                        onClick={handleCreateIndiv}
-                        disabled={!newIndivName.trim()}
-                        className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white p-2 rounded transition-colors"
-                        title="Add Individual"
-                    >
-                        <Plus size={14} />
-                    </button>
+            <AccordionSection title="Instances" icon={<User size={14} className="text-pink-400"/>}>
+                <div className="space-y-3">
+                    <p className="text-[10px] text-slate-500">
+                        Create a new NamedIndividual and link it to {localData.label}.
+                    </p>
+                    <div className="flex gap-2">
+                        <input 
+                            className="flex-1 bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder-slate-600"
+                            placeholder="New Individual Name..."
+                            value={newIndivName}
+                            onChange={(e) => setNewIndivName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleCreateIndiv()}
+                        />
+                        <button 
+                            onClick={handleCreateIndiv}
+                            disabled={!newIndivName.trim()}
+                            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white p-2 rounded transition-colors"
+                            title="Add Individual"
+                        >
+                            <Plus size={14} />
+                        </button>
+                    </div>
                 </div>
-                <p className="text-[10px] text-slate-500 italic">
-                    Creates a new NamedIndividual and links it to {localData.label}.
-                </p>
-            </div>
+            </AccordionSection>
         )}
 
-        {/* 4. Annotations Section */}
-        <div className="pt-4 border-t border-slate-800">
+        {/* 5. Annotations Section */}
+        <AccordionSection title="Annotations" icon={<Quote size={14} className="text-slate-400"/>}>
             <AnnotationManager 
                 annotations={localData.annotations} 
                 onUpdate={handleAnnotationsUpdate}
             />
-        </div>
+        </AccordionSection>
 
       </div>
 
@@ -816,14 +838,11 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
       <div className="mt-4 pt-4 border-t border-slate-800 px-5 pb-5">
           <button 
               onClick={() => onDeleteNode(selectedNode.id)}
-              className="w-full flex items-center justify-center gap-2 bg-red-950/30 hover:bg-red-900/50 text-red-400 border border-red-900/50 rounded-lg p-2 text-xs font-bold transition-colors"
+              className="w-full flex items-center justify-center gap-2 bg-red-950/20 hover:bg-red-900/30 text-red-400 border border-red-900/30 hover:border-red-900/50 rounded-lg p-2.5 text-xs font-bold transition-all"
           >
               <AlertOctagon size={14} />
               Delete {displayType}
           </button>
-          <p className="text-[10px] text-slate-600 text-center mt-2">
-              Warning: Deleting this entity will remove it and all connected relations from the ontology.
-          </p>
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ import * as d3 from 'd3';
 import dagre from 'dagre';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, Maximize, Download, ArrowDown, ArrowRight, Layout, Settings2, Share2, Layers } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize, Download, ArrowDown, ArrowRight, Layout, Settings2, Share2, Layers, Database, User, Box, Tag, Sigma } from 'lucide-react';
 
 interface OWLVizVisualizationProps {
     nodes: Node<UMLNodeData>[];
@@ -53,6 +53,12 @@ interface LayoutEdge {
     type: 'subclass' | 'instance' | 'relation';
 }
 
+interface TooltipData {
+    x: number;
+    y: number;
+    data: UMLNodeData;
+}
+
 const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges, searchTerm = '', selectedNodeId }) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -61,6 +67,7 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
     
     const [direction, setDirection] = useState<'TB' | 'LR'>('TB');
     const [graphData, setGraphData] = useState<{ nodes: LayoutNode[], edges: LayoutEdge[] } | null>(null);
+    const [tooltip, setTooltip] = useState<TooltipData | null>(null);
 
     // --- Layout Calculation (Dagre) ---
     useEffect(() => {
@@ -106,15 +113,6 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             if (['subclassof', 'rdfs:subclassof'].includes(lowerLabel)) {
                 type = 'subclass';
                 // Parent -> Child for Top-Down hierarchy usually means Parent is Higher (Lower Y)
-                // Dagre: Source -> Target.
-                // We want to draw Child -> Parent arrow.
-                // In Dagre TB, Source is usually top.
-                // If we want Parent at top, we model Parent -> Child in Dagre structure?
-                // Let's model the semantic flow: Child IS_A Parent. 
-                // Visually, Parent is usually Top. So Child (bottom) -> Parent (top).
-                // Dagre ranks depend on edges. A -> B puts A "before" B.
-                // In TB, "before" = Top.
-                // So Parent -> Child in Dagre puts Parent at Top.
                 g.setEdge(e.target, e.source, { minlen: 2 });
             } 
             else if (['rdf:type', 'a'].includes(lowerLabel)) {
@@ -123,10 +121,7 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
                 g.setEdge(e.target, e.source, { minlen: 1 });
             } 
             else {
-                // Ignore other edges for layout rank to prevent distortion, 
-                // but we might add them as constraints if we wanted strictly.
-                // For now, don't add to Dagre to let them float or add with weight 0
-                // g.setEdge(e.source, e.target, { minlen: 1, weight: 0 }); 
+                // Ignore other edges for layout rank to prevent distortion
             }
 
             relevantEdges.push({
@@ -373,9 +368,33 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
                 .attr("font-weight", "600")
                 .attr("fill", textFill)
                 .style("pointer-events", "none");
+
+            // --- Tooltip Event Handlers ---
+            ng.on("mouseenter", (event) => {
+                const original = nodes.find(node => node.id === n.id);
+                if (original && containerRef.current) {
+                    const rect = containerRef.current.getBoundingClientRect();
+                    setTooltip({
+                        x: event.clientX - rect.left,
+                        y: event.clientY - rect.top,
+                        data: original.data
+                    });
+                }
+                d3.select(event.currentTarget).transition().duration(200).attr("transform", `translate(${n.x}, ${n.y}) scale(1.05)`);
+            })
+            .on("mousemove", (event) => {
+                if (containerRef.current) {
+                    const rect = containerRef.current.getBoundingClientRect();
+                    setTooltip(prev => prev ? { ...prev, x: event.clientX - rect.left, y: event.clientY - rect.top } : null);
+                }
+            })
+            .on("mouseleave", (event) => {
+                setTooltip(null);
+                d3.select(event.currentTarget).transition().duration(200).attr("transform", `translate(${n.x}, ${n.y}) scale(1)`);
+            });
         });
 
-    }, [graphData, selectedNodeId, searchTerm]);
+    }, [graphData, selectedNodeId, searchTerm, nodes]); // Added 'nodes' dependency to ensure tooltip data is fresh
 
     // Initial Zoom Fit
     useEffect(() => {
@@ -505,6 +524,96 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
                     </div>
                 </div>
             </div>
+
+            {/* Hover Tooltip Overlay */}
+            {tooltip && (
+                <div 
+                    className="absolute z-50 p-4 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] text-slate-200 pointer-events-none min-w-[220px] max-w-[280px] animate-in fade-in zoom-in-95 duration-150"
+                    style={{ 
+                        left: Math.min(tooltip.x + 20, (containerRef.current?.clientWidth || 0) - 300), 
+                        top: Math.min(tooltip.y + 20, (containerRef.current?.clientHeight || 0) - 200)
+                    }}
+                >
+                    <div className="flex flex-col gap-3">
+                        {/* Header */}
+                        <div className="flex items-start gap-3">
+                            <div className={`p-2 rounded-lg ${
+                                tooltip.data.type === ElementType.OWL_CLASS ? 'bg-indigo-500/20 text-indigo-400' :
+                                tooltip.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'bg-pink-500/20 text-pink-400' :
+                                'bg-slate-800 text-slate-400'
+                            }`}>
+                                {tooltip.data.type === ElementType.OWL_CLASS ? <Database size={16} /> : 
+                                 tooltip.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? <User size={16} /> : <Box size={16} />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="font-bold text-sm text-white truncate">{tooltip.data.label}</div>
+                                <div className="font-mono text-[10px] text-slate-500 truncate">{tooltip.data.iri || 'Local Entity'}</div>
+                            </div>
+                        </div>
+
+                        {/* Stats / Counts */}
+                        <div className="flex gap-2">
+                            {(tooltip.data.attributes?.length || 0) > 0 && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/30 text-emerald-400 border border-emerald-900/50">
+                                    {tooltip.data.attributes.length} Props
+                                </span>
+                            )}
+                            {(tooltip.data.methods?.length || 0) > 0 && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900/30 text-indigo-400 border border-indigo-900/50">
+                                    {tooltip.data.methods.length} Axioms
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Divider */}
+                        {((tooltip.data.attributes?.length || 0) > 0 || (tooltip.data.methods?.length || 0) > 0) && <div className="h-px bg-slate-800/80" />}
+
+                        {/* Attributes */}
+                        {(tooltip.data.attributes?.length || 0) > 0 && (
+                            <div className="space-y-1.5">
+                                <div className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1.5">
+                                    <Tag size={10} /> Properties
+                                </div>
+                                <div className="space-y-1">
+                                    {tooltip.data.attributes.slice(0, 3).map((attr: any) => (
+                                        <div key={attr.id} className="text-xs flex items-baseline justify-between bg-slate-800/30 p-1 rounded px-2">
+                                            <span className="text-slate-300 font-medium truncate max-w-[60%]">{attr.name}</span>
+                                            <span className="font-mono text-[9px] text-slate-500">{attr.type || 'Literal'}</span>
+                                        </div>
+                                    ))}
+                                    {tooltip.data.attributes.length > 3 && (
+                                        <div className="text-[9px] text-slate-500 italic px-1">
+                                            +{tooltip.data.attributes.length - 3} more
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Axioms */}
+                        {(tooltip.data.methods?.length || 0) > 0 && (
+                            <div className="space-y-1.5">
+                                <div className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1.5">
+                                    <Sigma size={10} /> Logic
+                                </div>
+                                <div className="space-y-1">
+                                    {tooltip.data.methods.slice(0, 3).map((m: any) => (
+                                        <div key={m.id} className="text-xs bg-slate-800/30 p-1 rounded px-2">
+                                            <div className="text-indigo-300 text-[10px] font-bold mb-0.5">{m.name}</div>
+                                            <div className="font-mono text-slate-400 text-[10px] truncate">{m.returnType}</div>
+                                        </div>
+                                    ))}
+                                    {tooltip.data.methods.length > 3 && (
+                                        <div className="text-[9px] text-slate-500 italic px-1">
+                                            +{tooltip.data.methods.length - 3} more
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

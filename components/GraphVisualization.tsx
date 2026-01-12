@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, RefreshCw, Maximize, Workflow, Database, User, Tag, ArrowRightLeft } from 'lucide-react';
+import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, User, Tag, ArrowRightLeft } from 'lucide-react';
 
 interface GraphVisualizationProps {
     nodes: Node<UMLNodeData>[];
@@ -404,16 +404,6 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
                             </div>
                         )}
                     </div>
-                    {onNavigate && (
-                        <div className="pt-2 border-t border-slate-700/50 flex justify-center pointer-events-auto">
-                            <button 
-                                onClick={() => onNavigate('concept', tooltip.node.id)}
-                                className="flex items-center gap-2 bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white px-2 py-1 rounded text-[10px] font-bold transition-colors w-full justify-center"
-                            >
-                                <Workflow size={12} /> Concept View
-                            </button>
-                        </div>
-                    )}
                     <div className="absolute left-1/2 -bottom-1.5 w-3 h-3 bg-slate-900 border-r border-b border-slate-700 transform rotate-45 -translate-x-1/2"></div>
                 </div>
             )}

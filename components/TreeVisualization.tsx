@@ -2,7 +2,7 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ChevronRight, ChevronDown, Database, User, Tag, ArrowRightLeft, FileType, Box, Layers, Brain, Workflow } from 'lucide-react';
+import { ChevronRight, ChevronDown, Database, User, Tag, ArrowRightLeft, FileType, Box, Layers, Brain } from 'lucide-react';
 
 interface TreeVisualizationProps {
     nodes: Node<UMLNodeData>[];
@@ -68,9 +68,8 @@ const TreeNodeItem: React.FC<{
                 className={`flex items-center gap-2 py-1 px-2 hover:bg-slate-800 rounded cursor-pointer transition-colors group relative ${level === 0 ? 'mb-1' : ''} ${isMatch ? 'bg-yellow-900/30 border border-yellow-700/50' : ''} ${isSelected ? 'bg-blue-900/30 border-l-2 border-blue-500' : ''}`}
                 style={{ paddingLeft: `${level * 16 + 8}px`, opacity: isDimmed ? 0.3 : 1 }}
                 onClick={(e) => { 
-                    // e.stopPropagation(); // Allow parent handling if needed
                     if (hasChildren) setIsOpen(!isOpen); 
-                    if (onNavigate) onNavigate('tree', node.id); // Just update selection
+                    if (onNavigate) onNavigate('tree', node.id); 
                 }}
             >
                 <div className="w-4 flex items-center justify-center shrink-0">
@@ -89,19 +88,6 @@ const TreeNodeItem: React.FC<{
                         <Brain size={10} className="text-amber-500 ml-1" />
                     </span>
                 )}
-                
-                {/* Navigation Action */}
-                <div className="ml-auto opacity-0 group-hover:opacity-100 flex items-center">
-                    {onNavigate && (
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); onNavigate('concept', node.id); }}
-                            className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-indigo-400 transition-colors"
-                            title="View in Concept Map"
-                        >
-                            <Workflow size={14} />
-                        </button>
-                    )}
-                </div>
             </div>
             {isOpen && hasChildren && (
                 <div>
@@ -131,9 +117,6 @@ const TreeSection: React.FC<{
 }> = ({ title, icon, nodes, searchTerm, selectedNodeId, onNavigate }) => {
     const [isExpanded, setIsExpanded] = useState(true);
 
-    // Auto expand section if selected node is inside (simplified check)
-    // Real implementation would check deep structure, but 'true' default covers most
-    
     if (nodes.length === 0) return null;
 
     return (

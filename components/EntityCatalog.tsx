@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Method } from '../types';
-import { Database, ArrowRightLeft, Tag, User, FileType, Plus, Trash2, Search, Edit3, Settings, ArrowRight, GitMerge, List, BookOpen, Brain, AlertTriangle, Sigma, Key, Link2, MessageSquare, Workflow } from 'lucide-react';
+import { Database, ArrowRightLeft, Tag, User, FileType, Plus, Trash2, Search, Edit3, Settings, ArrowRight, GitMerge, List, BookOpen, Brain, AlertTriangle, Sigma, Key, Link2, MessageSquare, Layers } from 'lucide-react';
 
 interface EntityCatalogProps {
     nodes: Node<UMLNodeData>[];
@@ -467,9 +467,9 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({
                                                         <button 
                                                             onClick={() => onViewInGraph && onViewInGraph(node.id)}
                                                             className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded transition-colors"
-                                                            title="Visualize in Concept Map"
+                                                            title="View in Graph"
                                                         >
-                                                            <Workflow size={16} />
+                                                            <Layers size={16} />
                                                         </button>
                                                         <button 
                                                             onClick={() => onSelectNode(node.id)}

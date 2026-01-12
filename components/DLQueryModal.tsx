@@ -430,13 +430,6 @@ const DLQueryModal: React.FC<DLQueryModalProps> = ({ isOpen, onClose, nodes, edg
                                                 <List size={16} />
                                             </button>
                                             <button 
-                                                onClick={() => { onNavigate('concept', node.id); onClose(); }}
-                                                className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded transition-colors"
-                                                title="View Concept Graph"
-                                            >
-                                                <Workflow size={16} />
-                                            </button>
-                                            <button 
                                                 onClick={() => { onNavigate('design', node.id); onClose(); }}
                                                 className="p-1.5 text-slate-400 hover:text-purple-400 hover:bg-slate-800 rounded transition-colors"
                                                 title="View on Canvas"

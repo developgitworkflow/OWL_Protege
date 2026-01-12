@@ -31,7 +31,6 @@ import MindmapVisualization from './components/MindmapVisualization';
 import TreeVisualization from './components/TreeVisualization';
 import UMLVisualization from './components/UMLVisualization';
 import PeirceVisualization from './components/PeirceVisualization';
-import ConceptGraph from './components/ConceptGraph';
 import OWLVizVisualization from './components/OWLVizVisualization';
 import WorkflowView from './components/WorkflowView';
 import EntityCatalog from './components/EntityCatalog';
@@ -67,7 +66,7 @@ function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [projectData, setProjectData] = useState<ProjectData>({ name: 'Untitled Ontology', defaultPrefix: 'ex' });
   
-  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz' | 'workflow'>('design');
+  const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'entities' | 'owlviz' | 'workflow'>('design');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -642,16 +641,6 @@ function App() {
 
                 {viewMode === 'peirce' && (
                     <PeirceVisualization nodes={visibleNodes} edges={edges} />
-                )}
-
-                {viewMode === 'concept' && (
-                    <ConceptGraph 
-                        nodes={visibleNodes} 
-                        edges={displayEdges} // Use displayEdges for reasoning view
-                        searchTerm={searchTerm}
-                        selectedNodeId={selectedNodeId}
-                        onNavigate={handleNavigate}
-                    />
                 )}
 
                 {viewMode === 'owlviz' && (

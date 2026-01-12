@@ -1,11 +1,11 @@
 
 import React from 'react';
-import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Workflow, Map, Feather, GitGraph, FolderTree, Terminal, Eye, EyeOff, ShieldCheck, Activity, Calculator, ScrollText, Sigma } from 'lucide-react';
+import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, EyeOff, ShieldCheck, Activity, Calculator, ScrollText, Sigma } from 'lucide-react';
 
 interface TopBarProps {
     onOpenSettings: () => void;
-    currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz' | 'workflow';
-    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'concept' | 'entities' | 'owlviz' | 'workflow') => void;
+    currentView: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'entities' | 'owlviz' | 'workflow';
+    onViewChange: (view: 'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'entities' | 'owlviz' | 'workflow') => void;
     searchTerm: string;
     onSearchChange: (term: string) => void;
     isReasonerActive: boolean;
@@ -64,7 +64,6 @@ const TopBar: React.FC<TopBarProps> = ({
       { id: 'workflow', label: 'Workflow', icon: GitBranch },
       { id: 'design', label: 'Design', icon: Layers },
       { id: 'entities', label: 'Catalog', icon: List },
-      { id: 'concept', label: 'Concept', icon: Workflow },
       { id: 'uml', label: 'UML', icon: Box },
       { id: 'owlviz', label: 'Map', icon: Map },
       { id: 'peirce', label: 'Peirce', icon: Feather },

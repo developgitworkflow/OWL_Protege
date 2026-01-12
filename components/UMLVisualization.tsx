@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import { Node, Edge } from 'reactflow';
@@ -8,12 +9,16 @@ interface UMLVisualizationProps {
     nodes: Node<UMLNodeData>[];
     edges: Edge[];
     searchTerm?: string;
+    onNavigate?: (view: string, id: string) => void;
 }
 
-const UMLVisualization: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm = '' }) => {
+const UMLVisualization: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm = '', onNavigate }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [svgCode, setSvgCode] = useState<string>('');
     const [scale, setScale] = useState(1);
+    
+    // Map safeId -> originalId for click handling
+    const idMap = useRef<Map<string, string>>(new Map());
 
     // Initialize mermaid
     useEffect(() => {
@@ -28,22 +33,37 @@ const UMLVisualization: React.FC<UMLVisualizationProps> = ({ nodes, edges, searc
         });
     }, []);
 
+    // Setup global callback for Mermaid clicks
+    useEffect(() => {
+        (window as any).onMermaidClick = (safeId: string) => {
+            const originalId = idMap.current.get(safeId);
+            if (originalId && onNavigate) {
+                onNavigate('uml', originalId);
+            }
+        };
+        return () => {
+            (window as any).onMermaidClick = undefined;
+        };
+    }, [onNavigate]);
+
     const generateMermaidCode = () => {
         let code = 'classDiagram\n';
         
-        // Use a Set to track rendered nodes to avoid duplicates or issues
+        // Reset Map
+        idMap.current.clear();
+        
         const renderedIds = new Set<string>();
 
         // Nodes
         nodes.forEach(node => {
-            // Filter visibility logic
             if (searchTerm && !node.data.label.toLowerCase().includes(searchTerm.toLowerCase())) {
                 return;
             }
 
             // Safe ID for Mermaid class definition
             const safeId = node.id.replace(/[^a-zA-Z0-9]/g, '_');
-            // Label can contain spaces or special chars, but double quotes need escaping
+            idMap.current.set(safeId, node.id);
+            
             const label = node.data.label.replace(/"/g, "'");
             renderedIds.add(node.id);
             
@@ -61,8 +81,6 @@ const UMLVisualization: React.FC<UMLVisualizationProps> = ({ nodes, edges, searc
             // Attributes
             node.data.attributes.forEach(attr => {
                 const vis = attr.visibility === '+' ? '+' : attr.visibility === '-' ? '-' : '#';
-                // Sanitize type: keep alphanumeric, colon, underscore, brackets (for arrays/generics)
-                // Remove spaces to prevent parsing issues in 'type name' format
                 const type = attr.type ? attr.type.replace(/[^a-zA-Z0-9:\[\]_]/g, '') : '';
                 const name = attr.name.replace(/[^a-zA-Z0-9_]/g, '_');
                 code += `        ${vis}${type} ${name}\n`;
@@ -71,9 +89,7 @@ const UMLVisualization: React.FC<UMLVisualizationProps> = ({ nodes, edges, searc
             // Methods (Axioms)
             node.data.methods.forEach(method => {
                 const vis = method.visibility === '+' ? '+' : method.visibility === '-' ? '-' : '#';
-                // We truncate return type for visual sanity in static diagram
                 let ret = method.returnType.length > 30 ? method.returnType.substring(0, 27) + '...' : method.returnType;
-                // Sanitize return type text for Mermaid display
                 ret = ret.replace(/"/g, "'").replace(/[(){}]/g, ''); 
                 const name = method.name.replace(/[^a-zA-Z0-9_]/g, '_');
                 code += `        ${vis}${name}(${ret})\n`;
@@ -81,11 +97,13 @@ const UMLVisualization: React.FC<UMLVisualizationProps> = ({ nodes, edges, searc
             
             code += `    }\n`;
             
+            // Add interaction callback
+            code += `    click ${safeId} call onMermaidClick("${safeId}") "Select ${label}"\n`;
+            
             // Highlight search match
             if (searchTerm && node.data.label.toLowerCase().includes(searchTerm.toLowerCase())) {
                 code += `    style ${safeId} fill:#854c08,stroke:#facc15,stroke-width:4px\n`;
             } else {
-                // Default styling based on type
                 if (node.data.type === ElementType.OWL_CLASS) {
                     code += `    style ${safeId} fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#fff\n`;
                 } else if (node.data.type === ElementType.OWL_NAMED_INDIVIDUAL) {
@@ -104,21 +122,14 @@ const UMLVisualization: React.FC<UMLVisualizationProps> = ({ nodes, edges, searc
             const t = edge.target.replace(/[^a-zA-Z0-9]/g, '_');
             const originalLabel = edge.label as string || '';
             
-            // Determine arrow type
             let arrow = '-->';
             if (originalLabel === 'subClassOf' || originalLabel === 'rdfs:subClassOf') arrow = '--|>';
             else if (originalLabel === 'rdf:type' || originalLabel === 'a') arrow = '..>';
             else if (originalLabel === 'owl:disjointWith') arrow = '..'; 
             
-            // Clean label for display: 
-            // 1. Remove quotes (meramid syntax doesn't strictly require them for simple labels and they can confuse parser)
-            // 2. Remove newlines
-            // 3. Replace colons with space to avoid syntax ambiguity with the label separator
             let displayLabel = originalLabel.replace(/"/g, '').replace(/\n/g, ' ').replace(/:/g, ' ').trim();
-            
             const isStandard = ['subClassOf', 'rdfs subClassOf', 'rdf type', 'a', 'owl disjointWith'].includes(displayLabel);
 
-            // Mermaid edge format: A --> B : Label
             if (displayLabel && !isStandard) {
                 code += `    ${s} ${arrow} ${t} : ${displayLabel}\n`;
             } else {
@@ -136,7 +147,6 @@ const UMLVisualization: React.FC<UMLVisualizationProps> = ({ nodes, edges, searc
         const graphDefinition = generateMermaidCode();
         
         try {
-            // Check if graphDefinition is empty (no classes)
             if (graphDefinition.trim() === 'classDiagram') {
                 setSvgCode('<div class="flex items-center justify-center h-full text-slate-500 text-sm italic">No elements to display. Add classes to the diagram.</div>');
                 return;
@@ -146,7 +156,6 @@ const UMLVisualization: React.FC<UMLVisualizationProps> = ({ nodes, edges, searc
             setSvgCode(svg);
         } catch (error) {
             console.error('Mermaid render error:', error);
-            // Show error but also the code for debugging if needed (hidden or small)
             setSvgCode(`
                 <div class="flex flex-col items-center justify-center h-full text-red-400 p-10 gap-4">
                     <div class="border border-red-900 bg-red-950/20 rounded p-4 max-w-lg">
@@ -159,13 +168,12 @@ const UMLVisualization: React.FC<UMLVisualizationProps> = ({ nodes, edges, searc
         }
     };
 
-    // Debounced Render
     useEffect(() => {
         const timer = setTimeout(() => {
             renderGraph();
         }, 500);
         return () => clearTimeout(timer);
-    }, [nodes, edges, searchTerm]);
+    }, [nodes, edges, searchTerm, onNavigate]);
 
     const handleDownload = () => {
         if (!containerRef.current) return;
@@ -217,7 +225,7 @@ const UMLVisualization: React.FC<UMLVisualizationProps> = ({ nodes, edges, searc
             
             {/* Info */}
             <div className="absolute bottom-4 left-6 text-[10px] text-slate-500 pointer-events-none">
-                Generated via Mermaid.js • Auto-Layout
+                Generated via Mermaid.js • Auto-Layout • Click elements to edit properties
             </div>
         </div>
     );

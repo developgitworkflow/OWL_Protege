@@ -622,6 +622,7 @@ function App() {
                         edges={displayEdges}
                         searchTerm={searchTerm}
                         selectedNodeId={selectedNodeId}
+                        onNavigate={handleNavigate}
                     />
                 )}
 
@@ -636,11 +637,11 @@ function App() {
                 )}
 
                 {viewMode === 'uml' && (
-                    <UMLVisualization nodes={visibleNodes} edges={edges} searchTerm={searchTerm} />
+                    <UMLVisualization nodes={visibleNodes} edges={edges} searchTerm={searchTerm} onNavigate={handleNavigate} />
                 )}
 
                 {viewMode === 'peirce' && (
-                    <PeirceVisualization nodes={visibleNodes} edges={edges} />
+                    <PeirceVisualization nodes={visibleNodes} edges={edges} onNavigate={handleNavigate} />
                 )}
 
                 {viewMode === 'owlviz' && (
@@ -649,6 +650,7 @@ function App() {
                         edges={displayEdges} // Use displayEdges for reasoning view
                         searchTerm={searchTerm} 
                         selectedNodeId={selectedNodeId} 
+                        onNavigate={handleNavigate}
                     />
                 )}
 

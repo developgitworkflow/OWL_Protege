@@ -8,6 +8,7 @@ import { ZoomIn, ZoomOut, Maximize, Scroll, RefreshCw, Feather, Brain, Eraser } 
 interface PeirceVisualizationProps {
     nodes: Node<UMLNodeData>[];
     edges: Edge[];
+    onNavigate?: (view: string, id: string) => void;
 }
 
 // --- Theme Colors (Clean Technical Style) ---
@@ -70,7 +71,7 @@ const ScrollRenderer: React.FC<{ s: string, p: string, o: string, type: 'subclas
 
 // --- 2. Graph Visualization (The Sheet of Assertion / Beta Graphs) ---
 
-const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges }) => {
+const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges, onNavigate }) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [showLogic, setShowLogic] = useState(false);
@@ -236,6 +237,7 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges 
             .data(simNodes)
             .enter().append("g")
             .attr("class", "node-group")
+            .style("cursor", "pointer")
             .call(d3.drag<any, any>()
                 .on("start", (event, d) => {
                     if (!event.active) simulation.alphaTarget(0.3).restart();
@@ -251,6 +253,12 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges 
                     d.fx = null;
                     d.fy = null;
                 }));
+
+        // Interaction
+        node.on("click", (event, d) => {
+            event.stopPropagation();
+            if (onNavigate) onNavigate('peirce', d.id);
+        });
 
         node.each(function(d) {
             const el = d3.select(this);

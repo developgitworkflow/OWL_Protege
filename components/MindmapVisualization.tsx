@@ -10,6 +10,7 @@ interface MindmapVisualizationProps {
     edges: Edge[];
     searchTerm?: string;
     selectedNodeId?: string | null;
+    onNavigate?: (view: string, id: string) => void;
 }
 
 interface HierarchyNode {
@@ -21,7 +22,7 @@ interface HierarchyNode {
     _children?: HierarchyNode[]; // For collapsing
 }
 
-const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edges, searchTerm = '', selectedNodeId }) => {
+const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edges, searchTerm = '', selectedNodeId, onNavigate }) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
@@ -151,20 +152,14 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
 
             const nodeEnter = node.enter().append("g")
                 .attr("class", "node")
-                .attr("transform", (d: any) => `translate(${source.y0 || 0},${source.x0 || 0})`);
-
-            // Circle Click -> Toggle Expansion
-            nodeEnter.append("circle")
-                .attr("r", 10)
-                .style("fill", (d: any) => {
-                    if (d.data.type === ElementType.OWL_CLASS) return "#6366f1"; // Indigo
-                    if (d.data.type === ElementType.OWL_NAMED_INDIVIDUAL) return "#ec4899"; // Pink
-                    return "#64748b";
-                })
-                .style("stroke", (d: any) => d.data.isInferred ? "#fbbf24" : "#1e293b")
-                .style("stroke-width", (d: any) => d.data.isInferred ? 3 : 2)
-                .style("cursor", "pointer")
+                .attr("transform", (d: any) => `translate(${source.y0 || 0},${source.x0 || 0})`)
                 .on("click", (event, d) => {
+                    // Trigger Selection for Properties Panel
+                    if (d.data.id && d.data.id !== 'virtual-root' && onNavigate) {
+                        onNavigate('mindmap', d.data.id);
+                    }
+                    
+                    // Toggle Children
                     if (d.children) {
                         (d as any)._children = d.children;
                         d.children = null;
@@ -176,6 +171,18 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
                     event.stopPropagation();
                 });
 
+            // Circle
+            nodeEnter.append("circle")
+                .attr("r", 10)
+                .style("fill", (d: any) => {
+                    if (d.data.type === ElementType.OWL_CLASS) return "#6366f1"; // Indigo
+                    if (d.data.type === ElementType.OWL_NAMED_INDIVIDUAL) return "#ec4899"; // Pink
+                    return "#64748b";
+                })
+                .style("stroke", (d: any) => d.data.isInferred ? "#fbbf24" : "#1e293b")
+                .style("stroke-width", (d: any) => d.data.isInferred ? 3 : 2)
+                .style("cursor", "pointer");
+
             // Text Label
             const textGroup = nodeEnter.append("text")
                 .attr("dy", ".35em")
@@ -184,7 +191,8 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
                 .style("fill", (d: any) => d.data.isInferred ? "#fbbf24" : "#cbd5e1")
                 .style("font-size", "12px")
                 .style("font-family", "sans-serif")
-                .style("text-shadow", "2px 2px 4px #0f172a");
+                .style("text-shadow", "2px 2px 4px #0f172a")
+                .style("cursor", "pointer");
             
             textGroup.append("tspan")
                 .text((d: any) => d.data.name);
@@ -197,6 +205,11 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
             nodeUpdate.select("text")
                 .attr("x", (d: any) => d.children || (d as any)._children ? -15 : 15)
                 .attr("text-anchor", (d: any) => d.children || (d as any)._children ? "end" : "start");
+
+            // Highlight selected
+            nodeUpdate.select("circle")
+                .style("stroke", (d: any) => d.data.id === selectedNodeId ? "#ffffff" : (d.data.isInferred ? "#fbbf24" : "#1e293b"))
+                .style("stroke-width", (d: any) => d.data.id === selectedNodeId ? 3 : (d.data.isInferred ? 3 : 2));
 
             const nodeExit = node.exit().transition().duration(200)
                 .attr("transform", (d: any) => `translate(${source.y},${source.x})`)
@@ -250,64 +263,26 @@ const MindmapVisualization: React.FC<MindmapVisualizationProps> = ({ nodes, edge
 
         update(root);
 
-    }, [rootData]); 
+    }, [rootData, selectedNodeId]); // Add selectedNodeId to dependency to re-render highlights
 
     // --- Styling & Selection Effect ---
     useEffect(() => {
         if (!gRef.current) return;
 
-        // Apply Search & Selected Highlighting without rebuilding tree
+        // Apply Search Highlight
         gRef.current.selectAll("g.node").each(function(d: any) {
             const el = d3.select(this);
-            const isSelected = d.data.id === selectedNodeId;
             const isMatch = searchTerm && d.data.name.toLowerCase().includes(searchTerm.toLowerCase());
             
-            // Circle Styles
-            el.select("circle")
-                .style("fill", () => {
-                    if (isSelected) return "#facc15"; 
-                    if (isMatch) return "#facc15";
-                    if ((d as any)._children) return "#fbbf24";
-                    if (d.data.type === ElementType.OWL_CLASS) return "#6366f1";
-                    if (d.data.type === ElementType.OWL_NAMED_INDIVIDUAL) return "#ec4899";
-                    return "#64748b";
-                })
-                .style("stroke", () => {
-                    if (isSelected) return "#fff";
-                    if (isMatch) return "#fff";
-                    return d.data.isInferred ? "#fbbf24" : "#1e293b";
-                })
-                .style("stroke-width", () => isSelected ? 4 : (d.data.isInferred ? 3 : 2))
-                .style("stroke-dasharray", () => d.data.isInferred ? "2,2" : "none");
-
-            // Text Styles
             el.select("text")
                 .style("fill", () => {
-                    if (isSelected) return "#facc15";
                     if (isMatch) return "#facc15";
                     return d.data.isInferred ? "#fbbf24" : "#cbd5e1";
                 })
-                .style("font-weight", () => isSelected || isMatch ? "bold" : "normal");
+                .style("font-weight", () => isMatch ? "bold" : "normal");
         });
 
-        // Zoom to selection
-        if (selectedNodeId && svgRef.current && zoomRef.current && containerRef.current) {
-            // Find data in D3 selection
-            const selection = gRef.current.selectAll("g.node")
-                .filter((d: any) => d.data.id === selectedNodeId);
-            
-            if (!selection.empty()) {
-                const d: any = selection.datum();
-                const width = containerRef.current.clientWidth;
-                const height = containerRef.current.clientHeight;
-                const t = d3.zoomIdentity.translate(width / 2 - d.y, height / 2 - d.x).scale(1);
-                
-                d3.select(svgRef.current).transition().duration(750)
-                    .call(zoomRef.current.transform, t);
-            }
-        }
-
-    }, [searchTerm, selectedNodeId]);
+    }, [searchTerm]);
 
     const handleZoomIn = useCallback(() => {
         if (!svgRef.current || !zoomRef.current) return;

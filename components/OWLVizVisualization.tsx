@@ -11,6 +11,7 @@ interface OWLVizVisualizationProps {
     edges: Edge[];
     searchTerm?: string;
     selectedNodeId?: string | null;
+    onNavigate?: (view: string, id: string) => void;
 }
 
 // Modern Dark Theme matching the app's aesthetic
@@ -59,7 +60,7 @@ interface TooltipData {
     data: UMLNodeData;
 }
 
-const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges, searchTerm = '', selectedNodeId }) => {
+const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges, searchTerm = '', selectedNodeId, onNavigate }) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
@@ -391,6 +392,12 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             .on("mouseleave", (event) => {
                 setTooltip(null);
                 d3.select(event.currentTarget).transition().duration(200).attr("transform", `translate(${n.x}, ${n.y}) scale(1)`);
+            })
+            .on("click", (event) => {
+                if (onNavigate) {
+                    onNavigate('owlviz', n.id);
+                }
+                event.stopPropagation();
             });
         });
 

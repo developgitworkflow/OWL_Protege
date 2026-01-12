@@ -1,14 +1,16 @@
+
 import React from 'react';
-import { X, AlertTriangle, CheckCircle, Info, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { X, AlertTriangle, CheckCircle, Info, ShieldAlert, ShieldCheck, Layers, List } from 'lucide-react';
 import { ValidationResult, ValidationIssue } from '../services/validatorService';
 
 interface ValidationModalProps {
   isOpen: boolean;
   onClose: () => void;
   result: ValidationResult | null;
+  onNavigate: (view: string, id: string) => void;
 }
 
-const ValidationModal: React.FC<ValidationModalProps> = ({ isOpen, onClose, result }) => {
+const ValidationModal: React.FC<ValidationModalProps> = ({ isOpen, onClose, result, onNavigate }) => {
   if (!isOpen || !result) return null;
 
   const errorCount = result.issues.filter(i => i.severity === 'error').length;
@@ -87,8 +89,19 @@ const ValidationModal: React.FC<ValidationModalProps> = ({ isOpen, onClose, resu
                                     {issue.message}
                                 </p>
                                 {issue.elementId && (
-                                    <div className="mt-2 text-xs font-mono bg-slate-950/50 px-2 py-1 rounded inline-block text-slate-500 border border-slate-800">
-                                        ID: {issue.elementId}
+                                    <div className="mt-3 flex gap-2">
+                                        <button 
+                                            onClick={() => { onNavigate('design', issue.elementId!); onClose(); }}
+                                            className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300 transition-colors"
+                                        >
+                                            <Layers size={12} /> Graph
+                                        </button>
+                                        <button 
+                                            onClick={() => { onNavigate('entities', issue.elementId!); onClose(); }}
+                                            className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300 transition-colors"
+                                        >
+                                            <List size={12} /> Catalog
+                                        </button>
                                     </div>
                                 )}
                             </div>

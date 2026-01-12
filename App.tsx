@@ -198,8 +198,17 @@ function App() {
   const handleNavigate = (view: string, id?: string) => {
     setViewMode(view as any);
     if (id) {
-        setSelectedNodeId(id);
-        setSelectedEdgeId(null);
+        // Check if ID belongs to a node or an edge to set correct selection
+        const isNode = nodes.some(n => n.id === id);
+        const isEdge = edges.some(e => e.id === id);
+        
+        if (isNode) {
+            setSelectedNodeId(id);
+            setSelectedEdgeId(null);
+        } else if (isEdge) {
+            setSelectedEdgeId(id);
+            setSelectedNodeId(null);
+        }
     }
   };
 
@@ -727,7 +736,12 @@ function App() {
                 setIsCreateOpen(false);
             }}
         />
-        <ValidationModal isOpen={isValidationOpen} onClose={() => setIsValidationOpen(false)} result={validationResult} />
+        <ValidationModal 
+            isOpen={isValidationOpen} 
+            onClose={() => setIsValidationOpen(false)} 
+            result={validationResult} 
+            onNavigate={handleNavigate}
+        />
         <DLQueryModal isOpen={isDLQueryOpen} onClose={() => setIsDLQueryOpen(false)} nodes={nodes} edges={edges} onNavigate={handleNavigate} />
         <SWRLModal 
             isOpen={isSWRLOpen} 

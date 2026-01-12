@@ -56,6 +56,10 @@ import { parseTurtle } from './services/rdfParser';
 import { parseRdfXml } from './services/rdfXmlParser';
 import { parseManchesterSyntax } from './services/manchesterSyntaxParser';
 import { parseFunctionalSyntax } from './services/functionalSyntaxParser';
+import { generateManchesterSyntax } from './services/manchesterSyntaxGenerator';
+import { generateFunctionalSyntax } from './services/functionalSyntaxGenerator';
+import { generateRdfXml } from './services/xmlGenerator';
+import { generateTurtle } from './services/owlMapper';
 
 const nodeTypes = {
   umlNode: UMLNode,
@@ -246,6 +250,57 @@ function App() {
             addToast('Relation deleted', 'success');
         }
     });
+  };
+
+  // --- Export Logic ---
+  const handleExport = (format: 'json' | 'rdf' | 'turtle' | 'manchester' | 'functional') => {
+      let content = '';
+      let mime = 'text/plain';
+      let extension = 'txt';
+      const filename = (projectData.name || 'ontology').replace(/\s+/g, '_');
+
+      try {
+          switch (format) {
+              case 'json':
+                  content = JSON.stringify({ metadata: projectData, nodes, edges }, null, 2);
+                  mime = 'application/json';
+                  extension = 'json';
+                  break;
+              case 'rdf':
+                  content = generateRdfXml(nodes, edges, projectData);
+                  mime = 'application/rdf+xml';
+                  extension = 'owl';
+                  break;
+              case 'turtle':
+                  content = generateTurtle(nodes, edges, projectData);
+                  mime = 'text/turtle';
+                  extension = 'ttl';
+                  break;
+              case 'manchester':
+                  content = generateManchesterSyntax(nodes, edges, projectData);
+                  mime = 'text/plain';
+                  extension = 'omn';
+                  break;
+              case 'functional':
+                  content = generateFunctionalSyntax(nodes, edges, projectData);
+                  mime = 'text/plain';
+                  extension = 'ofn';
+                  break;
+          }
+
+          const blob = new Blob([content], { type: mime });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${filename}.${extension}`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          addToast(`Exported as ${format.toUpperCase()}`, 'success');
+      } catch (e) {
+          console.error(e);
+          addToast("Export failed: " + (e as Error).message, 'error');
+      }
   };
 
   // --- Keyboard & Focus Management ---
@@ -713,8 +768,7 @@ function App() {
             projectData={projectData}
             onUpdateProjectData={setProjectData}
             onNewProject={() => { setNodes([]); setEdges([]); setProjectData({ name: 'New Project', defaultPrefix: 'ex' }); }}
-            onExportJSON={() => {}} // Todo: Implement logic similar to previous versions if needed or rely on code viewer
-            onExportTurtle={() => {}}
+            onExport={handleExport}
             onImportJSON={(e) => { if (e.target.files?.[0]) handleImportFile(e.target.files[0]); }}
             onOpenImportUrl={() => setIsImportUrlOpen(true)}
             onValidate={handleValidate}

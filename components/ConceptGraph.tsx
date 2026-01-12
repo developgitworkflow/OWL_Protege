@@ -350,13 +350,56 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
         // --- 3. Rendering ---
 
-        const linkGroup = g.append("g").selectAll("g").data(simLinks).join("g");
+        // --- Layers ---
+        const boxLayer = g.append("g").attr("class", "box-layer");
+        const linkGroupSelection = g.append("g").attr("class", "links");
+        const nodeGroupSelection = g.append("g").attr("class", "nodes");
 
-        const linkPath = linkGroup.append("path")
-            .attr("stroke", d => d.isInferred ? THEME.inferredStroke : "#475569")
-            .attr("stroke-width", d => d.isInferred ? 1.5 : 1.5)
+        // --- Class Group Box ---
+        const classBoxGroup = boxLayer.append("g").style("display", "none");
+        const classBoxRect = classBoxGroup.append("rect")
+            .attr("fill", "rgba(99, 102, 241, 0.03)") 
+            .attr("stroke", "rgba(99, 102, 241, 0.2)")
+            .attr("stroke-width", 1)
+            .attr("stroke-dasharray", "8,4")
+            .attr("rx", 24);
+        const classBoxLabel = classBoxGroup.append("text")
+            .attr("fill", "rgba(99, 102, 241, 0.6)")
+            .attr("font-size", "14px")
+            .attr("font-weight", "bold")
+            .attr("text-anchor", "start")
+            .style("text-transform", "uppercase")
+            .style("letter-spacing", "2px")
+            .text("Classes (TBox)");
+
+        // --- Individual Group Box ---
+        const indivBoxGroup = boxLayer.append("g").style("display", "none");
+        const indivBoxRect = indivBoxGroup.append("rect")
+            .attr("fill", "rgba(236, 72, 153, 0.03)") 
+            .attr("stroke", "rgba(236, 72, 153, 0.2)")
+            .attr("stroke-width", 1)
+            .attr("stroke-dasharray", "8,4")
+            .attr("rx", 24);
+        const indivBoxLabel = indivBoxGroup.append("text")
+            .attr("fill", "rgba(236, 72, 153, 0.6)")
+            .attr("font-size", "14px")
+            .attr("font-weight", "bold")
+            .attr("text-anchor", "start")
+            .style("text-transform", "uppercase")
+            .style("letter-spacing", "2px")
+            .text("Individuals (ABox)");
+
+        const link = linkGroupSelection
+            .selectAll("g")
+            .data(simLinks)
+            .join("g")
+            .attr("class", "link-group");
+
+        const linkPath = link.append("path")
+            .attr("stroke", (d: any) => d.isInferred ? THEME.inferredStroke : "#475569")
+            .attr("stroke-width", (d: any) => d.isInferred ? 1.5 : 1.5)
             .attr("fill", "none")
-            .attr("marker-end", d => {
+            .attr("marker-end", (d: any) => {
                 if (!d.isArrow) return null;
                 if (d.isInferred) return "url(#arrow-inf)";
                 const src = d.source as SimNode;
@@ -365,9 +408,52 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                 if (!src.isProperty && !tgt.isProperty) return "url(#arrow-sub)";
                 return "url(#arrow-std)";
             })
-            .attr("stroke-dasharray", d => (d.role === 'instance' || d.role === 'disjoint_link' || !d.isArrow || d.isInferred) ? "4,4" : "");
+            .attr("stroke-dasharray", (d: any) => (d.role === 'instance' || d.role === 'disjoint_link' || !d.isArrow || d.isInferred) ? "4,4" : "");
 
-        const node = g.append("g").selectAll("g").data(simNodes).join("g")
+        const linkLabelGroup = link.append("g").style("display", (d: any) => d.type === 'subclass' ? 'none' : 'block');
+        
+        linkLabelGroup.append("rect")
+            .attr("rx", 3)
+            .attr("ry", 3)
+            .attr("fill", THEME.bg)
+            .attr("fill-opacity", 0.8)
+            .attr("stroke", (d: any) => d.isInferred ? THEME.inferredStroke : THEME.line)
+            .attr("stroke-width", 0.5);
+
+        linkLabelGroup.append("text")
+            .text((d: any) => d.label)
+            .attr("text-anchor", "middle")
+            .attr("dy", "0.3em")
+            .attr("font-size", "9px")
+            .attr("fill", (d: any) => d.isInferred ? THEME.inferred : "#94a3b8")
+            .each(function() {
+                const bbox = this.getBBox();
+                (this as any)._bbox = bbox;
+            });
+
+        linkLabelGroup.select("rect")
+            .attr("width", function() { 
+                const parent = (this as unknown as Element).parentNode as Element;
+                return ((parent.querySelector('text') as any)._bbox.width || 0) + 6; 
+            })
+            .attr("height", function() { 
+                const parent = (this as unknown as Element).parentNode as Element;
+                return ((parent.querySelector('text') as any)._bbox.height || 0) + 4; 
+            })
+            .attr("x", function() { 
+                const parent = (this as unknown as Element).parentNode as Element;
+                return -(((parent.querySelector('text') as any)._bbox.width || 0) + 6) / 2; 
+            })
+            .attr("y", function() { 
+                const parent = (this as unknown as Element).parentNode as Element;
+                return -(((parent.querySelector('text') as any)._bbox.height || 0) + 4) / 2; 
+            });
+
+        const node = nodeGroupSelection
+            .selectAll("g")
+            .data(simNodes)
+            .join("g")
+            .attr("class", "node-group")
             .call(d3.drag<any, any>()
                 .on("start", (event, d) => {
                     if (!event.active) simulation.alphaTarget(0.3).restart();

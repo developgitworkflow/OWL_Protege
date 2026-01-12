@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Node as FlowNode, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Annotation, Method } from '../types';
-import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag, ArrowRightLeft, Sparkles, Command, AlertCircle, Layers, Settings, Database, ChevronDown, ChevronRight } from 'lucide-react';
+import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag, ArrowRightLeft, Sparkles, Command, AlertCircle, Layers, Settings, Database, ChevronDown, ChevronRight, List, Network } from 'lucide-react';
 import AnnotationManager from './AnnotationManager';
 import { validateManchesterSyntax } from '../services/manchesterValidator';
 
@@ -15,6 +15,7 @@ interface PropertiesPanelProps {
   onDeleteNode: (id: string) => void;
   onDeleteEdge?: (id: string) => void;
   onCreateIndividual?: (classId: string, name: string) => void;
+  onNavigate: (view: string, id: string) => void;
   onClose: () => void;
 }
 
@@ -291,7 +292,7 @@ const AxiomInput: React.FC<AxiomInputProps> = ({ value, onChange, placeholder, a
 
 // --- Main Component ---
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selectedEdge, allNodes, onUpdateNode, onUpdateEdge, onDeleteNode, onDeleteEdge, onCreateIndividual, onClose }) => {
+const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selectedEdge, allNodes, onUpdateNode, onUpdateEdge, onDeleteNode, onDeleteEdge, onCreateIndividual, onNavigate, onClose }) => {
   const [localData, setLocalData] = useState<UMLNodeData | null>(null);
   const [edgeLabel, setEdgeLabel] = useState('');
   const [activeAttrType, setActiveAttrType] = useState<string | null>(null);
@@ -571,13 +572,41 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
             </span>
             <div className="font-bold text-lg text-white truncate max-w-[200px]" title={localData.label}>{localData.label}</div>
         </div>
-        <button 
-            onClick={onClose}
-            className="text-slate-500 hover:text-white hover:bg-slate-800 p-2 rounded-full transition-all"
-            title="Hide Panel"
-        >
-            <X size={20} />
-        </button>
+        
+        <div className="flex items-center gap-1">
+            {/* View Navigation */}
+            <div className="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700 mr-2">
+                <button 
+                    onClick={() => onNavigate('design', selectedNode.id)}
+                    className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-indigo-400 transition-colors"
+                    title="Focus in Graph"
+                >
+                    <Layers size={14} />
+                </button>
+                <button 
+                    onClick={() => onNavigate('entities', selectedNode.id)}
+                    className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-blue-400 transition-colors"
+                    title="View in Catalog"
+                >
+                    <List size={14} />
+                </button>
+                <button 
+                    onClick={() => onNavigate('owlviz', selectedNode.id)}
+                    className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-amber-400 transition-colors"
+                    title="View Hierarchy"
+                >
+                    <Network size={14} />
+                </button>
+            </div>
+
+            <button 
+                onClick={onClose}
+                className="text-slate-500 hover:text-white hover:bg-slate-800 p-2 rounded-full transition-all"
+                title="Hide Panel"
+            >
+                <X size={20} />
+            </button>
+        </div>
       </div>
 
       <div className="p-4 space-y-2 flex-1">

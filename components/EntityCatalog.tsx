@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Method } from '../types';
-import { Database, ArrowRightLeft, Tag, User, FileType, Plus, Trash2, Search, Edit3, Settings, ArrowRight, GitMerge, List, BookOpen, Brain, AlertTriangle, Sigma, Key, Link2, MessageSquare, Layers } from 'lucide-react';
+import { Database, ArrowRightLeft, Tag, User, FileType, Plus, Trash2, Search, Edit3, Settings, ArrowRight, GitMerge, List, BookOpen, Brain, AlertTriangle, Sigma, Key, Link2, MessageSquare, Layers, Network } from 'lucide-react';
 
 interface EntityCatalogProps {
     nodes: Node<UMLNodeData>[];
@@ -12,7 +12,7 @@ interface EntityCatalogProps {
     onAddNode: (type: ElementType, label: string) => void;
     onDeleteNode: (id: string) => void;
     onSelectNode: (id: string) => void;
-    onViewInGraph?: (id: string) => void;
+    onNavigate?: (view: string, id: string) => void;
     selectedNodeId?: string | null;
 }
 
@@ -26,7 +26,7 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({
     onAddNode, 
     onDeleteNode, 
     onSelectNode, 
-    onViewInGraph,
+    onNavigate,
     selectedNodeId 
 }) => {
     const [activeTab, setActiveTab] = useState<TabType>('classes');
@@ -329,7 +329,7 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({
                                         {activeTab === 'individuals' && <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 w-1/5">Type Assertions</th>}
                                         
                                         <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800">Formal Definition & Annotations</th>
-                                        <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 text-right w-32">Actions</th>
+                                        <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-800 text-right w-40">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-800/50">
@@ -465,11 +465,18 @@ const EntityCatalog: React.FC<EntityCatalogProps> = ({
                                                 <td className="p-4 align-top text-right">
                                                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <button 
-                                                            onClick={() => onViewInGraph && onViewInGraph(node.id)}
+                                                            onClick={() => onNavigate && onNavigate('design', node.id)}
                                                             className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded transition-colors"
                                                             title="View in Graph"
                                                         >
                                                             <Layers size={16} />
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => onNavigate && onNavigate('owlviz', node.id)}
+                                                            className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 rounded transition-colors"
+                                                            title="View Hierarchy"
+                                                        >
+                                                            <Network size={16} />
                                                         </button>
                                                         <button 
                                                             onClick={() => onSelectNode(node.id)}

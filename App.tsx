@@ -601,8 +601,8 @@ function App() {
                         onAddNode={handleAddNode}
                         onDeleteNode={handleDeleteNode}
                         onSelectNode={setSelectedNodeId}
+                        onNavigate={handleNavigate}
                         selectedNodeId={selectedNodeId}
-                        onViewInGraph={(id) => handleNavigate('design', id)}
                     />
                 )}
 
@@ -691,6 +691,7 @@ function App() {
                         addToast(`Created Individual ${name}`, 'success');
                     }}
                     onClose={() => { setSelectedNodeId(null); setSelectedEdgeId(null); }}
+                    onNavigate={handleNavigate}
                 />
             </div>
         </div>

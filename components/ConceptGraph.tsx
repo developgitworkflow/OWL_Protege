@@ -37,6 +37,7 @@ interface SimLink extends d3.SimulationLinkDatum<SimNode> {
     isArrow: boolean; // Only draw arrow on the second half of the link
     role?: 'domain' | 'range' | 'attribute' | 'value' | 'subclass' | 'instance' | 'disjoint_link'; 
     isInferred?: boolean;
+    label?: string;
 }
 
 // VOWL-aligned Theme (Dark Mode Optimized)
@@ -64,7 +65,8 @@ const THEME = {
     inferred: '#fbbf24',     // Amber-400 (for inferred edges)
     inferredStroke: '#f59e0b', 
 
-    text: '#ffffff',         
+    text: '#ffffff',
+    line: '#475569',         // Slate-600
     bg: '#0f172a'            // Slate-950
 };
 
@@ -396,7 +398,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             .attr("class", "link-group");
 
         const linkPath = link.append("path")
-            .attr("stroke", (d: any) => d.isInferred ? THEME.inferredStroke : "#475569")
+            .attr("stroke", (d: any) => d.isInferred ? THEME.inferredStroke : THEME.line)
             .attr("stroke-width", (d: any) => d.isInferred ? 1.5 : 1.5)
             .attr("fill", "none")
             .attr("marker-end", (d: any) => {
@@ -410,7 +412,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             })
             .attr("stroke-dasharray", (d: any) => (d.role === 'instance' || d.role === 'disjoint_link' || !d.isArrow || d.isInferred) ? "4,4" : "");
 
-        const linkLabelGroup = link.append("g").style("display", (d: any) => d.type === 'subclass' ? 'none' : 'block');
+        const linkLabelGroup = link.append("g").style("display", (d: any) => d.role === 'subclass' ? 'none' : 'block');
         
         linkLabelGroup.append("rect")
             .attr("rx", 3)

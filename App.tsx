@@ -741,6 +741,7 @@ function App() {
                     selectedNode={selectedNode}
                     selectedEdge={selectedEdge}
                     allNodes={nodes}
+                    allEdges={edges}
                     onUpdateNode={handleUpdateNode}
                     onUpdateEdge={handleUpdateEdge}
                     onDeleteNode={handleDeleteNode}

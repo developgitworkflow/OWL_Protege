@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Node as FlowNode, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Annotation, Method } from '../types';
-import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag, ArrowRightLeft, Sparkles, Command, AlertCircle } from 'lucide-react';
+import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag, ArrowRightLeft, Sparkles, Command, AlertCircle, Layers, Settings, Database } from 'lucide-react';
 import AnnotationManager from './AnnotationManager';
 import { validateManchesterSyntax } from '../services/manchesterValidator';
 
@@ -552,7 +552,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
         </button>
       </div>
 
-      <div className="p-5 space-y-8 flex-1">
+      <div className="p-5 space-y-6 flex-1">
         
         {/* Identity Section */}
         <div className="space-y-3">
@@ -580,184 +580,29 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
             </div>
         </div>
 
-        {/* Instances Quick Create */}
-        {isClassNode && (
-            <div className="space-y-3 pt-4 border-t border-slate-800">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                    <User size={12} /> Instances
-                </h3>
-                <div className="flex gap-2">
-                    <input 
-                        className="flex-1 bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder-slate-600"
-                        placeholder="New Individual Name..."
-                        value={newIndivName}
-                        onChange={(e) => setNewIndivName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleCreateIndiv()}
-                    />
-                    <button 
-                        onClick={handleCreateIndiv}
-                        disabled={!newIndivName.trim()}
-                        className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white p-2 rounded transition-colors"
-                        title="Add Individual"
-                    >
-                        <Plus size={14} />
-                    </button>
-                </div>
-                <p className="text-[10px] text-slate-500 italic">
-                    Creates a new NamedIndividual and links it to {localData.label}.
-                </p>
-            </div>
-        )}
-
-        {/* Annotations */}
-        <AnnotationManager 
-            annotations={localData.annotations} 
-            onUpdate={handleAnnotationsUpdate}
-        />
-
-        {/* Specialized Views based on Entity Type */}
-        {isObjectProperty ? (
-            <div className="space-y-6 pt-4 border-t border-slate-800">
-                {/* Characteristics */}
-                 <div className="space-y-2">
-                     <div className="flex justify-between items-end">
-                         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Characteristics</h3>
-                         <button onClick={addAttribute} className="text-blue-400 hover:bg-blue-500/10 p-1 rounded"><Plus size={14}/></button>
-                     </div>
-                     <div className="grid grid-cols-2 gap-2">
-                         {localData.attributes.map(attr => (
-                             <div key={attr.id} className="bg-slate-950 border border-slate-800 rounded px-2 py-1 flex justify-between items-center group">
-                                 <select 
-                                     className="bg-transparent text-[10px] text-slate-300 outline-none w-full"
-                                     value={attr.name}
-                                     onChange={(e) => updateAttribute(attr.id, 'name', e.target.value)}
-                                 >
-                                     {CHARACTERISTICS.map(c => <option key={c} value={c}>{c}</option>)}
-                                 </select>
-                                 <button onClick={() => removeAttribute(attr.id)} className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100"><X size={10}/></button>
-                             </div>
-                         ))}
-                     </div>
-                 </div>
-
-                 {renderAxiomGroup('Domains (Intersection)', ['Domain'], <ArrowRight size={12} />, 'Class')}
-                 {renderAxiomGroup('Ranges (Intersection)', ['Range'], <ArrowRight size={12} />, 'Class')}
-                 {renderAxiomGroup('Super Properties', ['SubPropertyOf'], <GitMerge size={12} />, 'Property')}
-                 {renderAxiomGroup('Inverse Properties', ['InverseOf'], <GitMerge size={12} className="rotate-180" />, 'Property')}
-                 {renderAxiomGroup('Equivalent Properties', ['EquivalentTo'], <Link2 size={12} />, 'Property')}
-                 {renderAxiomGroup('Disjoint Properties', ['DisjointWith'], <Split size={12} />, 'Property')}
-                 {renderAxiomGroup('Property Chains', ['PropertyChainAxiom'], <GitCommit size={12} />, 'prop1 o prop2', true)}
-            </div>
-        ) : (
-            // Default View for Classes, DataProps, Individuals
-            <>
-                <div className="space-y-3 pt-4 border-t border-slate-800">
+        {/* 1. Axioms Section */}
+        <div className="pt-4 border-t border-slate-800 space-y-4">
+            {isObjectProperty ? (
+                // Object Property Axioms
+                <>
+                    {renderAxiomGroup('Domains (Intersection)', ['Domain'], <ArrowRight size={12} />, 'Class')}
+                    {renderAxiomGroup('Ranges (Intersection)', ['Range'], <ArrowRight size={12} />, 'Class')}
+                    {renderAxiomGroup('Super Properties', ['SubPropertyOf'], <GitMerge size={12} />, 'Property')}
+                    {renderAxiomGroup('Inverse Properties', ['InverseOf'], <GitMerge size={12} className="rotate-180" />, 'Property')}
+                    {renderAxiomGroup('Equivalent Properties', ['EquivalentTo'], <Link2 size={12} />, 'Property')}
+                    {renderAxiomGroup('Disjoint Properties', ['DisjointWith'], <Split size={12} />, 'Property')}
+                    {renderAxiomGroup('Property Chains', ['PropertyChainAxiom'], <GitCommit size={12} />, 'prop1 o prop2', true)}
+                </>
+            ) : (
+                // General Axioms (Classes)
+                <div className="space-y-3">
                     <div className="flex justify-between items-end">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                            {isPropertyNode ? 'Characteristics' : 'Data Properties'}
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                            <Layers size={12} /> Axioms
                         </h3>
-                        <button 
-                            onClick={addAttribute} 
-                            className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs font-medium hover:bg-blue-500/10 px-2 py-1 rounded transition-colors"
-                        >
-                            <Plus size={14} /> Add
-                        </button>
-                    </div>
-                    
-                    <div className="space-y-2">
-                        {localData.attributes?.map((attr) => (
-                        <div key={attr.id} className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 group hover:border-slate-700 transition-all">
-                            <div className="flex gap-2 items-start">
-                                {/* Visibility Selector */}
-                                <div className="pt-0.5">
-                                    <VisibilitySelector 
-                                        value={attr.visibility} 
-                                        onChange={(v) => updateAttribute(attr.id, 'visibility', v)} 
-                                    />
-                                </div>
-
-                                <div className="flex-1 flex flex-col gap-2">
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => updateAttribute(attr.id, 'isDerived', !attr.isDerived)}
-                                            className={`p-1 rounded text-[10px] font-mono border ${attr.isDerived ? 'bg-blue-900/30 border-blue-500/50 text-blue-300' : 'bg-slate-900 border-slate-700 text-slate-600'}`}
-                                            title="Derived Property (/)"
-                                        >
-                                            /
-                                        </button>
-                                        
-                                        {isPropertyNode ? (
-                                            <div className="flex-1 relative">
-                                                <select
-                                                    className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none"
-                                                    value={attr.name}
-                                                    onChange={(e) => updateAttribute(attr.id, 'name', e.target.value)}
-                                                >
-                                                    {CHARACTERISTICS.map(c => <option key={c} value={c}>{c}</option>)}
-                                                </select>
-                                            </div>
-                                        ) : (
-                                            <input 
-                                                className="bg-transparent text-sm text-slate-200 outline-none placeholder-slate-600 font-medium w-full"
-                                                value={attr.name}
-                                                onChange={(e) => updateAttribute(attr.id, 'name', e.target.value)}
-                                                placeholder="hasAge"
-                                            />
-                                        )}
-                                        <button 
-                                            onClick={() => toggleExpand(attr.id)}
-                                            className={`text-slate-500 hover:text-blue-400 transition-colors ml-1 ${expandedId === attr.id ? 'text-blue-400' : ''}`}
-                                        >
-                                            <Quote size={12} />
-                                        </button>
-                                    </div>
-                                    {!isPropertyNode && (
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] text-slate-500 uppercase tracking-wide">Range</span>
-                                            <div className="relative flex-1">
-                                                <input 
-                                                    className="bg-slate-900/50 border border-slate-800 focus:border-blue-500/50 rounded px-2 py-1 text-xs text-blue-300 outline-none placeholder-slate-600 w-full font-mono transition-colors"
-                                                    value={attr.type}
-                                                    onChange={(e) => updateAttribute(attr.id, 'type', e.target.value)}
-                                                    onFocus={() => setActiveAttrType(attr.id)}
-                                                    placeholder="xsd:string"
-                                                    autoComplete="off"
-                                                />
-                                                {activeAttrType === attr.id && (
-                                                    <div className="absolute top-full left-0 mt-1 w-full bg-slate-800 border border-slate-700 rounded shadow-xl z-50 max-h-32 overflow-y-auto">
-                                                        {XSD_TYPES.filter(t => t.toLowerCase().includes(attr.type.toLowerCase())).map(type => (
-                                                            <div 
-                                                                key={type}
-                                                                className="px-3 py-1.5 text-xs text-slate-300 hover:bg-blue-600 hover:text-white cursor-pointer font-mono"
-                                                                onMouseDown={(e) => { e.preventDefault(); updateAttribute(attr.id, 'type', type); setActiveAttrType(null); }}
-                                                            >
-                                                                {type}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                                <button onClick={() => removeAttribute(attr.id)} className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"><X size={14} /></button>
-                            </div>
-                            {expandedId === attr.id && (
-                                <div className="mt-2 pt-2 border-t border-slate-800/50 pl-2 border-l-2 border-l-blue-900/30">
-                                    <AnnotationManager annotations={attr.annotations} onUpdate={(anns) => updateAttribute(attr.id, 'annotations', anns)} title="Annotations" compact />
-                                </div>
-                            )}
-                        </div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="space-y-3 pt-4 border-t border-slate-800">
-                    <div className="flex justify-between items-end">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Axioms</h3>
                         <button onClick={() => addMethod('SubClassOf')} className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs font-medium hover:bg-blue-500/10 px-2 py-1 rounded transition-colors"><Plus size={14} /> Add</button>
                     </div>
-                    {/* Simplified Axiom List for Non-ObjectProperties */}
+                    
                     <div className="space-y-2">
                         {localData.methods?.map((method) => (
                              <div key={method.id} className="relative">
@@ -810,8 +655,160 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedNode, selecte
                         ))}
                     </div>
                 </div>
-            </>
+            )}
+        </div>
+
+        {/* 2. Data Properties / Characteristics Section */}
+        <div className="pt-4 border-t border-slate-800">
+            {isObjectProperty ? (
+                 <div className="space-y-2">
+                     <div className="flex justify-between items-end">
+                         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                             <Settings size={12} /> Characteristics
+                         </h3>
+                         <button onClick={addAttribute} className="text-blue-400 hover:bg-blue-500/10 p-1 rounded"><Plus size={14}/></button>
+                     </div>
+                     <div className="grid grid-cols-2 gap-2">
+                         {localData.attributes.map(attr => (
+                             <div key={attr.id} className="bg-slate-950 border border-slate-800 rounded px-2 py-1 flex justify-between items-center group">
+                                 <select 
+                                     className="bg-transparent text-[10px] text-slate-300 outline-none w-full"
+                                     value={attr.name}
+                                     onChange={(e) => updateAttribute(attr.id, 'name', e.target.value)}
+                                 >
+                                     {CHARACTERISTICS.map(c => <option key={c} value={c}>{c}</option>)}
+                                 </select>
+                                 <button onClick={() => removeAttribute(attr.id)} className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100"><X size={10}/></button>
+                             </div>
+                         ))}
+                     </div>
+                 </div>
+            ) : (
+                <div className="space-y-3">
+                    <div className="flex justify-between items-end">
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                            <Tag size={12} /> Data Properties
+                        </h3>
+                        <button 
+                            onClick={addAttribute} 
+                            className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs font-medium hover:bg-blue-500/10 px-2 py-1 rounded transition-colors"
+                        >
+                            <Plus size={14} /> Add
+                        </button>
+                    </div>
+                    
+                    <div className="space-y-2">
+                        {localData.attributes?.map((attr) => (
+                        <div key={attr.id} className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 group hover:border-slate-700 transition-all">
+                            <div className="flex gap-2 items-start">
+                                {/* Visibility Selector */}
+                                <div className="pt-0.5">
+                                    <VisibilitySelector 
+                                        value={attr.visibility} 
+                                        onChange={(v) => updateAttribute(attr.id, 'visibility', v)} 
+                                    />
+                                </div>
+
+                                <div className="flex-1 flex flex-col gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => updateAttribute(attr.id, 'isDerived', !attr.isDerived)}
+                                            className={`p-1 rounded text-[10px] font-mono border ${attr.isDerived ? 'bg-blue-900/30 border-blue-500/50 text-blue-300' : 'bg-slate-900 border-slate-700 text-slate-600'}`}
+                                            title="Derived Property (/)"
+                                        >
+                                            /
+                                        </button>
+                                        
+                                        <input 
+                                            className="bg-transparent text-sm text-slate-200 outline-none placeholder-slate-600 font-medium w-full"
+                                            value={attr.name}
+                                            onChange={(e) => updateAttribute(attr.id, 'name', e.target.value)}
+                                            placeholder="hasAge"
+                                        />
+                                        <button 
+                                            onClick={() => toggleExpand(attr.id)}
+                                            className={`text-slate-500 hover:text-blue-400 transition-colors ml-1 ${expandedId === attr.id ? 'text-blue-400' : ''}`}
+                                        >
+                                            <Quote size={12} />
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-slate-500 uppercase tracking-wide">Range</span>
+                                        <div className="relative flex-1">
+                                            <input 
+                                                className="bg-slate-900/50 border border-slate-800 focus:border-blue-500/50 rounded px-2 py-1 text-xs text-blue-300 outline-none placeholder-slate-600 w-full font-mono transition-colors"
+                                                value={attr.type}
+                                                onChange={(e) => updateAttribute(attr.id, 'type', e.target.value)}
+                                                onFocus={() => setActiveAttrType(attr.id)}
+                                                placeholder="xsd:string"
+                                                autoComplete="off"
+                                            />
+                                            {activeAttrType === attr.id && (
+                                                <div className="absolute top-full left-0 mt-1 w-full bg-slate-800 border border-slate-700 rounded shadow-xl z-50 max-h-32 overflow-y-auto">
+                                                    {XSD_TYPES.filter(t => t.toLowerCase().includes(attr.type.toLowerCase())).map(type => (
+                                                        <div 
+                                                            key={type}
+                                                            className="px-3 py-1.5 text-xs text-slate-300 hover:bg-blue-600 hover:text-white cursor-pointer font-mono"
+                                                            onMouseDown={(e) => { e.preventDefault(); updateAttribute(attr.id, 'type', type); setActiveAttrType(null); }}
+                                                        >
+                                                            {type}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                <button onClick={() => removeAttribute(attr.id)} className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"><X size={14} /></button>
+                            </div>
+                            {expandedId === attr.id && (
+                                <div className="mt-2 pt-2 border-t border-slate-800/50 pl-2 border-l-2 border-l-blue-900/30">
+                                    <AnnotationManager annotations={attr.annotations} onUpdate={(anns) => updateAttribute(attr.id, 'annotations', anns)} title="Annotations" compact />
+                                </div>
+                            )}
+                        </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+
+        {/* 3. Instances Section */}
+        {isClassNode && (
+            <div className="space-y-3 pt-4 border-t border-slate-800">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                    <User size={12} /> Instances
+                </h3>
+                <div className="flex gap-2">
+                    <input 
+                        className="flex-1 bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder-slate-600"
+                        placeholder="New Individual Name..."
+                        value={newIndivName}
+                        onChange={(e) => setNewIndivName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleCreateIndiv()}
+                    />
+                    <button 
+                        onClick={handleCreateIndiv}
+                        disabled={!newIndivName.trim()}
+                        className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white p-2 rounded transition-colors"
+                        title="Add Individual"
+                    >
+                        <Plus size={14} />
+                    </button>
+                </div>
+                <p className="text-[10px] text-slate-500 italic">
+                    Creates a new NamedIndividual and links it to {localData.label}.
+                </p>
+            </div>
         )}
+
+        {/* 4. Annotations Section */}
+        <div className="pt-4 border-t border-slate-800">
+            <AnnotationManager 
+                annotations={localData.annotations} 
+                onUpdate={handleAnnotationsUpdate}
+            />
+        </div>
 
       </div>
 

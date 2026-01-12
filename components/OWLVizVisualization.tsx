@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
@@ -51,11 +51,11 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
     const svgRef = useRef<SVGSVGElement>(null);
     const [tooltip, setTooltip] = useState<{x: number, y: number, content: React.ReactNode} | null>(null);
     
-    // Simulation refs to maintain state across renders without re-simulating unnecessarily
     const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
     const simNodes = useRef<SimNode[]>([]);
     const simLinks = useRef<SimLink[]>([]);
-    const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    const mainGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
 
     useEffect(() => {
         if (!svgRef.current || !containerRef.current) return;
@@ -72,7 +72,6 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
 
         simNodes.current = relevantNodes.map(n => {
             const isClass = n.data.type === ElementType.OWL_CLASS;
-            // Approximate text width
             const textLen = n.data.label.length * 8 + 20;
             return {
                 id: n.id,
@@ -82,15 +81,14 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
                 color: isClass ? THEME.classStroke : THEME.indivStroke,
                 width: Math.max(90, textLen),
                 height: 35,
-                radius: isClass ? 0 : 22, // 0 implies rect for classes
-                x: n.position.x + width/2 - 200, // Offset initial pos
+                radius: isClass ? 0 : 22,
+                x: n.position.x + width/2 - 200,
                 y: n.position.y + height/2 - 200
             };
         });
 
         simLinks.current = [];
         
-        // 1. Edges
         edges.forEach(e => {
             if (!nodeSet.has(e.source) || !nodeSet.has(e.target)) return;
             
@@ -112,8 +110,6 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             });
         });
 
-        // 2. Internal Axioms (SubClassOf only for map structure)
-        // Only if edge doesn't already exist (some internal axioms are redundant with edges)
         relevantNodes.forEach(n => {
             n.data.methods.forEach(m => {
                 if (m.name.toLowerCase() === 'subclassof') {
@@ -141,13 +137,12 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
 
         // --- D3 Render ---
         const svg = d3.select(svgRef.current);
-        svg.selectAll("*").remove();
+        svg.selectAll("*").remove(); // Safely clear all D3 managed content
 
         const defs = svg.append("defs");
-        
         const markers = [
             { id: 'arrow-rel', color: '#64748b', filled: true },
-            { id: 'arrow-sub', color: '#f8fafc', filled: false }, // Hollow triangle
+            { id: 'arrow-sub', color: '#f8fafc', filled: false },
             { id: 'arrow-inf', color: '#fbbf24', filled: true }
         ];
 
@@ -155,7 +150,7 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             defs.append("marker")
                 .attr("id", m.id)
                 .attr("viewBox", "0 -5 10 10")
-                .attr("refX", 26) // Adjusted for larger nodes
+                .attr("refX", 26)
                 .attr("refY", 0)
                 .attr("markerWidth", 8)
                 .attr("markerHeight", 8)
@@ -168,29 +163,28 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
         });
 
         const g = svg.append("g");
+        mainGroupRef.current = g;
 
         const zoom = d3.zoom<SVGSVGElement, unknown>()
             .scaleExtent([0.1, 4])
             .on("zoom", (event) => g.attr("transform", event.transform));
-        zoomRef.current = zoom;
+        
+        zoomBehaviorRef.current = zoom;
         svg.call(zoom);
 
         const simulation = d3.forceSimulation(simNodes.current)
             .force("link", d3.forceLink(simLinks.current).id((d: any) => d.id).distance(180))
             .force("charge", d3.forceManyBody().strength(-600))
             .force("center", d3.forceCenter(width / 2, height / 2))
-            // Separate Y-planes: Individuals bottom, Classes top
             .force("y", d3.forceY((d: any) => d.type === ElementType.OWL_NAMED_INDIVIDUAL ? height * 0.75 : height * 0.25).strength(0.4))
             .force("collide", d3.forceCollide().radius((d: any) => (d.width || 40)/1.2).iterations(2));
         
         simulationRef.current = simulation;
 
-        // --- Layers ---
         const boxLayer = g.append("g").attr("class", "box-layer");
         const linkGroup = g.append("g").attr("class", "links");
         const nodeGroup = g.append("g").attr("class", "nodes");
 
-        // --- Class Group Box ---
         const classBoxGroup = boxLayer.append("g").style("display", "none");
         const classBoxRect = classBoxGroup.append("rect")
             .attr("fill", "rgba(99, 102, 241, 0.03)") 
@@ -207,7 +201,6 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             .style("letter-spacing", "2px")
             .text("Classes (TBox)");
 
-        // --- Individual Group Box ---
         const indivBoxGroup = boxLayer.append("g").style("display", "none");
         const indivBoxRect = indivBoxGroup.append("rect")
             .attr("fill", "rgba(236, 72, 153, 0.03)") 
@@ -227,8 +220,7 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
         const link = linkGroup
             .selectAll("g")
             .data(simLinks.current)
-            .join("g")
-            .attr("class", "link-group");
+            .join("g");
 
         const linkPath = link.append("path")
             .attr("fill", "none")
@@ -313,18 +305,16 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             .attr("x", d => -d.width! / 2)
             .attr("y", d => -d.height! / 2)
             .attr("rx", 8)
-            .attr("fill", d => d.id === selectedNodeId ? '#facc15' : THEME.classFill) // Highlight
+            .attr("fill", d => d.id === selectedNodeId ? '#facc15' : THEME.classFill)
             .attr("stroke", d => d.id === selectedNodeId ? '#fff' : THEME.classStroke)
-            .attr("stroke-width", d => d.id === selectedNodeId ? 3 : 2)
-            .attr("class", "shadow-sm cursor-grab active:cursor-grabbing hover:fill-slate-700 transition-colors");
+            .attr("stroke-width", d => d.id === selectedNodeId ? 3 : 2);
 
         node.filter(d => d.type === ElementType.OWL_NAMED_INDIVIDUAL)
             .append("circle")
             .attr("r", 20)
-            .attr("fill", d => d.id === selectedNodeId ? '#facc15' : THEME.indivFill) // Highlight
+            .attr("fill", d => d.id === selectedNodeId ? '#facc15' : THEME.indivFill)
             .attr("stroke", d => d.id === selectedNodeId ? '#fff' : THEME.indivStroke)
-            .attr("stroke-width", d => d.id === selectedNodeId ? 3 : 2)
-            .attr("class", "cursor-grab active:cursor-grabbing hover:fill-pink-800 transition-colors");
+            .attr("stroke-width", d => d.id === selectedNodeId ? 3 : 2);
 
         node.append("text")
             .text(d => d.label)
@@ -341,10 +331,7 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             linkLabelGroup.attr("transform", (d: any) => `translate(${(d.source.x + d.target.x)/2},${(d.source.y + d.target.y)/2})`);
             node.attr("transform", d => `translate(${d.x},${d.y})`);
 
-            // --- Update Group Boxes ---
             const padding = 40;
-
-            // Classes Box
             const classes = simNodes.current.filter(n => n.type === ElementType.OWL_CLASS);
             if (classes.length > 0) {
                 const xMin = d3.min(classes, n => (n.x || 0) - (n.width || 0)/2) || 0;
@@ -359,14 +346,11 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
                     .attr("width", Math.max(200, xMax - xMin + padding * 2))
                     .attr("height", yMax - yMin + padding * 2 + 10);
                 
-                classBoxLabel
-                    .attr("x", xMin - padding + 10)
-                    .attr("y", yMin - padding - 20);
+                classBoxLabel.attr("x", xMin - padding + 10).attr("y", yMin - padding - 20);
             } else {
                 classBoxGroup.style("display", "none");
             }
 
-            // Individuals Box
             const indivs = simNodes.current.filter(n => n.type === ElementType.OWL_NAMED_INDIVIDUAL);
             if (indivs.length > 0) {
                 const xMin = d3.min(indivs, n => (n.x || 0) - (n.radius || 20)) || 0;
@@ -381,9 +365,7 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
                     .attr("width", Math.max(200, xMax - xMin + padding * 2))
                     .attr("height", yMax - yMin + padding * 2 + 10);
                 
-                indivBoxLabel
-                    .attr("x", xMin - padding + 10)
-                    .attr("y", yMin - padding - 20);
+                indivBoxLabel.attr("x", xMin - padding + 10).attr("y", yMin - padding - 20);
             } else {
                 indivBoxGroup.style("display", "none");
             }
@@ -413,18 +395,18 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             simulation.stop();
         };
 
-    }, [nodes, edges, searchTerm, selectedNodeId]); // Re-run on selection
+    }, [nodes, edges, searchTerm, selectedNodeId]);
 
     // Focus Logic
     useEffect(() => {
-        if (selectedNodeId && svgRef.current && zoomRef.current && containerRef.current) {
+        if (selectedNodeId && svgRef.current && zoomBehaviorRef.current && containerRef.current && mainGroupRef.current) {
             const node = simNodes.current.find(n => n.id === selectedNodeId);
             if (node && node.x !== undefined && node.y !== undefined) {
                 const width = containerRef.current.clientWidth;
                 const height = containerRef.current.clientHeight;
                 const scale = 1.2;
                 const transform = d3.zoomIdentity.translate(width / 2, height / 2).scale(scale).translate(-node.x, -node.y);
-                d3.select(svgRef.current).transition().duration(750).call(zoomRef.current.transform, transform);
+                d3.select(svgRef.current).transition().duration(750).call(zoomBehaviorRef.current.transform, transform);
             }
         }
     }, [selectedNodeId]);
@@ -468,7 +450,6 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
                 </div>
             </div>
             
-            {/* Legend Overlay */}
             <div className="absolute bottom-6 left-6 z-10 pointer-events-none">
                 <div className="bg-slate-900/80 backdrop-blur border border-slate-800 p-4 rounded-lg shadow-2xl">
                     <h3 className="font-bold text-slate-300 mb-2 flex items-center gap-2 text-xs uppercase tracking-wider">
@@ -494,7 +475,6 @@ const OWLVizVisualization: React.FC<OWLVizVisualizationProps> = ({ nodes, edges,
             {tooltip && (
                 <div className="absolute z-50 bg-slate-900/95 border border-slate-700 p-3 rounded-lg shadow-2xl pointer-events-none transform -translate-x-1/2 min-w-[150px] text-white animate-in fade-in zoom-in-95 duration-75" style={{ left: tooltip.x, top: tooltip.y - 15 }}>
                     {tooltip.content}
-                    {/* Tooltip Arrow */}
                     <div className="absolute left-1/2 -bottom-1.5 w-3 h-3 bg-slate-900 border-r border-b border-slate-700 transform rotate-45 -translate-x-1/2"></div>
                 </div>
             )}

@@ -1,5 +1,5 @@
 
-import { Node } from 'reactflow';
+import type { Node } from 'reactflow';
 import { UMLNodeData } from '../types';
 
 /**

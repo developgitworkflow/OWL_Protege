@@ -1,7 +1,8 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { generateDiagramFromPrompt, explainDiagram } from '../services/geminiService';
 import { MessageSquare, Send, Sparkles, Loader2, X } from 'lucide-react';
-import { Node, Edge } from 'reactflow';
+import type { Node, Edge } from 'reactflow';
 
 interface AIAssistantProps {
   onDiagramGenerated: (nodes: Node[], edges: Edge[]) => void;

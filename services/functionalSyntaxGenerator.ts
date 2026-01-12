@@ -1,5 +1,5 @@
 
-import { Node, Edge } from 'reactflow';
+import type { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, ProjectData } from '../types';
 import { convertRuleToFunctional } from './swrlService';
 

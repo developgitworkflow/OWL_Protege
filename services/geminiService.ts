@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { UMLNode, UMLNodeData, ElementType, Attribute, Method } from "../types";
-import { Node, Edge } from 'reactflow';
+import type { Node, Edge } from 'reactflow';
 
 // Ensure API key is available
 const apiKey = process.env.API_KEY || '';

@@ -1,5 +1,5 @@
 
-import { Node, Edge } from 'reactflow';
+import type { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, ProjectData, SWRLRule } from '../types';
 import { convertFunctionalToHuman } from './swrlService';
 
@@ -16,12 +16,10 @@ interface Token {
     pos: number;
 }
 
-// Delimiters defined in OWL 2 Specification
-const DELIMITERS = new Set(['(', ')', '<', '>', '=', '@', '^', '.']);
-
-// Regex Definitions (Order matters for greedy matching!)
+// Regex Definitions - Using explicit construction for complex patterns to avoid parser issues
 const TERMINALS: { type: TokenType, regex: RegExp }[] = [
-    { type: 'COMMENT', regex: /^#[^\x0A\x0D]*/ },
+    { type: 'COMMENT', regex: /^#[^\n\r]*/ },
+    // Match double quoted string allowing escaped quotes: " ... \" ... "
     { type: 'STRING', regex: /^"(?:[^"\\]|\\.)*"/ },
     { type: 'FULL_IRI', regex: /^<[^>]*>/ },
     { type: 'LANGTAG', regex: /^@[a-zA-Z]+(?:-[a-zA-Z0-9]+)*/ },
@@ -32,9 +30,9 @@ const TERMINALS: { type: TokenType, regex: RegExp }[] = [
     { type: 'FLOAT', regex: /^[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+|[0-9]+)[eE][+-]?[0-9]+/ },
     { type: 'DECIMAL', regex: /^[+-]?[0-9]*\.[0-9]+/ },
     { type: 'INTEGER', regex: /^[+-]?[0-9]+/ },
-    { type: 'DELIMITER', regex: /^[()<>@=^.]/ }, // Added dot to delimiters to safely tokenize Turtle artifacts if mixed
-    { type: 'KEYWORD', regex: /^[a-zA-Z][a-zA-Z0-9._-]*/ }, // Allow dots in keywords/identifiers
-    { type: 'WHITESPACE', regex: /^[\x20\x09\x0A\x0D]+/ }
+    { type: 'DELIMITER', regex: /^[()<>@=^.]/ },
+    { type: 'KEYWORD', regex: /^[a-zA-Z][a-zA-Z0-9._-]*/ },
+    { type: 'WHITESPACE', regex: /^\s+/ }
 ];
 
 const tokenize = (input: string): Token[] => {
@@ -56,22 +54,11 @@ const tokenize = (input: string): Token[] => {
         }
 
         if (!bestMatch) {
-            // Skip unknown char if safe, or throw. For now throw to find issues.
+            // Skip invalid chars slightly more gracefully or throw
             throw new Error(`Syntax Error: Unexpected character '${input[pos]}' at position ${pos}`);
         }
 
-        // 2. Boundary Check (Simplified)
-        if (bestMatch.type !== 'WHITESPACE' && bestMatch.type !== 'COMMENT') {
-            const lastChar = bestMatch.value[bestMatch.value.length - 1];
-            const nextChar = (pos + bestMatch.value.length < input.length) ? input[pos + bestMatch.value.length] : '';
-            const isLastDelim = DELIMITERS.has(lastChar);
-            const isNextDelim = DELIMITERS.has(nextChar) || nextChar === '' || /[\s#]/.test(nextChar);
-
-            // Allow keywords/identifiers to be followed by anything that breaks a token
-            // The regex matching ensures we consumed the full identifier.
-        }
-
-        // 3. Emit Token
+        // 2. Emit Token
         if (bestMatch.type !== 'WHITESPACE' && bestMatch.type !== 'COMMENT') {
             tokens.push({ type: bestMatch.type, value: bestMatch.value, pos });
         }
@@ -85,7 +72,6 @@ const tokenize = (input: string): Token[] => {
 
 // --- 2. Parser ---
 
-// Standard Prefixes
 const STANDARD_PREFIXES: Record<string, string> = {
     'rdf:': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
     'rdfs:': 'http://www.w3.org/2000/01/rdf-schema#',
@@ -110,11 +96,9 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
     const metadata: ProjectData = { name: 'Imported Ontology', defaultPrefix: 'ex', baseIri: 'http://example.org/ontology#', rules: [] };
     
     const prefixes: Record<string, string> = { ...STANDARD_PREFIXES };
-    const declaredPrefixes = new Set<string>();
     const iriToNodeId: Record<string, string> = {};
     let nodeCounter = 0;
 
-    // Helper: Expand Abbreviated IRIs
     const resolveIRI = (tokenValue: string): string => {
         if (tokenValue.startsWith('<')) return tokenValue.replace(/[<>]/g, '');
         const colonIndex = tokenValue.indexOf(':');
@@ -122,7 +106,6 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
             const prefix = tokenValue.substring(0, colonIndex + 1);
             const local = tokenValue.substring(colonIndex + 1);
             if (prefixes[prefix]) return prefixes[prefix] + local;
-            // Best effort fallback
             return tokenValue;
         }
         return tokenValue;
@@ -142,13 +125,12 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
         }
 
         const id = `node-${++nodeCounter}`;
-        const newNode: Node<UMLNodeData> = {
+        nodes.push({
             id,
             type: 'umlNode',
             position: { x: Math.random() * 800, y: Math.random() * 600 },
             data: { label, type, iri: fullIRI, attributes: [], methods: [] }
-        };
-        nodes.push(newNode);
+        });
         iriToNodeId[key] = id;
         return id;
     };
@@ -186,17 +168,12 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
         return str.trim();
     };
 
-    // --- Parser Loop ---
-    
-    // 1. Prefix Declarations
     while (peek().value === 'Prefix') {
         consume(); 
         expect('(');
         let prefixName = ':'; 
-        // Prefix name can be PNAME_NS (foo:) or just KEYWORD (foo) if parser is loose
         if (peek().type === 'PNAME_NS' || peek().type === 'KEYWORD') {
             prefixName = consume().value;
-            // Normalize "foo" to "foo:" if needed, though usually it appears as PNAME_NS
         }
         expect('=');
         const iriTok = consume();
@@ -204,30 +181,26 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
 
         if (prefixName.endsWith(':')) {
             prefixes[prefixName] = iriTok.value.replace(/[<>]/g, '');
-            declaredPrefixes.add(prefixName);
             if (prefixName === ':') metadata.baseIri = prefixes[prefixName];
             else metadata.defaultPrefix = prefixName.replace(':', '');
         }
     }
 
-    // 2. Ontology Header
     if (match('Ontology')) {
         expect('(');
         if (peek().value !== ')' && peek().value !== 'Import' && peek().value !== 'Annotation') {
              const iri = parseIRI();
              if (iri) metadata.baseIri = resolveIRI(iri);
-             if (peek().value !== ')' && peek().value !== 'Import') parseIRI(); // Version IRI
+             if (peek().value !== ')' && peek().value !== 'Import') parseIRI();
         }
     }
 
-    // 3. Imports & Annotations
     while (peek().value === 'Import' || peek().value === 'Annotation') {
         consume();
         expect('(');
         consumeBalanced();
     }
 
-    // 4. Axioms
     while (peek().value !== ')' && peek().type !== 'EOF') {
         const t = peek();
         
@@ -237,7 +210,7 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
             const typeTok = consume();
             expect('(');
             const iri = parseIRI();
-            consumeBalanced(); // Consume remaining parens
+            consumeBalanced();
             
             if (iri) {
                 let type: ElementType | null = null;
@@ -291,31 +264,22 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
              }
         }
         else if (t.value === 'DLSafeRule') {
-             // Parse SWRL Rule
-             // Format: DLSafeRule( Annotation(...) Body(...) Head(...) )
              consume(); 
-             const fullRuleStr = consumeBalanced(); // This gets everything inside DLSafeRule()
-             
-             // Extract optional annotation for comment
+             const fullRuleStr = consumeBalanced();
              let comment = '';
              const annMatch = fullRuleStr.match(/Annotation\s*\(\s*rdfs:comment\s+"([^"]+)"\s*\)/);
              if (annMatch) comment = annMatch[1];
-             
-             // Convert functional body/head to human readable
              const humanExpr = convertFunctionalToHuman(fullRuleStr);
-             
              const newRule: SWRLRule = {
                  id: `rule-${Math.random()}`,
                  name: `Rule-${(metadata.rules?.length || 0) + 1}`,
                  expression: humanExpr,
                  comment: comment
              };
-             
              if (!metadata.rules) metadata.rules = [];
              metadata.rules.push(newRule);
         }
         else {
-            // Skip unknown axiom
             if (peek().value === '(') consumeBalanced();
             else {
                 consume();
@@ -324,8 +288,7 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
         }
     }
 
-    // Grid Layout
-    const cols = Math.ceil(Math.sqrt(nodes.length));
+    const cols = Math.ceil(Math.sqrt(nodes.length)) || 1;
     nodes.forEach((n, idx) => {
         n.position = { x: (idx % cols) * 320 + 50, y: Math.floor(idx / cols) * 250 + 50 };
     });

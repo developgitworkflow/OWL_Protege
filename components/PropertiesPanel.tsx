@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Node as FlowNode, Edge } from 'reactflow';
+import type { Node as FlowNode, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Annotation, Method } from '../types';
 import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag, ArrowRightLeft, Sparkles, Command, AlertCircle, Layers, Settings, Database, Network } from 'lucide-react';
 import AnnotationManager from './AnnotationManager';

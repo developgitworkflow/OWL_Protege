@@ -4,9 +4,6 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   addEdge,
-  Connection,
-  Edge,
-  Node,
   Controls,
   Background,
   ReactFlowProvider,
@@ -14,6 +11,7 @@ import ReactFlow, {
   MiniMap,
   useReactFlow
 } from 'reactflow';
+import type { Connection, Edge, Node } from 'reactflow';
 
 import TopBar from './components/TopBar';
 import Sidebar from './components/Sidebar';
@@ -127,7 +125,7 @@ function App() {
         } else if (sourceNode.data.type === ElementType.OWL_NAMED_INDIVIDUAL && targetNode.data.type === ElementType.OWL_CLASS) {
             label = 'rdf:type';
         } else if (sourceNode.data.type === ElementType.OWL_NAMED_INDIVIDUAL && targetNode.data.type === ElementType.OWL_NAMED_INDIVIDUAL) {
-            label = 'knows'; // Default object property example
+            label = 'knows';
         }
     }
 
@@ -159,50 +157,68 @@ function App() {
     (event: React.DragEvent) => {
       event.preventDefault();
 
-      const type = event.dataTransfer.getData('application/reactflow');
-      const elementType = event.dataTransfer.getData('application/elementType') as ElementType;
+      try {
+          const type = event.dataTransfer.getData('application/reactflow');
+          const elementType = event.dataTransfer.getData('application/elementType') as ElementType;
 
-      // check if the dropped element is valid
-      if (typeof type === 'undefined' || !type || !elementType) {
-        return;
+          if (typeof type === 'undefined' || !type || !elementType) {
+            return;
+          }
+
+          let position = { x: 0, y: 0 };
+          
+          if (viewMode === 'design') {
+              try {
+                  position = screenToFlowPosition 
+                    ? screenToFlowPosition({ x: event.clientX, y: event.clientY })
+                    : { x: event.clientX - 200, y: event.clientY - 50 };
+              } catch(e) {
+                  const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
+                  position = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+              }
+          } else {
+              const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
+              position = { x: event.clientX - bounds.left - 50, y: event.clientY - bounds.top - 20 };
+          }
+
+          let label = 'New Entity';
+          if (elementType === ElementType.OWL_CLASS) label = 'NewClass';
+          else if (elementType === ElementType.OWL_NAMED_INDIVIDUAL) label = 'NewIndividual';
+          else if (elementType === ElementType.OWL_OBJECT_PROPERTY) label = 'newProp';
+          else if (elementType === ElementType.OWL_DATA_PROPERTY) label = 'newDataProp';
+          else if (elementType === ElementType.OWL_DATATYPE) label = 'string';
+
+          const newNode: Node<UMLNodeData> = {
+            id: `node-${Date.now()}`,
+            type,
+            position,
+            data: { 
+                label: label, 
+                type: elementType,
+                attributes: [],
+                methods: [] 
+            },
+          };
+
+          // Use setTimeout to ensure state update happens after drag event (fixes React #310)
+          setTimeout(() => {
+              setNodes((nds) => nds.concat(newNode));
+              setSelectedNodeId(newNode.id);
+              setSelectedEdgeId(null);
+              addToast(`Created ${label}`, 'success');
+          }, 0);
+          
+      } catch (error) {
+          console.error("Drop error:", error);
+          addToast("Failed to create node.", "error");
       }
-
-      const position = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-
-      let label = 'New Entity';
-      if (elementType === ElementType.OWL_CLASS) label = 'NewClass';
-      else if (elementType === ElementType.OWL_NAMED_INDIVIDUAL) label = 'NewIndividual';
-      else if (elementType === ElementType.OWL_OBJECT_PROPERTY) label = 'newProp';
-      else if (elementType === ElementType.OWL_DATA_PROPERTY) label = 'newDataProp';
-      else if (elementType === ElementType.OWL_DATATYPE) label = 'string';
-
-      const newNode: Node<UMLNodeData> = {
-        id: `node-${Date.now()}`,
-        type,
-        position,
-        data: { 
-            label: label, 
-            type: elementType,
-            attributes: [],
-            methods: [] 
-        },
-      };
-
-      setNodes((nds) => nds.concat(newNode));
-      setSelectedNodeId(newNode.id);
-      setSelectedEdgeId(null);
-      addToast(`Created ${label}`, 'success');
     },
-    [screenToFlowPosition, setNodes]
+    [screenToFlowPosition, setNodes, viewMode]
   );
 
   const handleNavigate = (view: string, id?: string) => {
     setViewMode(view as any);
     if (id) {
-        // Check if ID belongs to a node or an edge to set correct selection
         const isNode = nodes.some(n => n.id === id);
         const isEdge = edges.some(e => e.id === id);
         
@@ -252,7 +268,6 @@ function App() {
     });
   };
 
-  // --- Export Logic ---
   const handleExport = (format: 'json' | 'rdf' | 'turtle' | 'manchester' | 'functional') => {
       let content = '';
       let mime = 'text/plain';
@@ -303,13 +318,9 @@ function App() {
       }
   };
 
-  // --- Keyboard & Focus Management ---
-  
-  // 1. Listen for global focus changes to handle Tab navigation
   useEffect(() => {
       const handleFocusIn = (e: FocusEvent) => {
           const target = e.target as HTMLElement;
-          // Check if it's a node
           if (target.classList.contains('uml-node')) {
               const nodeId = target.getAttribute('data-id');
               if (nodeId) {
@@ -322,21 +333,17 @@ function App() {
       return () => document.removeEventListener('focusin', handleFocusIn);
   }, []);
 
-  // 2. Keyboard Shortcuts
   useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
-          // Ignore if user is typing in an input
           if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
               return;
           }
 
-          // Help Shortcut
           if (e.key === '?') {
               e.preventDefault();
               setIsShortcutsOpen(prev => !prev);
           }
 
-          // Delete Shortcut
           if (e.key === 'Delete' || e.key === 'Backspace') {
               if (selectedNodeId) {
                   e.preventDefault(); 
@@ -347,14 +354,12 @@ function App() {
               }
           }
 
-          // Escape Shortcut
           if (e.key === 'Escape') {
               setSelectedNodeId(null);
               setSelectedEdgeId(null);
               setIsShortcutsOpen(false);
           }
 
-          // Spatial Navigation (Alt + Arrows)
           if (selectedNodeId && e.key.startsWith('Arrow') && e.altKey) {
               e.preventDefault();
               const current = nodes.find(n => n.id === selectedNodeId);
@@ -369,18 +374,15 @@ function App() {
                   const dy = target.position.y - current.position.y;
                   
                   let isValid = false;
-                  // Right: x increases, y change is minimal
                   if (e.key === 'ArrowRight') isValid = dx > 0;
                   if (e.key === 'ArrowLeft') isValid = dx < 0;
                   if (e.key === 'ArrowDown') isValid = dy > 0;
                   if (e.key === 'ArrowUp') isValid = dy < 0;
 
                   if (isValid) {
-                      // Weigh distance and angle. Prefer targets closer to the axis.
                       const dist = Math.sqrt(dx*dx + dy*dy);
-                      // Angle penalty: prioritize nodes directly in direction
                       const angle = Math.atan2(Math.abs(dy), Math.abs(dx)); 
-                      const score = dist * (1 + angle); // Simple heuristic
+                      const score = dist * (1 + angle);
 
                       if (score < minDist) {
                           minDist = score;
@@ -393,7 +395,6 @@ function App() {
                   const targetId = (bestCandidate as Node).id;
                   setSelectedNodeId(targetId);
                   
-                  // Focus the new node in DOM so tab index continues from there
                   setTimeout(() => {
                       const el = document.querySelector(`[data-id="${targetId}"]`) as HTMLElement;
                       if (el) el.focus();
@@ -423,7 +424,7 @@ function App() {
       setSelectedEdgeId(null);
       addToast(`Created ${label}`, 'success');
       if (viewMode !== 'design' && viewMode !== 'entities') {
-          setViewMode('design'); // Switch to view where we can see it usually
+          setViewMode('design');
       }
   };
 
@@ -432,7 +433,7 @@ function App() {
       setIsReasonerActive(newState);
       if (newState) {
           addToast('Reasoner activated. Inferences computed.', 'success');
-          setShowInferred(true); // Auto-show inferred edges when running
+          setShowInferred(true);
       } else {
           addToast('Reasoner deactivated.', 'info');
           setShowInferred(false);
@@ -452,10 +453,6 @@ function App() {
           
           if (lowerName.endsWith('.json')) {
               result = JSON.parse(content);
-              if (result.nodes && result.edges) {
-                  // Apply sanitization if reusing ReactFlow structure
-                  // But for raw imports we trust logic below
-              }
           } else if (lowerName.endsWith('.ttl') || lowerName.endsWith('.nt')) {
               result = await parseTurtle(content);
           } else if (lowerName.endsWith('.rdf') || lowerName.endsWith('.xml') || lowerName.endsWith('.owl')) {
@@ -465,13 +462,10 @@ function App() {
           } else if (lowerName.endsWith('.omn') || lowerName.endsWith('.manchester')) {
               result = parseManchesterSyntax(content);
           } else {
-              // Fallback to Turtle if unknown ext but looks like text
               result = await parseTurtle(content);
           }
 
           if (result && result.nodes) {
-              // CRITICAL: Sanitize edges to prevent "node not found" crashes in ReactFlow
-              // Ensure every edge connects to an existing node ID
               const validNodeIds = new Set(result.nodes.map((n: any) => n.id));
               const validEdges = (result.edges || []).filter((e: any) => 
                   validNodeIds.has(e.source) && validNodeIds.has(e.target)
@@ -501,7 +495,6 @@ function App() {
   const handleLoadUrl = async (url: string) => {
       try {
           addToast("Fetching ontology...", "info");
-          // Use Accept headers for Linked Data support (e.g. BioPortal, DBpedia)
           const response = await fetch(url, {
               headers: {
                   'Accept': 'text/turtle, application/x-turtle, text/n3, application/rdf+xml, application/xml, application/ld+json, application/json'
@@ -510,33 +503,27 @@ function App() {
           if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
           const content = await response.text();
           
-          // Infer type from content-type or extension
           const contentType = response.headers.get('content-type') || '';
           let filename = url.split('/').pop() || 'download';
           
-          // Basic extension inference if missing
           if (!filename.includes('.')) {
               if (contentType.includes('xml')) filename += '.rdf';
               else if (contentType.includes('json')) filename += '.json';
-              else filename += '.ttl'; // Default assumption for semantic web
+              else filename += '.ttl';
           }
 
           await handleLoadContent(content, filename);
       } catch (e) {
-          // Toast handles UI, but we throw to let the modal know
           throw e; 
       }
   };
 
-  // Filter visible nodes based on "Show Individuals" toggle
   const visibleNodes = useMemo(() => {
       return showIndividuals 
         ? nodes 
         : nodes.filter(n => n.data.type !== ElementType.OWL_NAMED_INDIVIDUAL);
   }, [nodes, showIndividuals]);
 
-  // Helper for derived edges (with inferences if enabled)
-  // Must filter edges to ensuring both source and target exist in visibleNodes
   const displayEdges = useMemo(() => {
       let currentEdges = edges;
       if (isReasonerActive && showInferred) {
@@ -544,15 +531,12 @@ function App() {
       }
       
       const visibleIds = new Set(visibleNodes.map(n => n.id));
-      // Strict filtering: Source AND Target must be in visibleIds
-      // This prevents "node not found" crashes in ReactFlow
       return currentEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
   }, [nodes, edges, isReasonerActive, showInferred, visibleNodes]);
 
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [selectedNodeId, nodes]);
   const selectedEdge = useMemo(() => edges.find(e => e.id === selectedEdgeId) || null, [selectedEdgeId, edges]);
 
-  // Sync sidebar visibility with view mode
   useEffect(() => {
       if (viewMode === 'design') {
           setIsSidebarOpen(true);
@@ -590,13 +574,15 @@ function App() {
         />
 
         <div className="flex flex-1 overflow-hidden relative">
-            {/* Left Sidebar (Only in Design Mode) */}
             {viewMode === 'design' && isSidebarOpen && (
                 <Sidebar selectedNode={selectedNode} />
             )}
 
-            {/* Main Content Area */}
-            <div className="flex-1 relative bg-slate-950">
+            <div 
+                className="flex-1 relative bg-slate-950"
+                onDrop={onDrop}
+                onDragOver={onDragOver}
+            >
                 {viewMode === 'design' && (
                     <ReactFlow
                         nodes={visibleNodes}
@@ -607,13 +593,11 @@ function App() {
                         onNodeClick={onNodeClick}
                         onEdgeClick={onEdgeClick}
                         onPaneClick={onPaneClick}
-                        onDrop={onDrop}
-                        onDragOver={onDragOver}
                         nodeTypes={nodeTypes}
                         fitView
                         className="bg-slate-950"
                         minZoom={0.1}
-                        deleteKeyCode={null} // Disable default delete to use custom handler with dialog
+                        deleteKeyCode={null}
                     >
                         <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#334155" />
                         <Controls className="bg-slate-800 border-slate-700 fill-slate-400 text-slate-400" />
@@ -650,7 +634,7 @@ function App() {
                 {viewMode === 'entities' && (
                     <EntityCatalog 
                         nodes={nodes} 
-                        edges={displayEdges} // Use displayEdges to show inferred relations
+                        edges={displayEdges}
                         isReasonerActive={isReasonerActive}
                         onAddNode={handleAddNode}
                         onDeleteNode={handleDeleteNode}
@@ -700,7 +684,7 @@ function App() {
                 {viewMode === 'concept' && (
                     <ConceptGraph 
                         nodes={visibleNodes} 
-                        edges={displayEdges} // Use displayEdges for reasoning view
+                        edges={displayEdges}
                         searchTerm={searchTerm}
                         selectedNodeId={selectedNodeId}
                         onNavigate={handleNavigate}
@@ -710,7 +694,7 @@ function App() {
                 {viewMode === 'owlviz' && (
                     <OWLVizVisualization 
                         nodes={visibleNodes} 
-                        edges={displayEdges} // Use displayEdges for reasoning view
+                        edges={displayEdges}
                         searchTerm={searchTerm} 
                         selectedNodeId={selectedNodeId} 
                     />
@@ -733,7 +717,6 @@ function App() {
                 />
             </div>
 
-            {/* Properties Panel Sliding Container */}
             <div className={`transition-all duration-300 ease-in-out border-l border-slate-800 bg-slate-900 overflow-hidden ${selectedNode || selectedEdge ? 'w-80 translate-x-0' : 'w-0 translate-x-full border-none'}`}>
                 <PropertiesPanel 
                     selectedNode={selectedNode}
@@ -760,7 +743,6 @@ function App() {
             </div>
         </div>
 
-        {/* Modals */}
         <SettingsModal 
             isOpen={isSettingsOpen} 
             onClose={() => setIsSettingsOpen(false)} 

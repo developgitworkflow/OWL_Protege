@@ -81,8 +81,9 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
         svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8));
 
         // B. Define Filters/Markers
-        const defs = svg.select("defs").size() === 0 ? svg.append("defs") : svg.select("defs");
-        (defs as any).selectAll("*").remove(); // Clean reload
+        const defs = d3.select(svgRef.current).select("defs");
+        // Clear existing defs carefully
+        defs.selectAll("*").remove();
 
         // Glow Filter
         const glow = defs.append("filter").attr("id", "glow");
@@ -132,7 +133,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
 
         // --- Data Merge Strategy ---
         // We want to preserve x,y,vx,vy of existing nodes if they still exist
-        const oldNodes = new Map(simulation.nodes().map(n => [n.id, n]));
+        const oldNodes = new Map<string, SimNode>();
+        simulation.nodes().forEach(n => oldNodes.set(n.id, n));
         
         const newNodes: SimNode[] = nodes.map(n => {
             const old = oldNodes.get(n.id);
@@ -169,7 +171,6 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
         // 1. Links
         const linkGroup = g.select(".links").size() === 0 ? g.append("g").attr("class", "links") : g.select(".links");
         
-        // TS Fix: Cast parent selection to any to allow string argument in selectAll
         const link = ((linkGroup as any).selectAll("path.link-path") as any)
             .data(newLinks, (d: any) => d.id);
 
@@ -187,7 +188,6 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
 
         // 2. Edge Labels
         const labelGroup = g.select(".labels").size() === 0 ? g.append("g").attr("class", "labels") : g.select(".labels");
-        // TS Fix: Cast parent selection to any to allow string argument in selectAll
         const edgeLabel = ((labelGroup as any).selectAll("g.edge-label") as any)
             .data(newLinks, (d: any) => d.id);
 
@@ -232,7 +232,6 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
 
         // 3. Nodes
         const nodeGroup = g.select(".nodes").size() === 0 ? g.append("g").attr("class", "nodes") : g.select(".nodes");
-        // TS Fix: Cast parent selection to any to allow string argument in selectAll
         const node = ((nodeGroup as any).selectAll("g.node") as any)
             .data(newNodes, (d: any) => d.id);
 
@@ -285,6 +284,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
         const nodeMerge = nodeEnter.merge(node);
 
         // --- Interactions ---
+        // Ensure state setters are not called with D3 arguments
         nodeMerge.on("click", (e: any, d: any) => {
             e.stopPropagation();
             if (onNavigate) onNavigate('graph', d.id);
@@ -293,6 +293,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
         nodeMerge.on("mouseenter", (e: any, d: any) => {
             const rect = containerRef.current?.getBoundingClientRect();
             if(rect) {
+                // Strictly construct the object to avoid passing 'e' or 'd' directly
                 setTooltip({ 
                     x: e.clientX - rect.left, 
                     y: e.clientY - rect.top, 
@@ -314,7 +315,10 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
                 );
                 return n.id === d.id || isNeighbor ? 1 : 0.1;
             });
-        }).on("mouseleave", () => {
+        });
+        
+        // Define mouseleave separately to be safe with state setter
+        nodeMerge.on("mouseleave", () => {
             setTooltip(null);
             linkMerge.transition().style("opacity", 1).attr("stroke", (d: any) => d.isInferred ? "#fbbf24" : "#475569");
             nodeMerge.transition().style("opacity", 1);
@@ -404,6 +408,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
     return (
         <div ref={containerRef} className="relative w-full h-full bg-slate-950 overflow-hidden group/canvas">
             <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing touch-none">
+                <defs></defs>
                 <g ref={wrapperRef}>
                     <g className="links"></g>
                     <g className="labels"></g>

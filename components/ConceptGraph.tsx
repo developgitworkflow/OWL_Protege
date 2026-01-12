@@ -1,9 +1,9 @@
 
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, Layers, X, Brain, ArrowRight, Tag, Info, BookOpen, Key, GitCommit, Split, Shield, Globe, List, FolderTree, Box, Sigma, User } from 'lucide-react';
+import { ZoomIn, ZoomOut, RefreshCw, Maximize, Database, X } from 'lucide-react';
 
 interface ConceptGraphProps {
     nodes: Node<UMLNodeData>[];
@@ -13,16 +13,14 @@ interface ConceptGraphProps {
     onNavigate?: (view: string, id: string) => void;
 }
 
-// Extended D3 types
 interface SimNode extends d3.SimulationNodeDatum {
     id: string;
     label: string;
-    type: ElementType | 'literal' | 'disjoint';
+    type: ElementType | 'literal';
     originalId: string;
     radius: number;
     color: string;
     stroke: string;
-    isPropertyNode?: boolean; // For VOWL property nodes if we split lines
     x?: number;
     y?: number;
     fx?: number | null;
@@ -34,21 +32,19 @@ interface SimLink extends d3.SimulationLinkDatum<SimNode> {
     source: string | SimNode;
     target: string | SimNode;
     label: string;
-    type: 'subclass' | 'type' | 'property' | 'disjoint';
+    type: 'subclass' | 'type' | 'property';
     isInferred: boolean;
 }
 
-// VOWL-aligned Theme
 const THEME = {
-    classStart: '#3b82f6', // Blue-500
-    classEnd: '#1d4ed8',   // Blue-700
-    indivStart: '#d946ef', // Fuchsia-500
-    indivEnd: '#a21caf',   // Fuchsia-700
-    dataStart: '#fbbf24',  // Amber-400
-    dataEnd: '#d97706',    // Amber-600
+    classStart: '#3b82f6',
+    classEnd: '#1d4ed8',
+    indivStart: '#d946ef',
+    indivEnd: '#a21caf',
+    dataStart: '#fbbf24',
+    dataEnd: '#d97706',
     literalStart: '#94a3b8',
     literalEnd: '#64748b',
-    text: '#ffffff',
     line: '#64748b',
     lineInferred: '#fbbf24',
 };
@@ -58,14 +54,12 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
     const containerRef = useRef<HTMLDivElement>(null);
     const wrapperRef = useRef<SVGGElement>(null);
     
-    // Maintain simulation state references to prevent resets
     const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
     const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
     
-    const [selectedEntity, setSelectedEntity] = useState<SimNode | null>(null);
+    const [selectedEntity, setSelectedEntity] = useState<Partial<SimNode> | null>(null);
     const [showAttributes, setShowAttributes] = useState(false);
 
-    // --- 1. Initialization (Run Once) ---
     useEffect(() => {
         if (!svgRef.current || !wrapperRef.current || !containerRef.current) return;
 
@@ -73,7 +67,6 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         const width = containerRef.current.clientWidth;
         const height = containerRef.current.clientHeight;
 
-        // A. Setup Zoom
         const zoom = d3.zoom<SVGSVGElement, unknown>()
             .scaleExtent([0.1, 4])
             .on("zoom", (event) => {
@@ -82,15 +75,12 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         zoomBehaviorRef.current = zoom;
         svg.call(zoom);
         
-        // Initial Center
         svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8));
 
-        // B. Define Gradients & Markers
-        const defs = svg.select("defs").size() === 0 ? svg.append("defs") : svg.select("defs");
-        // TS Fix: Cast defs selection to any to allow string wildcard
-        (defs as any).selectAll("*").remove();
+        // Setup Defs using D3 to populate the React-rendered <defs>
+        const defs = d3.select(svgRef.current).select("defs");
+        defs.selectAll("*").remove();
 
-        // 1. Gradients
         const createGradient = (id: string, start: string, end: string) => {
             const grad = defs.append("radialGradient")
                 .attr("id", id)
@@ -106,7 +96,6 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         createGradient("grad-data", THEME.dataStart, THEME.dataEnd);
         createGradient("grad-literal", THEME.literalStart, THEME.literalEnd);
 
-        // 2. Drop Shadow
         const filter = defs.append("filter").attr("id", "shadow").attr("x", "-20%").attr("y", "-20%").attr("width", "140%").attr("height", "140%");
         filter.append("feGaussianBlur").attr("in", "SourceAlpha").attr("stdDeviation", 2).attr("result", "blur");
         filter.append("feOffset").attr("in", "blur").attr("dx", 2).attr("dy", 2).attr("result", "offsetBlur");
@@ -114,19 +103,16 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         feMerge.append("feMergeNode").attr("in", "offsetBlur");
         feMerge.append("feMergeNode").attr("in", "SourceGraphic");
 
-        // 3. Markers
-        // Standard Arrow
         defs.append("marker")
             .attr("id", "arrow-std")
             .attr("viewBox", "0 -5 10 10")
-            .attr("refX", 28) // Offset for radius
+            .attr("refX", 28)
             .attr("refY", 0)
             .attr("markerWidth", 6)
             .attr("markerHeight", 6)
             .attr("orient", "auto")
             .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#64748b");
 
-        // Hollow Triangle (SubClassOf)
         const subMarker = defs.append("marker")
             .attr("id", "arrow-sub")
             .attr("viewBox", "0 -5 10 10")
@@ -137,7 +123,6 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             .attr("orient", "auto");
         subMarker.append("path").attr("d", "M0,-5L10,0L0,5Z").attr("fill", "#0f172a").attr("stroke", "#64748b").attr("stroke-width", 1.5);
 
-        // Inferred Arrow
         defs.append("marker")
             .attr("id", "arrow-inf")
             .attr("viewBox", "0 -5 10 10")
@@ -148,11 +133,10 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             .attr("orient", "auto")
             .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#fbbf24");
 
-        // C. Initialize Simulation
         const sim = d3.forceSimulation<SimNode, SimLink>()
             .force("link", d3.forceLink<SimNode, SimLink>().id(d => d.id).distance(180))
             .force("charge", d3.forceManyBody().strength(-800))
-            .force("center", d3.forceCenter(0, 0)) // Relative to group
+            .force("center", d3.forceCenter(0, 0))
             .force("collide", d3.forceCollide().radius((d: any) => d.radius + 30).iterations(3));
         
         simulationRef.current = sim;
@@ -160,21 +144,18 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         return () => { sim.stop(); };
     }, []);
 
-    // --- 2. Data Update & Rendering Loop ---
     useEffect(() => {
         if (!simulationRef.current || !wrapperRef.current) return;
         const simulation = simulationRef.current;
         const g = d3.select(wrapperRef.current);
 
-        // --- Data Merging Strategy (Preserve Layout) ---
-        const oldNodes = new Map(simulation.nodes().map(n => [n.id, n]));
+        const oldNodes = new Map<string, SimNode>();
+        simulation.nodes().forEach(n => oldNodes.set(n.id, n));
         
         const newNodes: SimNode[] = [];
         const newLinks: SimLink[] = [];
 
-        // 1. Process Nodes
         nodes.forEach(n => {
-            // Determine VOWL Style
             let radius = 35;
             let color = "url(#grad-class)";
             let stroke = THEME.classEnd;
@@ -184,7 +165,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                 color = "url(#grad-indiv)";
                 stroke = THEME.indivEnd;
             } else if (n.data.type === ElementType.OWL_DATATYPE) {
-                radius = 25; // Rect handled in render
+                radius = 25;
                 color = "url(#grad-data)";
                 stroke = THEME.dataEnd;
             }
@@ -204,7 +185,6 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                 fy: old ? old.fy : null
             });
 
-            // Attributes as Literals (Optional)
             if (showAttributes && n.data.attributes) {
                 n.data.attributes.forEach((attr, i) => {
                     const attrId = `${n.id}_attr_${i}`;
@@ -215,7 +195,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                         label: attr.name,
                         type: 'literal',
                         originalId: n.id,
-                        radius: 0, // Rect
+                        radius: 0,
                         color: "url(#grad-literal)",
                         stroke: THEME.literalEnd,
                         x: existingAttr ? existingAttr.x : (old?.x || 0) + 50,
@@ -234,9 +214,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             }
         });
 
-        // 2. Process Edges
         edges.forEach(e => {
-            // Validation: Ensure nodes exist
             if (!newNodes.find(n => n.id === e.source) || !newNodes.find(n => n.id === e.target)) return;
 
             let type: SimLink['type'] = 'property';
@@ -245,7 +223,6 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
             if (['subclassof', 'rdfs:subclassof'].includes(lowerLabel)) type = 'subclass';
             else if (['rdf:type', 'a'].includes(lowerLabel)) type = 'type';
-            else if (['owl:disjointwith', 'disjointwith'].includes(lowerLabel)) type = 'disjoint';
 
             label = label.replace(/^(owl:|rdf:|rdfs:)/, '');
 
@@ -259,16 +236,11 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             });
         });
 
-        // Update Simulation
         simulation.nodes(newNodes);
         (simulation.force("link") as d3.ForceLink<SimNode, SimLink>).links(newLinks);
         simulation.alpha(0.3).restart();
 
-        // --- Rendering ---
-
-        // 1. Links
         const linkGroup = g.select(".links").size() === 0 ? g.append("g").attr("class", "links") : g.select(".links");
-        // TS Fix: Cast parent selection to any to allow string argument in selectAll
         const link = ((linkGroup as any).selectAll("path.link") as any).data(newLinks, (d: any) => d.id);
 
         const linkEnter = link.enter().append("path")
@@ -278,7 +250,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
         const linkMerge = linkEnter.merge(link)
             .attr("stroke", (d: any) => d.isInferred ? THEME.lineInferred : THEME.line)
-            .attr("stroke-dasharray", (d: any) => (d.isInferred || d.type === 'type' || d.type === 'disjoint') ? "5,5" : "")
+            .attr("stroke-dasharray", (d: any) => (d.isInferred || d.type === 'type') ? "5,5" : "")
             .attr("marker-end", (d: any) => {
                 if (d.isInferred) return "url(#arrow-inf)";
                 if (d.type === 'subclass') return "url(#arrow-sub)";
@@ -287,9 +259,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
         link.exit().remove();
 
-        // 2. Link Labels (Rect + Text)
         const labelGroup = g.select(".labels").size() === 0 ? g.append("g").attr("class", "labels") : g.select(".labels");
-        // TS Fix: Cast parent selection to any to allow string argument in selectAll
         const label = ((labelGroup as any).selectAll("g.label") as any).data(newLinks, (d: any) => d.id);
 
         const labelEnter = label.enter().append("g")
@@ -326,9 +296,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
         label.exit().remove();
 
-        // 3. Nodes
         const nodeGroup = g.select(".nodes").size() === 0 ? g.append("g").attr("class", "nodes") : g.select(".nodes");
-        // TS Fix: Cast parent selection to any to allow string argument in selectAll
         const node = ((nodeGroup as any).selectAll("g.node") as any).data(newNodes, (d: any) => d.id);
 
         const nodeEnter = node.enter().append("g")
@@ -345,7 +313,6 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                     d.fx = null; d.fy = null;
                 }));
 
-        // Draw Circles or Rects based on type
         nodeEnter.each(function(d: any) {
             const el = d3.select(this);
             if (d.type === 'literal' || d.type === ElementType.OWL_DATATYPE) {
@@ -380,7 +347,6 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
 
         const nodeMerge = nodeEnter.merge(node);
 
-        // Highlight selection
         nodeMerge.select("circle")
             .attr("stroke", (d: any) => d.id === selectedNodeId ? "#fff" : d.stroke)
             .attr("stroke-width", (d: any) => d.id === selectedNodeId ? 4 : 2);
@@ -389,20 +355,23 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             .attr("stroke", (d: any) => d.id === selectedNodeId ? "#fff" : d.stroke)
             .attr("stroke-width", (d: any) => d.id === selectedNodeId ? 4 : 2);
 
-        // Search highlight
         nodeMerge.style("opacity", (d: any) => searchTerm && !d.label.toLowerCase().includes(searchTerm.toLowerCase()) ? 0.2 : 1);
 
         nodeMerge.on("click", (e: any, d: any) => {
             e.stopPropagation();
             if (d.originalId) {
-                setSelectedEntity(d);
-                // External Nav
+                const entity = { 
+                    id: d.id,
+                    label: d.label,
+                    type: d.type,
+                    originalId: d.originalId
+                };
+                setSelectedEntity(entity);
             }
         });
 
         node.exit().remove();
 
-        // Ticker
         simulation.on("tick", () => {
             linkMerge.attr("d", (d: any) => `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`);
             
@@ -415,9 +384,8 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
             nodeMerge.attr("transform", (d: any) => `translate(${d.x},${d.y})`);
         });
 
-    }, [nodes, edges, searchTerm, showAttributes, selectedNodeId]); // Re-run logic when React props change
+    }, [nodes, edges, searchTerm, showAttributes, selectedNodeId]);
 
-    // --- 3. View Controls ---
     const handleZoomIn = useCallback(() => {
         if (svgRef.current && zoomBehaviorRef.current) d3.select(svgRef.current).transition().call(zoomBehaviorRef.current.scaleBy, 1.3);
     }, []);
@@ -425,7 +393,6 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         if (svgRef.current && zoomBehaviorRef.current) d3.select(svgRef.current).transition().call(zoomBehaviorRef.current.scaleBy, 0.7);
     }, []);
     const handleFit = useCallback(() => {
-        // Simple reset to center for now
         if (svgRef.current && zoomBehaviorRef.current && containerRef.current) {
             const w = containerRef.current.clientWidth;
             const h = containerRef.current.clientHeight;
@@ -433,19 +400,12 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
         }
     }, []);
 
-    // Sync external selection
-    useEffect(() => {
-        if (selectedNodeId && simulationRef.current) {
-            const node = simulationRef.current.nodes().find(n => n.id === selectedNodeId);
-            if (node) setSelectedEntity(node);
-        }
-    }, [selectedNodeId]);
-
     const getNodeReal = (id: string) => nodes.find(n => n.id === id);
 
     return (
         <div ref={containerRef} className="relative w-full h-full bg-slate-950 overflow-hidden">
             <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing touch-none">
+                <defs></defs>
                 <g ref={wrapperRef}>
                     <g className="links"></g>
                     <g className="labels"></g>
@@ -453,7 +413,6 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                 </g>
             </svg>
 
-            {/* Top Right Legend */}
             <div className="absolute top-4 right-4 z-10 pointer-events-none">
                 <div className="bg-slate-900/80 backdrop-blur border border-slate-800 p-3 rounded-lg text-xs text-slate-300 shadow-xl pointer-events-auto">
                     <h3 className="font-bold mb-2 text-slate-500 uppercase tracking-wider text-[10px]">VOWL Notation</h3>
@@ -477,7 +436,6 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                 </div>
             </div>
 
-            {/* Controls */}
             <div className="absolute top-4 left-6 flex bg-slate-800 rounded-lg p-1 border border-slate-700 shadow-xl z-20">
                 <button 
                     onClick={() => setShowAttributes(!showAttributes)}
@@ -496,7 +454,6 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                 </div>
             </div>
 
-            {/* Info Panel */}
             {selectedEntity && (
                 <div className="absolute top-4 right-44 w-72 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-xl shadow-2xl flex flex-col animate-in slide-in-from-right-10 fade-in duration-200 z-30">
                     <div className="p-4 border-b border-slate-800 flex justify-between items-start">
@@ -506,7 +463,7 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                             </div>
                             <h2 className="text-lg font-bold text-white break-words">{selectedEntity.label}</h2>
                             <div className="text-[10px] text-slate-400 font-mono mt-1">
-                                {getNodeReal(selectedEntity.originalId)?.data.iri || selectedEntity.id}
+                                {selectedEntity.originalId ? (getNodeReal(selectedEntity.originalId)?.data.iri || selectedEntity.id) : selectedEntity.id}
                             </div>
                         </div>
                         <button onClick={() => setSelectedEntity(null)} className="text-slate-500 hover:text-white"><X size={16}/></button>
@@ -514,13 +471,13 @@ const ConceptGraph: React.FC<ConceptGraphProps> = ({ nodes, edges, searchTerm = 
                     {onNavigate && selectedEntity.originalId && (
                         <div className="p-3 bg-slate-950 rounded-b-xl flex gap-2">
                             <button 
-                                onClick={() => onNavigate('design', selectedEntity.originalId)}
+                                onClick={() => onNavigate('design', selectedEntity.originalId!)}
                                 className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 rounded border border-slate-700 transition-colors"
                             >
                                 Edit in Designer
                             </button>
                             <button 
-                                onClick={() => onNavigate('entities', selectedEntity.originalId)}
+                                onClick={() => onNavigate('entities', selectedEntity.originalId!)}
                                 className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 rounded border border-slate-700 transition-colors"
                             >
                                 Catalog

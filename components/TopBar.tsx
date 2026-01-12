@@ -83,7 +83,7 @@ const TopBar: React.FC<TopBarProps> = ({
             {showSidebarToggle && (
                 <button 
                     onClick={onToggleSidebar}
-                    className="text-slate-400 hover:text-white transition-colors"
+                    className="text-slate-400 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 rounded p-1"
                     title={isSidebarOpen ? "Hide Toolbox" : "Show Toolbox"}
                 >
                     {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
@@ -104,7 +104,7 @@ const TopBar: React.FC<TopBarProps> = ({
                     <button 
                         key={view.id}
                         onClick={() => onViewChange(view.id as any)}
-                        className={`px-3 py-1.5 text-xs font-medium rounded transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-all flex items-center gap-1.5 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-blue-500 focus:z-10 ${
                             currentView === view.id 
                             ? 'bg-blue-600 text-white shadow-sm' 
                             : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
@@ -139,7 +139,7 @@ const TopBar: React.FC<TopBarProps> = ({
                 <button 
                     onClick={onUndo} 
                     disabled={!canUndo}
-                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                     title="Undo (Ctrl+Z)"
                 >
                     <Undo2 size={18} />
@@ -147,7 +147,7 @@ const TopBar: React.FC<TopBarProps> = ({
                 <button 
                     onClick={onRedo} 
                     disabled={!canRedo}
-                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                     title="Redo (Ctrl+Y)"
                 >
                     <Redo2 size={18} />
@@ -160,7 +160,7 @@ const TopBar: React.FC<TopBarProps> = ({
             <div className="flex items-center gap-2">
                 <button 
                     onClick={onRunReasoner}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all border ${
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         isReasonerActive 
                         ? 'bg-amber-500/20 border-amber-500/50 text-amber-400 hover:bg-amber-500/30 hover:border-amber-400' 
                         : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500'
@@ -175,14 +175,14 @@ const TopBar: React.FC<TopBarProps> = ({
                     <div className="flex items-center bg-slate-900 rounded-md border border-slate-700 p-0.5">
                         <button
                             onClick={() => onToggleInferred()}
-                            className={`p-1 rounded transition-colors ${!showInferred ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+                            className={`p-1 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${!showInferred ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
                             title="Show Asserted"
                         >
                             <Layers size={12} />
                         </button>
                         <button
                             onClick={() => onToggleInferred()}
-                            className={`p-1 rounded transition-colors ${showInferred ? 'bg-amber-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+                            className={`p-1 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${showInferred ? 'bg-amber-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
                             title="Show Inferred"
                         >
                             <Brain size={12} />
@@ -196,7 +196,7 @@ const TopBar: React.FC<TopBarProps> = ({
             {/* Settings Main Action */}
             <button 
                 onClick={onOpenSettings}
-                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-3 py-1.5 rounded-md text-xs font-bold border border-slate-700 transition-colors"
+                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-3 py-1.5 rounded-md text-xs font-bold border border-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                 title="Settings, Project & Import/Export"
             >
                 <Settings size={14} />
@@ -210,7 +210,7 @@ const TopBar: React.FC<TopBarProps> = ({
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Visibility</span>
                 <button 
                     onClick={onToggleIndividuals}
-                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors ${showIndividuals ? 'bg-pink-900/20 text-pink-400 border border-pink-900/30' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'}`}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${showIndividuals ? 'bg-pink-900/20 text-pink-400 border border-pink-900/30' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'}`}
                     title={showIndividuals ? "Hide Individuals" : "Show Individuals"}
                 >
                     {showIndividuals ? <Eye size={12} /> : <EyeOff size={12} />}
@@ -220,29 +220,29 @@ const TopBar: React.FC<TopBarProps> = ({
 
             <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Analysis</span>
-                <button onClick={onValidate} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-emerald-400 hover:bg-slate-900 transition-colors">
+                <button onClick={onValidate} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-emerald-400 hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <ShieldCheck size={12} /> Validate
                 </button>
-                <button onClick={onOpenMetrics} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-cyan-400 hover:bg-slate-900 transition-colors">
+                <button onClick={onOpenMetrics} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-cyan-400 hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <Activity size={12} /> Metrics
                 </button>
-                <button onClick={onOpenExpressivity} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-pink-400 hover:bg-slate-900 transition-colors">
+                <button onClick={onOpenExpressivity} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-pink-400 hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <Calculator size={12} /> Complexity
                 </button>
             </div>
 
             <div className="flex items-center gap-2 border-l border-slate-800 pl-4">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Logic</span>
-                <button onClick={onOpenDLQuery} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-purple-400 hover:bg-slate-900 transition-colors">
+                <button onClick={onOpenDLQuery} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-purple-400 hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <Search size={12} /> DL Query
                 </button>
-                <button onClick={onOpenSWRL} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-amber-400 hover:bg-slate-900 transition-colors">
+                <button onClick={onOpenSWRL} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-amber-400 hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <ScrollText size={12} /> SWRL
                 </button>
-                <button onClick={onOpenDLAxioms} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-indigo-400 hover:bg-slate-900 transition-colors">
+                <button onClick={onOpenDLAxioms} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-indigo-400 hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <Sigma size={12} /> Axioms
                 </button>
-                <button onClick={onOpenDatalog} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-emerald-400 hover:bg-slate-900 transition-colors">
+                <button onClick={onOpenDatalog} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-slate-400 hover:text-emerald-400 hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <Terminal size={12} /> Datalog
                 </button>
             </div>

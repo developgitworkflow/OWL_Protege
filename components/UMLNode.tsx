@@ -4,7 +4,7 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
 import { Database, User, FileType, ArrowRightLeft, Tag, Info } from 'lucide-react';
 
-const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
+const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
   const getIcon = () => {
     switch(data.type) {
         case ElementType.OWL_CLASS: return <Database className="w-4 h-4 mr-2 text-purple-400" />;
@@ -37,16 +37,15 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
   }
 
   // Visual state for selection and search match
-  // Removed overflow-hidden to allow tooltip to pop out
   const containerClasses = `
-    group w-64 bg-slate-800 rounded-md text-xs font-sans transition-all duration-300
+    uml-node group w-64 bg-slate-800 rounded-md text-xs font-sans transition-all duration-200
     ${selected 
         ? 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] ring-1 ring-blue-500' 
         : data.isSearchMatch
             ? 'border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)] ring-2 ring-yellow-400/50 scale-105 z-10'
             : 'border-slate-600 shadow-lg hover:border-slate-500 hover:shadow-xl'
     }
-    border
+    border focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:shadow-xl
   `;
 
   // Dynamic Labels based on type
@@ -72,7 +71,13 @@ const UMLNode = ({ data, selected }: NodeProps<UMLNodeData>) => {
   };
 
   return (
-    <div className={containerClasses}>
+    <div 
+        className={containerClasses}
+        tabIndex={0} 
+        data-id={id} 
+        role="button" 
+        aria-label={`${data.type.replace('owl_', '')}: ${data.label}`}
+    >
       <Handle 
         type="target" 
         position={Position.Top} 

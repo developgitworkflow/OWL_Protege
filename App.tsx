@@ -23,6 +23,7 @@ import AIAssistant from './components/AIAssistant';
 import Toast, { ToastMessage, ToastType } from './components/Toast';
 import ConfirmDialog from './components/ConfirmDialog';
 import ImportUrlModal from './components/ImportUrlModal';
+import ShortcutsModal from './components/ShortcutsModal';
 
 // Visualizations & Views
 import GraphVisualization from './components/GraphVisualization';
@@ -89,6 +90,7 @@ function App() {
   const [isDatalogOpen, setIsDatalogOpen] = useState(false);
   const [isMetricsOpen, setIsMetricsOpen] = useState(false);
   const [isImportUrlOpen, setIsImportUrlOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [confirmConfig, setConfirmConfig] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
@@ -184,12 +186,37 @@ function App() {
     });
   };
 
-  // --- Keyboard Navigation ---
+  // --- Keyboard & Focus Management ---
+  
+  // 1. Listen for global focus changes to handle Tab navigation
+  useEffect(() => {
+      const handleFocusIn = (e: FocusEvent) => {
+          const target = e.target as HTMLElement;
+          // Check if it's a node
+          if (target.classList.contains('uml-node')) {
+              const nodeId = target.getAttribute('data-id');
+              if (nodeId) {
+                  setSelectedNodeId(nodeId);
+                  setSelectedEdgeId(null);
+              }
+          }
+      };
+      document.addEventListener('focusin', handleFocusIn);
+      return () => document.removeEventListener('focusin', handleFocusIn);
+  }, []);
+
+  // 2. Keyboard Shortcuts
   useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
           // Ignore if user is typing in an input
           if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
               return;
+          }
+
+          // Help Shortcut
+          if (e.key === '?') {
+              e.preventDefault();
+              setIsShortcutsOpen(prev => !prev);
           }
 
           // Delete Shortcut
@@ -207,6 +234,7 @@ function App() {
           if (e.key === 'Escape') {
               setSelectedNodeId(null);
               setSelectedEdgeId(null);
+              setIsShortcutsOpen(false);
           }
 
           // Spatial Navigation (Alt + Arrows)
@@ -245,7 +273,14 @@ function App() {
               });
 
               if (bestCandidate) {
-                  setSelectedNodeId((bestCandidate as Node).id);
+                  const targetId = (bestCandidate as Node).id;
+                  setSelectedNodeId(targetId);
+                  
+                  // Focus the new node in DOM so tab index continues from there
+                  setTimeout(() => {
+                      const el = document.querySelector(`[data-id="${targetId}"]`) as HTMLElement;
+                      if (el) el.focus();
+                  }, 50);
               }
           }
       };
@@ -656,6 +691,7 @@ function App() {
         <ExpressivityModal isOpen={isExpressivityOpen} onClose={() => setIsExpressivityOpen(false)} nodes={nodes} edges={edges} />
         <DatalogModal isOpen={isDatalogOpen} onClose={() => setIsDatalogOpen(false)} nodes={nodes} edges={edges} />
         <OntoMetricsModal isOpen={isMetricsOpen} onClose={() => setIsMetricsOpen(false)} nodes={nodes} edges={edges} />
+        <ShortcutsModal isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} />
         
         <ConfirmDialog 
             isOpen={!!confirmConfig}

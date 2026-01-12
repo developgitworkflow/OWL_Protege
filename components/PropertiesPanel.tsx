@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Node as FlowNode, Edge } from 'reactflow';
 import { UMLNodeData, ElementType, Annotation, Method } from '../types';
-import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag, ArrowRightLeft, Sparkles, Command } from 'lucide-react';
+import { Trash2, Plus, X, Box, ArrowRight, MousePointerClick, ListOrdered, Quote, Link2, GitMerge, GitCommit, Split, Globe, Lock, Shield, Eye, BookOpen, Check, User, AlertOctagon, Tag, ArrowRightLeft, Sparkles, Command, AlertCircle } from 'lucide-react';
 import AnnotationManager from './AnnotationManager';
+import { validateManchesterSyntax } from '../services/manchesterValidator';
 
 interface PropertiesPanelProps {
   selectedNode: FlowNode<UMLNodeData> | null;
@@ -109,6 +110,9 @@ const AxiomInput: React.FC<AxiomInputProps> = ({ value, onChange, placeholder, a
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
+    // Validation State
+    const validation = useMemo(() => validateManchesterSyntax(value), [value]);
+
     const suggestions = useMemo(() => {
         if (!matchToken) return [];
         const term = matchToken.toLowerCase();
@@ -201,7 +205,7 @@ const AxiomInput: React.FC<AxiomInputProps> = ({ value, onChange, placeholder, a
     return (
         <div className="relative w-full group/input" ref={containerRef}>
             {/* Syntax Toolbar */}
-            <div className="flex gap-1 mb-1.5 opacity-0 group-focus-within/input:opacity-100 group-hover/input:opacity-100 transition-opacity absolute bottom-full left-0 bg-slate-900/90 p-1 rounded-t-md border border-b-0 border-slate-700 pointer-events-none group-focus-within/input:pointer-events-auto">
+            <div className="flex gap-1 mb-1.5 opacity-0 group-focus-within/input:opacity-100 group-hover/input:opacity-100 transition-opacity absolute bottom-full left-0 bg-slate-900/90 p-1 rounded-t-md border border-b-0 border-slate-700 pointer-events-none group-focus-within/input:pointer-events-auto z-10">
                 {['some', 'only', 'and', 'or', 'not'].map(kw => (
                     <button 
                         key={kw} 
@@ -213,16 +217,28 @@ const AxiomInput: React.FC<AxiomInputProps> = ({ value, onChange, placeholder, a
                 ))}
             </div>
 
-            <textarea
-                ref={textareaRef}
-                value={value}
-                onChange={handleInput}
-                onKeyDown={handleKeyDown}
-                placeholder={placeholder}
-                rows={1}
-                className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-[11px] text-slate-300 font-mono focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 resize-none overflow-hidden min-h-[28px]"
-                style={{ height: Math.max(28, value.split('\n').length * 18) + 'px' }}
-            />
+            <div className="relative">
+                <textarea
+                    ref={textareaRef}
+                    value={value}
+                    onChange={handleInput}
+                    onKeyDown={handleKeyDown}
+                    placeholder={placeholder}
+                    rows={1}
+                    className={`w-full bg-slate-900 border rounded px-2 py-1.5 text-[11px] text-slate-300 font-mono focus:outline-none focus:ring-1 resize-none overflow-hidden min-h-[28px] ${!validation.isValid && value ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-800 focus:border-blue-500/50 focus:ring-blue-500/20'}`}
+                    style={{ height: Math.max(28, value.split('\n').length * 18) + 'px' }}
+                />
+                
+                {/* Validation Icon */}
+                {!validation.isValid && value && (
+                    <div className="absolute right-2 top-1.5 text-red-500 group/err">
+                        <AlertCircle size={12} />
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-red-950 border border-red-800 text-red-200 text-[10px] p-2 rounded shadow-xl opacity-0 group-hover/err:opacity-100 pointer-events-none transition-opacity z-20">
+                            {validation.error}
+                        </div>
+                    </div>
+                )}
+            </div>
 
             {/* Suggestions Dropdown */}
             {showSuggestions && suggestions.length > 0 && (

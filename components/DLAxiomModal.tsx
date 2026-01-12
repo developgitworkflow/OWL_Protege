@@ -3,6 +3,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { X, Sigma, BookOpen, Database, User, ArrowRightLeft, Info, Plus, Check, ListFilter, Tag, Command } from 'lucide-react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
+import { validateManchesterSyntax } from '../services/manchesterValidator';
 
 interface DLAxiomModalProps {
   isOpen: boolean;
@@ -126,6 +127,7 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
   const [newSubject, setNewSubject] = useState('');
   const [newPredicate, setNewPredicate] = useState('SubClassOf');
   const [newObject, setNewObject] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   // Intellisense State
   const [suggestions, setSuggestions] = useState<{label: string, type: string}[]>([]);
@@ -178,9 +180,9 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
   const handleObjectChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = e.target.value;
       setNewObject(val);
+      setValidationError(null); // Clear error on typing
       
       // Suggest based on the last word being typed
-      // Split by spaces or parens, but keep delimiters to reconstruct logic
       const words = val.split(/([\s()]+)/);
       const lastToken = words[words.length - 1];
       
@@ -210,14 +212,12 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
       if (activeInput === 'subject') {
           setNewSubject(suggestion.label);
       } else if (activeInput === 'object') {
-          // Replace only the last token
           const words = newObject.split(/(\s+|[()])/);
-          // Find last non-empty token index
           let i = words.length - 1;
           while (i >= 0 && !words[i]) i--; 
           
           if (i >= 0) {
-              words[i] = suggestion.label + ' '; // Add space for convenience
+              words[i] = suggestion.label + ' '; 
               setNewObject(words.join(''));
           } else {
               setNewObject(suggestion.label + ' ');
@@ -250,7 +250,15 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
   const handleAddAxiom = () => {
       if (!newSubject.trim() || !newObject.trim()) return;
 
-      // 1. Resolve or Create Subject Node
+      // 1. Validate Syntax
+      const objectStr = fromDL(newObject);
+      const validation = validateManchesterSyntax(objectStr);
+      if (!validation.isValid) {
+          setValidationError(validation.error);
+          return;
+      }
+
+      // 2. Resolve or Create Subject Node
       let subjectNode = nodes.find(n => n.data.label === newSubject);
       const newNodes = [...nodes];
       const newEdges = [...edges];
@@ -274,10 +282,7 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
           newNodes.push(subjectNode);
       }
 
-      // 2. Process Object & Relation
-      // If object is simple named entity and valid edge type -> Edge
-      // Else -> Method (Axiom)
-      const objectStr = fromDL(newObject);
+      // 3. Process Object & Relation
       const simpleEntity = objectStr.match(/^[a-zA-Z0-9_]+$/) && !['some','only','and','or','not'].includes(objectStr);
       
       let addedAsEdge = false;
@@ -286,10 +291,8 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
       if (simpleEntity) {
           let objectNode = newNodes.find(n => n.data.label === objectStr);
           if (!objectNode) {
-              // Create placeholder node?
-              // For robustness, let's create it if it looks like a class/individual name
               let objType = ElementType.OWL_CLASS;
-              if (newPredicate === 'Type') objType = ElementType.OWL_CLASS; // Instance OF Class
+              if (newPredicate === 'Type') objType = ElementType.OWL_CLASS; 
               else if (['SameAs', 'DifferentFrom'].includes(newPredicate)) objType = ElementType.OWL_NAMED_INDIVIDUAL;
               else if (subjectNode.data.type === ElementType.OWL_CLASS) objType = ElementType.OWL_CLASS;
 
@@ -302,7 +305,6 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
               newNodes.push(objectNode);
           }
 
-          // Map predicate to edge label
           let edgeLabel = '';
           if (newPredicate === 'SubClassOf') edgeLabel = 'subClassOf';
           else if (newPredicate === 'Type') edgeLabel = 'rdf:type';
@@ -328,7 +330,6 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
               returnType: objectStr,
               visibility: '+' as const
           };
-          // Must update specific node in newNodes array
           const idx = newNodes.findIndex(n => n.id === subjectNode!.id);
           if (idx !== -1) {
               const updatedNode = { ...newNodes[idx], data: { ...newNodes[idx].data, methods: [...newNodes[idx].data.methods, newMethod] } };
@@ -340,6 +341,7 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
       
       // Reset
       setNewObject('');
+      setValidationError(null);
       setIsAdding(false);
   };
 
@@ -365,7 +367,6 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
       nodes.forEach(node => {
           const label = node.data.label;
           
-          // Internal Axioms (Methods)
           node.data.methods.forEach(m => {
               const explanation = getAxiomExplanation(label, m.name, m.returnType);
               const ax = createRow(
@@ -383,7 +384,6 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
               else rbox.push(ax);
           });
 
-          // Attributes (Implicit Axioms)
           node.data.attributes.forEach(attr => {
               if (node.data.type === ElementType.OWL_OBJECT_PROPERTY) {
                   const char = attr.name;
@@ -402,7 +402,6 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
           });
       });
 
-      // Edge Axioms
       edges.forEach(e => {
           const sNode = nodes.find(n => n.id === e.source);
           const tNode = nodes.find(n => n.id === e.target);
@@ -456,7 +455,6 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
       return { tbox, rbox, abox };
   }, [nodes, edges]);
 
-  // Helper to get suggestion icon
   const getSuggestionIcon = (type: string) => {
       switch(type) {
           case 'Class': return <Database size={10} className="text-purple-400" />;
@@ -588,7 +586,7 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                             {/* Object Input */}
                             <div className="flex-1 relative group">
                                 <input 
-                                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500 font-mono placeholder-slate-600"
+                                    className={`w-full bg-slate-950 border rounded px-2 py-1.5 text-xs text-slate-200 outline-none font-mono placeholder-slate-600 ${validationError ? 'border-red-500 focus:border-red-600' : 'border-slate-700 focus:border-blue-500'}`}
                                     placeholder="Expression (e.g. ∃hasChild.Person)"
                                     value={newObject}
                                     onChange={handleObjectChange}
@@ -628,6 +626,11 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                                 <Check size={16} />
                             </button>
                         </div>
+                        {validationError && (
+                            <div className="mt-2 text-[10px] text-red-400 bg-red-950/20 p-1.5 rounded border border-red-900/30 flex items-center gap-2">
+                                <Info size={12} /> {validationError}
+                            </div>
+                        )}
                         <p className="text-[9px] text-slate-500 mt-2">
                             New subjects will be created as nodes. Symbols ($\exists, \forall, etc.$) are converted to Manchester Syntax on save.
                         </p>

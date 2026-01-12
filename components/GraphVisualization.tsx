@@ -137,13 +137,17 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, edges, s
             };
         });
 
-        const newLinks: SimLink[] = edges.map(e => ({
-            id: e.id,
-            source: e.source,
-            target: e.target,
-            label: (typeof e.label === 'string' ? e.label : '').replace(/^(owl:|rdf:|rdfs:)/, ''),
-            isInferred: e.data?.isInferred || false
-        }));
+        // SAFETY: Filter links to ensure source/target exist in newNodes
+        const nodeIds = new Set(newNodes.map(n => n.id));
+        const newLinks: SimLink[] = edges
+            .filter(e => nodeIds.has(e.source) && nodeIds.has(e.target))
+            .map(e => ({
+                id: e.id,
+                source: e.source,
+                target: e.target,
+                label: (typeof e.label === 'string' ? e.label : '').replace(/^(owl:|rdf:|rdfs:)/, ''),
+                isInferred: e.data?.isInferred || false
+            }));
 
         // Simulation
         const simulation = d3.forceSimulation<SimNode, SimLink>(newNodes)

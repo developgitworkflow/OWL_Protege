@@ -78,11 +78,12 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges 
     // Extract TBox Axioms for the Scroll View
     const axioms = useMemo(() => {
         const list: { id: string, s: string, p: string, o: string, type: 'subclass' | 'disjoint', isInferred: boolean }[] = [];
+        const nodeMap = new Map(nodes.map(n => [n.id, n]));
         
         // From Edges
         edges.forEach(e => {
-            const sNode = nodes.find(n => n.id === e.source);
-            const tNode = nodes.find(n => n.id === e.target);
+            const sNode = nodeMap.get(e.source);
+            const tNode = nodeMap.get(e.target);
             if (!sNode || !tNode) return;
             
             const isInferred = e.data?.isInferred || false;
@@ -138,12 +139,17 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges 
             y: n.position.y + 100
         }));
 
-        const simLinks = edges.map(e => ({
-            source: e.source,
-            target: e.target,
-            label: (typeof e.label === 'string' ? e.label : ''),
-            isInferred: e.data?.isInferred || false
-        })).filter(l => !['subClassOf', 'rdfs:subClassOf', 'owl:disjointWith'].includes(l.label)); // Filter logic edges
+        const nodeIds = new Set(simNodes.map(n => n.id));
+
+        const simLinks = edges
+            .filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)) // Safety Check
+            .map(e => ({
+                source: e.source,
+                target: e.target,
+                label: (typeof e.label === 'string' ? e.label : ''),
+                isInferred: e.data?.isInferred || false
+            }))
+            .filter(l => !['subClassOf', 'rdfs:subClassOf', 'owl:disjointWith'].includes(l.label)); // Filter logic edges
 
         const simulation = d3.forceSimulation(simNodes as any)
             .force("link", d3.forceLink(simLinks).id((d: any) => d.id).distance(180))
@@ -300,19 +306,7 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges 
                     const dy = d.target.y - d.source.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
                     
-                    // Simple Quadratic Bezier for smoother curve
-                    // Control point offset slightly to create a gentle arc
                     if (dist === 0) return `M${d.source.x},${d.source.y} L${d.target.x},${d.target.y}`;
-                    
-                    // Calculate a slight curve
-                    // Midpoint
-                    const mx = (d.source.x + d.target.x) / 2;
-                    const my = (d.source.y + d.target.y) / 2;
-                    
-                    // Normal vector for offset (optional curvature)
-                    // Let's stick to straight but with Q command structure for future potential
-                    // Or actually, straight lines are cleaner for "Identity" unless multigraph.
-                    // Let's use a straight line but ensure it touches edges of nodes properly.
                     
                     return `M${d.source.x},${d.source.y} L${d.target.x},${d.target.y}`;
                 });

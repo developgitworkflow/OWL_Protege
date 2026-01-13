@@ -82,6 +82,7 @@ function App() {
   const [isReasonerActive, setIsReasonerActive] = useState(false);
   const [showInferred, setShowInferred] = useState(false);
   const [showIndividuals, setShowIndividuals] = useState(true);
+  const [showGrid, setShowGrid] = useState(true);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   
   // Modals State
@@ -439,6 +440,8 @@ function App() {
             showSidebarToggle={viewMode === 'design'}
             showIndividuals={showIndividuals}
             onToggleIndividuals={() => setShowIndividuals(!showIndividuals)}
+            showGrid={showGrid}
+            onToggleGrid={() => setShowGrid(!showGrid)}
             onValidate={handleValidate}
             onOpenDLQuery={() => setIsDLQueryOpen(true)}
             onOpenSWRL={() => setIsSWRLOpen(true)}
@@ -478,7 +481,7 @@ function App() {
                         minZoom={0.1}
                         deleteKeyCode={null}
                     >
-                        <Background variant={BackgroundVariant.Lines} gap={20} size={1} color="#1e293b" />
+                        {showGrid && <Background variant={BackgroundVariant.Lines} gap={20} size={1} color="#1e293b" />}
                         <Controls className="bg-slate-800 border-slate-700 fill-slate-400 text-slate-400 shadow-xl" showInteractive={false} />
                         <MiniMap 
                             nodeColor={(n) => {

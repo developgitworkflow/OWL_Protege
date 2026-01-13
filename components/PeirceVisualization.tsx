@@ -80,7 +80,7 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges,
     // Extract TBox Axioms for the Scroll View
     const axioms = useMemo(() => {
         const list: { id: string, s: string, p: string, o: string, type: 'subclass' | 'disjoint', isInferred: boolean }[] = [];
-        const nodeMap = new Map(nodes.map(n => [n.id, n]));
+        const nodeMap = new Map<string, Node<UMLNodeData>>(nodes.map(n => [n.id, n]));
         
         // From Edges
         edges.forEach(e => {
@@ -88,7 +88,7 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges,
             const tNode = nodeMap.get(e.target);
             if (!sNode || !tNode) return;
             
-            const isInferred = e.data?.isInferred || false;
+            const isInferred = (e.data as any)?.isInferred || false;
 
             if (e.label === 'subClassOf' || e.label === 'rdfs:subClassOf') {
                 list.push({ id: e.id, s: sNode.data.label, p: 'is a', o: tNode.data.label, type: 'subclass', isInferred });
@@ -149,7 +149,7 @@ const PeirceVisualization: React.FC<PeirceVisualizationProps> = ({ nodes, edges,
                 source: e.source,
                 target: e.target,
                 label: (typeof e.label === 'string' ? e.label : ''),
-                isInferred: e.data?.isInferred || false
+                isInferred: (e.data as any)?.isInferred || false
             }))
             .filter(l => !['subClassOf', 'rdfs:subClassOf', 'owl:disjointWith'].includes(l.label)); // Filter logic edges
 

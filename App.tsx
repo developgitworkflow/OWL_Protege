@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import ReactFlow, {
   useNodesState,
   useEdgesState,
@@ -46,15 +46,18 @@ import DLAxiomModal from './components/DLAxiomModal';
 import ExpressivityModal from './components/ExpressivityModal';
 import DatalogModal from './components/DatalogModal';
 import OntoMetricsModal from './components/OntoMetricsModal';
+import VersionControlModal from './components/VersionControlModal';
+import DocumentationModal from './components/DocumentationModal';
 
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
-import { UMLNodeData, ElementType, ProjectData } from './types';
+import { UMLNodeData, ElementType, ProjectData, Repository, Snapshot } from './types';
 import { validateOntology, ValidationResult } from './services/validatorService';
 import { computeInferredEdges } from './services/reasonerService';
 import { parseTurtle } from './services/rdfParser';
 import { parseRdfXml } from './services/rdfXmlParser';
 import { parseManchesterSyntax } from './services/manchesterSyntaxParser';
 import { parseFunctionalSyntax } from './services/functionalSyntaxParser';
+import { initRepository } from './services/versionControlService';
 
 const nodeTypes = {
   umlNode: UMLNode,
@@ -90,12 +93,18 @@ function App() {
   const [isMetricsOpen, setIsMetricsOpen] = useState(false);
   const [isImportUrlOpen, setIsImportUrlOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isVCOpen, setIsVCOpen] = useState(false);
+  const [isDocsOpen, setIsDocsOpen] = useState(false);
   
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [confirmConfig, setConfirmConfig] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
 
-  // Hooks
+  // Version Control State
+  const [repository, setRepository] = useState<Repository>(() => initRepository({ nodes: INITIAL_NODES, edges: INITIAL_EDGES, metadata: { name: 'Init', defaultPrefix: 'ex' } }));
+
+  // Hooks & Refs
   const { screenToFlowPosition } = useReactFlow();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Handlers ---
 
@@ -110,7 +119,6 @@ function App() {
   };
 
   const onConnect = useCallback((params: Connection) => {
-    // Smart Connection Labeling
     const sourceNode = nodes.find(n => n.id === params.source);
     const targetNode = nodes.find(n => n.id === params.target);
     
@@ -122,7 +130,7 @@ function App() {
         } else if (sourceNode.data.type === ElementType.OWL_NAMED_INDIVIDUAL && targetNode.data.type === ElementType.OWL_CLASS) {
             label = 'rdf:type';
         } else if (sourceNode.data.type === ElementType.OWL_NAMED_INDIVIDUAL && targetNode.data.type === ElementType.OWL_NAMED_INDIVIDUAL) {
-            label = 'knows'; // Default object property example
+            label = 'knows';
         }
     }
 
@@ -144,20 +152,24 @@ function App() {
     setSelectedEdgeId(null);
   }, []);
 
-  // --- Drag & Drop Handlers ---
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
+    event.dataTransfer.dropEffect = 'copy';
   }, []);
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
 
+      if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+          const file = event.dataTransfer.files[0];
+          handleImportFile(file);
+          return;
+      }
+
       const type = event.dataTransfer.getData('application/reactflow');
       const elementType = event.dataTransfer.getData('application/elementType') as ElementType;
 
-      // check if the dropped element is valid
       if (typeof type === 'undefined' || !type || !elementType) {
         return;
       }
@@ -197,7 +209,6 @@ function App() {
   const handleNavigate = (view: string, id?: string) => {
     setViewMode(view as any);
     if (id) {
-        // Check if ID belongs to a node or an edge to set correct selection
         const isNode = nodes.some(n => n.id === id);
         const isEdge = edges.some(e => e.id === id);
         
@@ -247,13 +258,9 @@ function App() {
     });
   };
 
-  // --- Keyboard & Focus Management ---
-  
-  // 1. Listen for global focus changes to handle Tab navigation
   useEffect(() => {
       const handleFocusIn = (e: FocusEvent) => {
           const target = e.target as HTMLElement;
-          // Check if it's a node
           if (target.classList.contains('uml-node')) {
               const nodeId = target.getAttribute('data-id');
               if (nodeId) {
@@ -266,21 +273,17 @@ function App() {
       return () => document.removeEventListener('focusin', handleFocusIn);
   }, []);
 
-  // 2. Keyboard Shortcuts
   useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
-          // Ignore if user is typing in an input
           if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
               return;
           }
 
-          // Help Shortcut
           if (e.key === '?') {
               e.preventDefault();
               setIsShortcutsOpen(prev => !prev);
           }
 
-          // Delete Shortcut
           if (e.key === 'Delete' || e.key === 'Backspace') {
               if (selectedNodeId) {
                   e.preventDefault(); 
@@ -291,14 +294,12 @@ function App() {
               }
           }
 
-          // Escape Shortcut
           if (e.key === 'Escape') {
               setSelectedNodeId(null);
               setSelectedEdgeId(null);
               setIsShortcutsOpen(false);
           }
 
-          // Spatial Navigation (Alt + Arrows)
           if (selectedNodeId && e.key.startsWith('Arrow') && e.altKey) {
               e.preventDefault();
               const current = nodes.find(n => n.id === selectedNodeId);
@@ -313,18 +314,15 @@ function App() {
                   const dy = target.position.y - current.position.y;
                   
                   let isValid = false;
-                  // Right: x increases, y change is minimal
                   if (e.key === 'ArrowRight') isValid = dx > 0;
                   if (e.key === 'ArrowLeft') isValid = dx < 0;
                   if (e.key === 'ArrowDown') isValid = dy > 0;
                   if (e.key === 'ArrowUp') isValid = dy < 0;
 
                   if (isValid) {
-                      // Weigh distance and angle. Prefer targets closer to the axis.
                       const dist = Math.sqrt(dx*dx + dy*dy);
-                      // Angle penalty: prioritize nodes directly in direction
                       const angle = Math.atan2(Math.abs(dy), Math.abs(dx)); 
-                      const score = dist * (1 + angle); // Simple heuristic
+                      const score = dist * (1 + angle); 
 
                       if (score < minDist) {
                           minDist = score;
@@ -336,8 +334,6 @@ function App() {
               if (bestCandidate) {
                   const targetId = (bestCandidate as Node).id;
                   setSelectedNodeId(targetId);
-                  
-                  // Focus the new node in DOM so tab index continues from there
                   setTimeout(() => {
                       const el = document.querySelector(`[data-id="${targetId}"]`) as HTMLElement;
                       if (el) el.focus();
@@ -367,7 +363,7 @@ function App() {
       setSelectedEdgeId(null);
       addToast(`Created ${label}`, 'success');
       if (viewMode !== 'design' && viewMode !== 'entities') {
-          setViewMode('design'); // Switch to view where we can see it usually
+          setViewMode('design');
       }
   };
 
@@ -376,7 +372,7 @@ function App() {
           const newState = !prev;
           if (newState) {
               addToast('Reasoner activated. Inferences computed.', 'success');
-              setShowInferred(true); // Auto-show inferred edges when running
+              setShowInferred(true);
           } else {
               addToast('Reasoner deactivated.', 'info');
               setShowInferred(false);
@@ -398,26 +394,32 @@ function App() {
           
           if (lowerName.endsWith('.json')) {
               result = JSON.parse(content);
-              if (result.nodes && result.edges) {
-                  // Apply sanitization if reusing ReactFlow structure
-                  // But for raw imports we trust logic below
-              }
-          } else if (lowerName.endsWith('.ttl') || lowerName.endsWith('.nt')) {
-              result = await parseTurtle(content);
-          } else if (lowerName.endsWith('.rdf') || lowerName.endsWith('.xml') || lowerName.endsWith('.owl')) {
-              result = parseRdfXml(content);
           } else if (lowerName.endsWith('.ofn')) {
               result = parseFunctionalSyntax(content);
+          } else if (lowerName.endsWith('.owl') || lowerName.endsWith('.rdf') || lowerName.endsWith('.xml')) {
+              try {
+                  result = parseRdfXml(content);
+              } catch (xmlError) {
+                  console.warn("XML parse failed, trying Turtle/N-Triples fallback for OWL file", xmlError);
+                  result = await parseTurtle(content);
+              }
+          } else if (lowerName.endsWith('.ttl') || lowerName.endsWith('.nt') || lowerName.endsWith('.n3')) {
+              result = await parseTurtle(content);
           } else if (lowerName.endsWith('.omn') || lowerName.endsWith('.manchester')) {
               result = parseManchesterSyntax(content);
           } else {
-              // Fallback to Turtle if unknown ext but looks like text
-              result = await parseTurtle(content);
+              try {
+                  result = parseRdfXml(content);
+              } catch {
+                  try {
+                      result = await parseTurtle(content);
+                  } catch (e) {
+                      throw new Error("Could not determine file format. Please use .ttl, .rdf, .owl, .json, or .ofn");
+                  }
+              }
           }
 
           if (result && result.nodes) {
-              // CRITICAL: Sanitize edges to prevent "node not found" crashes in ReactFlow
-              // Ensure every edge connects to an existing node ID
               const validNodeIds = new Set(result.nodes.map((n: any) => n.id));
               const validEdges = (result.edges || []).filter((e: any) => 
                   validNodeIds.has(e.source) && validNodeIds.has(e.target)
@@ -428,6 +430,8 @@ function App() {
               
               if (result.metadata) setProjectData(prev => ({ ...prev, ...result.metadata }));
               addToast(`Imported ${result.nodes.length} entities.`, 'success');
+              
+              setRepository(initRepository({ nodes: result.nodes, edges: validEdges, metadata: result.metadata || projectData }));
           }
       } catch (e) {
           console.error(e);
@@ -447,7 +451,6 @@ function App() {
   const handleLoadUrl = async (url: string) => {
       try {
           addToast("Fetching ontology...", "info");
-          // Use Accept headers for Linked Data support (e.g. BioPortal, DBpedia)
           const response = await fetch(url, {
               headers: {
                   'Accept': 'text/turtle, application/x-turtle, text/n3, application/rdf+xml, application/xml, application/ld+json, application/json'
@@ -456,33 +459,34 @@ function App() {
           if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
           const content = await response.text();
           
-          // Infer type from content-type or extension
           const contentType = response.headers.get('content-type') || '';
           let filename = url.split('/').pop() || 'download';
           
-          // Basic extension inference if missing
           if (!filename.includes('.')) {
               if (contentType.includes('xml')) filename += '.rdf';
               else if (contentType.includes('json')) filename += '.json';
-              else filename += '.ttl'; // Default assumption for semantic web
+              else filename += '.ttl';
           }
 
           await handleLoadContent(content, filename);
       } catch (e) {
-          // Toast handles UI, but we throw to let the modal know
           throw e; 
       }
   };
 
-  // Filter visible nodes based on "Show Individuals" toggle
+  const handleRestoreSnapshot = (snapshot: Snapshot) => {
+      setNodes(snapshot.nodes);
+      setEdges(snapshot.edges);
+      setProjectData(snapshot.metadata);
+      addToast('Restored version successfully.', 'success');
+  };
+
   const visibleNodes = useMemo(() => {
       return showIndividuals 
         ? nodes 
         : nodes.filter(n => n.data.type !== ElementType.OWL_NAMED_INDIVIDUAL);
   }, [nodes, showIndividuals]);
 
-  // Helper for derived edges (with inferences if enabled)
-  // Must filter edges to ensuring both source and target exist in visibleNodes
   const displayEdges = useMemo(() => {
       let currentEdges = edges;
       if (isReasonerActive && showInferred) {
@@ -490,15 +494,12 @@ function App() {
       }
       
       const visibleIds = new Set(visibleNodes.map(n => n.id));
-      // Strict filtering: Source AND Target must be in visibleIds
-      // This prevents "node not found" crashes in ReactFlow
       return currentEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
   }, [nodes, edges, isReasonerActive, showInferred, visibleNodes]);
 
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [selectedNodeId, nodes]);
   const selectedEdge = useMemo(() => edges.find(e => e.id === selectedEdgeId) || null, [selectedEdgeId, edges]);
 
-  // Sync sidebar visibility with view mode
   useEffect(() => {
       if (viewMode === 'design') {
           setIsSidebarOpen(true);
@@ -507,6 +508,14 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden">
+        <input 
+            type="file" 
+            ref={fileInputRef}
+            onChange={(e) => { if(e.target.files?.[0]) handleImportFile(e.target.files[0]); }}
+            accept=".json,.ttl,.rdf,.nt,.owl,.ofn,.xml,.omn"
+            className="hidden"
+        />
+
         <TopBar 
             onOpenSettings={() => setIsSettingsOpen(true)}
             currentView={viewMode}
@@ -533,15 +542,17 @@ function App() {
             onOpenExpressivity={() => setIsExpressivityOpen(true)}
             onOpenDatalog={() => setIsDatalogOpen(true)}
             onOpenMetrics={() => setIsMetricsOpen(true)}
+            onOpenVersionControl={() => setIsVCOpen(true)}
+            onOpenDocs={() => setIsDocsOpen(true)}
+            onImport={() => fileInputRef.current?.click()}
+            currentBranch={repository.currentBranch}
         />
 
         <div className="flex flex-1 overflow-hidden relative">
-            {/* Left Sidebar (Only in Design Mode) */}
             {viewMode === 'design' && isSidebarOpen && (
                 <Sidebar selectedNode={selectedNode} />
             )}
 
-            {/* Main Content Area */}
             <div className="flex-1 relative bg-slate-950">
                 {viewMode === 'design' && (
                     <ReactFlow
@@ -559,7 +570,7 @@ function App() {
                         fitView
                         className="bg-slate-950"
                         minZoom={0.1}
-                        deleteKeyCode={null} // Disable default delete to use custom handler with dialog
+                        deleteKeyCode={null}
                     >
                         <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#334155" />
                         <Controls className="bg-slate-800 border-slate-700 fill-slate-400 text-slate-400" />
@@ -596,7 +607,7 @@ function App() {
                 {viewMode === 'entities' && (
                     <EntityCatalog 
                         nodes={nodes} 
-                        edges={displayEdges} // Use displayEdges to show inferred relations
+                        edges={displayEdges}
                         isReasonerActive={isReasonerActive}
                         onAddNode={handleAddNode}
                         onDeleteNode={handleDeleteNode}
@@ -647,7 +658,7 @@ function App() {
                 {viewMode === 'owlviz' && (
                     <OWLVizVisualization 
                         nodes={visibleNodes} 
-                        edges={displayEdges} // Use displayEdges for reasoning view
+                        edges={displayEdges}
                         searchTerm={searchTerm} 
                         selectedNodeId={selectedNodeId} 
                         onNavigate={handleNavigate}
@@ -671,7 +682,6 @@ function App() {
                 />
             </div>
 
-            {/* Properties Panel Sliding Container */}
             <div className={`transition-all duration-300 ease-in-out border-l border-slate-800 bg-slate-900 overflow-hidden ${selectedNode || selectedEdge ? 'w-80 translate-x-0' : 'w-0 translate-x-full border-none'}`}>
                 <PropertiesPanel 
                     selectedNode={selectedNode}
@@ -698,14 +708,13 @@ function App() {
             </div>
         </div>
 
-        {/* Modals */}
         <SettingsModal 
             isOpen={isSettingsOpen} 
             onClose={() => setIsSettingsOpen(false)} 
             projectData={projectData}
-            onUpdateProjectData={setProjectData}
-            onNewProject={() => { setNodes([]); setEdges([]); setProjectData({ name: 'New Project', defaultPrefix: 'ex' }); }}
-            onExportJSON={() => {}} // Todo: Implement logic similar to previous versions if needed or rely on code viewer
+            onUpdateProjectData={(d) => setProjectData(d)}
+            onNewProject={() => { setNodes([]); setEdges([]); setProjectData({ name: 'New Project', defaultPrefix: 'ex' }); setRepository(initRepository({ nodes: [], edges: [], metadata: { name: 'New Project', defaultPrefix: 'ex' } })); }}
+            onExportJSON={() => {}}
             onExportTurtle={() => {}}
             onImportJSON={(e) => { if (e.target.files?.[0]) handleImportFile(e.target.files[0]); }}
             onOpenImportUrl={() => setIsImportUrlOpen(true)}
@@ -716,6 +725,7 @@ function App() {
             onOpenExpressivity={() => setIsExpressivityOpen(true)}
             onOpenDatalog={() => setIsDatalogOpen(true)}
             onOpenMetrics={() => setIsMetricsOpen(true)}
+            onExportDocs={() => setIsDocsOpen(true)}
         />
         <CreateProjectModal 
             isOpen={isCreateOpen}
@@ -725,6 +735,7 @@ function App() {
                 setNodes([]);
                 setEdges([]);
                 if (data.file) handleImportFile(data.file);
+                setRepository(initRepository({ nodes: [], edges: [], metadata: data }));
                 setIsCreateOpen(false);
             }}
         />
@@ -754,6 +765,21 @@ function App() {
         <DatalogModal isOpen={isDatalogOpen} onClose={() => setIsDatalogOpen(false)} nodes={nodes} edges={edges} />
         <OntoMetricsModal isOpen={isMetricsOpen} onClose={() => setIsMetricsOpen(false)} nodes={nodes} edges={edges} />
         <ShortcutsModal isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} />
+        <VersionControlModal 
+            isOpen={isVCOpen} 
+            onClose={() => setIsVCOpen(false)} 
+            repository={repository} 
+            onUpdateRepository={(repo) => setRepository(repo)}
+            currentSnapshot={{ nodes, edges, metadata: projectData }}
+            onRestoreSnapshot={handleRestoreSnapshot}
+        />
+        <DocumentationModal 
+            isOpen={isDocsOpen} 
+            onClose={() => setIsDocsOpen(false)} 
+            nodes={nodes} 
+            edges={edges} 
+            projectData={projectData} 
+        />
         
         <ConfirmDialog 
             isOpen={!!confirmConfig}

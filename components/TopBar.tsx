@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, EyeOff, ShieldCheck, Activity, Calculator, ScrollText, Sigma, ChevronRight } from 'lucide-react';
+import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, EyeOff, ShieldCheck, Activity, Calculator, ScrollText, Sigma, ChevronRight, GitCommit, FileText, FolderOpen } from 'lucide-react';
 
 interface TopBarProps {
     onOpenSettings: () => void;
@@ -30,6 +30,10 @@ interface TopBarProps {
     onOpenExpressivity: () => void;
     onOpenDatalog: () => void;
     onOpenMetrics: () => void;
+    onOpenVersionControl: () => void;
+    onOpenDocs: () => void;
+    onImport: () => void;
+    currentBranch: string;
 }
 
 const TopBar: React.FC<TopBarProps> = ({ 
@@ -57,7 +61,11 @@ const TopBar: React.FC<TopBarProps> = ({
     onOpenDLAxioms,
     onOpenExpressivity,
     onOpenDatalog,
-    onOpenMetrics
+    onOpenMetrics,
+    onOpenVersionControl,
+    onOpenDocs,
+    onImport,
+    currentBranch
 }) => {
 
   const views = [
@@ -136,6 +144,16 @@ const TopBar: React.FC<TopBarProps> = ({
 
                 <div className="h-8 w-px bg-slate-800 mx-1"></div>
 
+                {/* Git Version Control */}
+                <button 
+                    onClick={onOpenVersionControl}
+                    className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-lg transition-all text-xs font-bold group"
+                    title="Version Control (Git)"
+                >
+                    <GitCommit size={16} className="text-green-400" />
+                    <span className="font-mono text-xs">{currentBranch}</span>
+                </button>
+
                 {/* History */}
                 <div className="flex bg-slate-900 rounded-lg border border-slate-800 p-0.5">
                     <button 
@@ -193,6 +211,15 @@ const TopBar: React.FC<TopBarProps> = ({
                     )}
                 </div>
 
+                {/* Import */}
+                <button
+                    onClick={onImport}
+                    className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full border border-slate-700 transition-all shadow-sm group"
+                    title="Import Ontology"
+                >
+                    <FolderOpen size={18} className="group-hover:text-blue-400 transition-colors" />
+                </button>
+
                 {/* Settings */}
                 <button 
                     onClick={onOpenSettings}
@@ -235,6 +262,9 @@ const TopBar: React.FC<TopBarProps> = ({
                 </button>
                 <button onClick={onOpenExpressivity} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-pink-400 hover:bg-slate-900 transition-colors">
                     <Calculator size={14} /> Complexity
+                </button>
+                <button onClick={onOpenDocs} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-blue-400 hover:bg-slate-900 transition-colors">
+                    <FileText size={14} /> Docs
                 </button>
             </div>
 

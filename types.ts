@@ -84,3 +84,17 @@ export interface ProjectData {
   annotations?: Annotation[]; // Annotations on the Ontology itself
   rules?: SWRLRule[]; // SWRL Rules
 }
+
+export interface Snapshot {
+  id: string;
+  timestamp: number;
+  message: string;
+  nodes: Node<UMLNodeData>[];
+  edges: Edge[];
+  metadata: ProjectData;
+}
+
+export interface Repository {
+  currentBranch: string;
+  branches: Record<string, Snapshot[]>;
+}

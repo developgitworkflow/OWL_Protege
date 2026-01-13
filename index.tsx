@@ -9,12 +9,25 @@ import App from './App';
 const resizeObserverLoopErr = 'ResizeObserver loop completed with undelivered notifications.';
 const resizeObserverLoopLimitErr = 'ResizeObserver loop limit exceeded';
 
+// Patch console.error to suppress specific ResizeObserver errors
+const originalError = console.error;
+console.error = (...args: any[]) => {
+  if (
+    typeof args[0] === 'string' && 
+    (args[0].includes(resizeObserverLoopErr) || args[0].includes(resizeObserverLoopLimitErr))
+  ) {
+    return;
+  }
+  originalError.apply(console, args);
+};
+
 window.addEventListener('error', (e) => {
   if (typeof e.message === 'string' && (
       e.message.includes(resizeObserverLoopErr) || 
       e.message.includes(resizeObserverLoopLimitErr)
   )) {
     e.stopImmediatePropagation();
+    e.preventDefault();
   }
 });
 

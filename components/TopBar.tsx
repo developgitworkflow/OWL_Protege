@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, ShieldCheck, Activity, Calculator, ScrollText, Sigma, GitCommit, FileText, FolderOpen, Database } from 'lucide-react';
+import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, ShieldCheck, Activity, Calculator, ScrollText, Sigma, GitCommit, FileText, FolderOpen, Database, AlignLeft } from 'lucide-react';
 
 interface TopBarProps {
     onOpenSettings: () => void;
@@ -27,6 +27,7 @@ interface TopBarProps {
     onOpenDLQuery: () => void;
     onOpenSWRL: () => void;
     onOpenDLAxioms: () => void;
+    onOpenManchester: () => void;
     onOpenExpressivity: () => void;
     onOpenDatalog: () => void;
     onOpenMetrics: () => void;
@@ -60,6 +61,7 @@ const TopBar: React.FC<TopBarProps> = ({
     onOpenDLQuery,
     onOpenSWRL,
     onOpenDLAxioms,
+    onOpenManchester,
     onOpenExpressivity,
     onOpenDatalog,
     onOpenMetrics,
@@ -291,6 +293,9 @@ const TopBar: React.FC<TopBarProps> = ({
                 </button>
                 <button onClick={onOpenDatalog} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-emerald-400 hover:bg-slate-900 transition-colors">
                     <Terminal size={14} /> Datalog
+                </button>
+                <button onClick={onOpenManchester} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-cyan-400 hover:bg-slate-900 transition-colors">
+                    <AlignLeft size={14} /> Manchester
                 </button>
             </div>
         </div>

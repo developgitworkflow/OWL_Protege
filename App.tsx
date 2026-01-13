@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import ReactFlow, {
   useNodesState,
@@ -51,6 +52,7 @@ import OntoMetricsModal from './components/OntoMetricsModal';
 import VersionControlModal from './components/VersionControlModal';
 import DocumentationModal from './components/DocumentationModal';
 import SPARQLModal from './components/SPARQLModal';
+import ManchesterSyntaxModal from './components/ManchesterSyntaxModal';
 
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { UMLNodeData, ElementType, ProjectData, Repository, Snapshot } from './types';
@@ -102,6 +104,7 @@ function App() {
   const [isVCOpen, setIsVCOpen] = useState(false);
   const [isDocsOpen, setIsDocsOpen] = useState(false);
   const [isSPARQLOpen, setIsSPARQLOpen] = useState(false);
+  const [isManchesterOpen, setIsManchesterOpen] = useState(false);
   
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [confirmConfig, setConfirmConfig] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
@@ -466,7 +469,6 @@ function App() {
         />
 
         <TopBar 
-            // ... (Props passed as before)
             onOpenSettings={() => setIsSettingsOpen(true)}
             currentView={viewMode}
             onViewChange={setViewMode}
@@ -489,6 +491,7 @@ function App() {
             onOpenDLQuery={() => setIsDLQueryOpen(true)}
             onOpenSWRL={() => setIsSWRLOpen(true)}
             onOpenDLAxioms={() => setIsAxiomsOpen(true)}
+            onOpenManchester={() => setIsManchesterOpen(true)}
             onOpenExpressivity={() => setIsExpressivityOpen(true)}
             onOpenDatalog={() => setIsDatalogOpen(true)}
             onOpenMetrics={() => setIsMetricsOpen(true)}
@@ -761,6 +764,13 @@ function App() {
             nodes={nodes} 
             edges={edges} 
             onNavigate={handleNavigate}
+        />
+        <ManchesterSyntaxModal
+            isOpen={isManchesterOpen}
+            onClose={() => setIsManchesterOpen(false)}
+            nodes={nodes}
+            edges={edges}
+            projectData={projectData}
         />
         
         <ConfirmDialog 

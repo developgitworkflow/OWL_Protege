@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useCallback } from 'react';
+import React, { useEffect, useMemo, useCallback, useState } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -18,7 +18,7 @@ import ReactFlow, {
 import dagre from 'dagre';
 import { UMLNodeData, ElementType } from '../types';
 import ProfessionalNode from './ProfessionalNode';
-import { Download, Layout } from 'lucide-react';
+import { Download, Layout, ToggleLeft, ToggleRight } from 'lucide-react';
 
 interface UMLVisualizationProps {
     nodes: Node<UMLNodeData>[];
@@ -74,6 +74,7 @@ const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, 
     const { fitView } = useReactFlow();
     const [layoutNodes, setLayoutNodes, onNodesChange] = useNodesState([]);
     const [layoutEdges, setLayoutEdges, onEdgesChange] = useEdgesState([]);
+    const [isAutoLayout, setIsAutoLayout] = useState(true);
 
     // Transform and Layout
     useEffect(() => {
@@ -137,16 +138,20 @@ const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, 
             };
         });
 
-        // 3. Compute Layout
-        const { nodes: lNodes, edges: lEdges } = getLayoutedElements(transformedNodes, transformedEdges);
-        
-        setLayoutNodes(lNodes);
-        setLayoutEdges(lEdges);
+        // 3. Compute Layout (or not)
+        if (isAutoLayout) {
+            const { nodes: lNodes, edges: lEdges } = getLayoutedElements(transformedNodes, transformedEdges);
+            setLayoutNodes(lNodes);
+            setLayoutEdges(lEdges);
+            // Fit view after a brief delay
+            setTimeout(() => fitView({ padding: 0.2 }), 50);
+        } else {
+            // Use existing positions from the source nodes
+            setLayoutNodes(transformedNodes);
+            setLayoutEdges(transformedEdges);
+        }
 
-        // Fit view after a brief delay
-        setTimeout(() => fitView({ padding: 0.2 }), 50);
-
-    }, [nodes, edges, searchTerm, fitView, setLayoutNodes, setLayoutEdges, onNavigate, onDeleteEdge]);
+    }, [nodes, edges, searchTerm, fitView, setLayoutNodes, setLayoutEdges, onNavigate, onDeleteEdge, isAutoLayout]);
 
     const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
         if (onNavigate) {
@@ -184,7 +189,7 @@ const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, 
             </svg>
 
             <Background color="#1e293b" gap={20} size={1} />
-            <Controls className="bg-slate-800 border-slate-700 fill-slate-400" />
+            <Controls position="top-left" className="bg-slate-800 border-slate-700 fill-slate-400" />
             <MiniMap 
                 nodeColor={(n) => {
                     switch(n.data.type) {
@@ -199,10 +204,15 @@ const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, 
             
             <Panel position="top-right" className="flex gap-2">
                 <div className="bg-slate-900/90 backdrop-blur border border-slate-700 p-2 rounded-lg shadow-xl text-xs text-slate-400 flex items-center gap-4">
-                    <div className="flex items-center gap-2">
+                    <button 
+                        onClick={() => setIsAutoLayout(!isAutoLayout)}
+                        className={`flex items-center gap-2 transition-colors ${isAutoLayout ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
+                        title="Toggle Automatic Layout"
+                    >
                         <Layout size={14} />
-                        <span>Auto-Layout Active</span>
-                    </div>
+                        <span className="font-bold">Auto-Layout</span>
+                        {isAutoLayout ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                    </button>
                     <div className="h-4 w-px bg-slate-700"></div>
                     <div className="flex gap-3">
                         <div className="flex items-center gap-1.5">

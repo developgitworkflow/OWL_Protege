@@ -2,7 +2,7 @@
 import React, { useMemo } from 'react';
 import { UMLNodeData } from '../types';
 import { verbalizeNode } from '../services/verbalizer';
-import { BookOpen, Info } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 
 interface ElementDescriptionPanelProps {
     node: UMLNodeData | null;
@@ -16,14 +16,7 @@ const ElementDescriptionPanel: React.FC<ElementDescriptionPanelProps> = ({ node 
     }, [node]);
 
     if (!node || !content) {
-        return (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 md:left-6 md:translate-x-0 z-40 w-[90vw] md:w-[400px] bg-slate-900/80 backdrop-blur-md border border-slate-800 p-4 rounded-xl shadow-2xl pointer-events-none transition-all duration-500 opacity-60">
-                <div className="flex items-center gap-3 text-slate-500">
-                    <Info size={18} />
-                    <span className="text-xs font-medium">Hover over or select an element to see its description.</span>
-                </div>
-            </div>
-        );
+        return null;
     }
 
     return (

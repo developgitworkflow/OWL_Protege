@@ -1,3 +1,4 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -6,8 +7,13 @@ import App from './App';
 // This is a benign error that happens often with ReactFlow and other libraries observing element size.
 // We suppress it to prevent it from cluttering the console or triggering error boundaries.
 const resizeObserverLoopErr = 'ResizeObserver loop completed with undelivered notifications.';
+const resizeObserverLoopLimitErr = 'ResizeObserver loop limit exceeded';
+
 window.addEventListener('error', (e) => {
-  if (e.message === resizeObserverLoopErr) {
+  if (typeof e.message === 'string' && (
+      e.message.includes(resizeObserverLoopErr) || 
+      e.message.includes(resizeObserverLoopLimitErr)
+  )) {
     e.stopImmediatePropagation();
   }
 });

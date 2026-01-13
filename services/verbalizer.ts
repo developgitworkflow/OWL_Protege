@@ -36,7 +36,19 @@ export const verbalizeNode = (node: UMLNodeData): { title: string, subtitle: str
         lines.push(node.description);
     }
 
-    // 2. Type Specific Verbalization
+    // 2. Annotations
+    if (node.annotations && node.annotations.length > 0) {
+        node.annotations.forEach(ann => {
+            // Skip if this is the comment we just showed as description
+            if (ann.property === 'rdfs:comment' && ann.value.replace(/^"|"$/g, '') === node.description) return;
+            
+            const cleanProp = ann.property.split(/[:#]/).pop();
+            const cleanVal = ann.value.replace(/^"|"$/g, '');
+            lines.push(`**${cleanProp}**: ${cleanVal}`);
+        });
+    }
+
+    // 3. Type Specific Verbalization
     if (node.type === ElementType.OWL_CLASS) {
         const parents: string[] = [];
         const restrictions: string[] = [];

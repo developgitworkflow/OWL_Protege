@@ -4,68 +4,43 @@ import { UMLNodeData, ElementType, ProjectData } from '../types';
 import { generateTurtle } from './owlMapper';
 
 export interface DocOptions {
-    // Front Matter
     metadata: boolean;
     abstract: boolean;
-    
-    // Indices
     crossReference: boolean; 
-    
-    // Entity Details
     classes: boolean;
     objectProperties: boolean;
     dataProperties: boolean;
     individuals: boolean;
-    
-    // Granularity
-    axioms: boolean; // Logical axioms (SubClassOf, Disjoint, etc.)
-    annotations: boolean; // rdfs:comment, labels
-    
-    // Appendix
-    serialization: boolean; // Turtle snippet
+    axioms: boolean;
+    annotations: boolean;
+    serialization: boolean;
 }
+
+const texEscape = (text: string | undefined) => {
+    if (!text) return '';
+    return text
+        .replace(/\\/g, '\\textbackslash{}')
+        .replace(/([&%$#_{}])/g, '\\$1')
+        .replace(/~/g, '\\textasciitilde{}')
+        .replace(/\^/g, '\\textasciicircum{}')
+        .replace(/</g, '\\textless{}')
+        .replace(/>/g, '\\textgreater{}');
+};
 
 export const generateWidocoMarkdown = (
     nodes: Node<UMLNodeData>[], 
     edges: Edge[], 
     metadata: ProjectData,
-    options: DocOptions = { 
-        metadata: true, 
-        abstract: true,
-        crossReference: true,
-        classes: true, 
-        objectProperties: true, 
-        dataProperties: true, 
-        individuals: true, 
-        axioms: true, 
-        annotations: true,
-        serialization: false
-    }
+    options: DocOptions
 ): string => {
     const lines: string[] = [];
     const add = (s: string = '') => lines.push(s);
 
-    // --- Helpers ---
     const getNode = (id: string) => nodes.find(n => n.id === id);
-    const getLabel = (id: string) => {
-        const n = getNode(id);
-        return n ? n.data.label : id;
-    };
-    
-    // Create anchors for links
-    const getAnchor = (label: string) => label.toLowerCase().replace(/[^a-z0-9]/g, '-');
-    const getLink = (id: string) => {
-        const n = getNode(id);
-        return n ? `#${getAnchor(n.data.label)}` : '#';
-    };
-    
-    // Filter and Sort Entities
-    const classes = nodes.filter(n => n.data.type === ElementType.OWL_CLASS).sort((a, b) => a.data.label.localeCompare(b.data.label));
-    const objProps = nodes.filter(n => n.data.type === ElementType.OWL_OBJECT_PROPERTY).sort((a, b) => a.data.label.localeCompare(b.data.label));
-    const dataProps = nodes.filter(n => n.data.type === ElementType.OWL_DATA_PROPERTY).sort((a, b) => a.data.label.localeCompare(b.data.label));
-    const individuals = nodes.filter(n => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL).sort((a, b) => a.data.label.localeCompare(b.data.label));
+    const getLabel = (id: string) => getNode(id)?.data.label || id;
+    const getLink = (id: string) => `#${getLabel(id).toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
 
-    // --- 1. Header & Metadata ---
+    // Header
     if (options.metadata) {
         add(`---`);
         add(`title: ${metadata.name}`);
@@ -75,196 +50,192 @@ export const generateWidocoMarkdown = (
         add(``);
         add(`# ${metadata.name}`);
         add(``);
-        
-        add(`## Metadata`);
-        add(``);
-        add(`| Metadata | Value |`);
-        add(`| --- | --- |`);
-        add(`| **IRI** | \`${metadata.ontologyIri || metadata.baseIri}\` |`);
-        if (metadata.versionIri) add(`| **Version IRI** | \`${metadata.versionIri}\` |`);
-        if (metadata.defaultPrefix) add(`| **Prefix** | \`${metadata.defaultPrefix}\` |`);
-        add(`| **Created** | ${new Date().toLocaleDateString()} |`);
-        
-        // Stats
-        add(`| **Classes** | ${classes.length} |`);
-        add(`| **Properties** | ${objProps.length + dataProps.length} |`);
-        add(`| **Individuals** | ${individuals.length} |`);
-        
-        if (metadata.annotations) {
-            metadata.annotations.forEach(ann => {
-                if (ann.property !== 'rdfs:comment') {
-                    add(`| **${ann.property}** | ${ann.value.replace(/"/g, '')} |`);
-                }
-            });
-        }
+        add(`**IRI:** \`${metadata.ontologyIri || metadata.baseIri}\``);
         add(``);
     }
 
-    // --- 2. Abstract / Description ---
-    if (options.abstract) {
-        if (metadata.description) {
-            add(`## Abstract`);
-            add(``);
-            add(`> ${metadata.description}`);
-            add(``);
-        }
-    }
-
-    // --- 3. Cross Reference (Index) ---
-    if (options.crossReference) {
-        add(`## Cross Reference`);
-        add(``);
-        add(`This section provides an index of all entities defined in the ontology.`);
-        add(``);
-        
-        if (classes.length > 0) {
-            add(`### Classes`);
-            add(classes.map(c => `[${c.data.label}](${getLink(c.id)})`).join(', '));
-            add(``);
-        }
-        
-        if (objProps.length > 0) {
-            add(`### Object Properties`);
-            add(objProps.map(p => `[${p.data.label}](${getLink(p.id)})`).join(', '));
-            add(``);
-        }
-
-        if (dataProps.length > 0) {
-            add(`### Data Properties`);
-            add(dataProps.map(p => `[${p.data.label}](${getLink(p.id)})`).join(', '));
-            add(``);
-        }
-
-        if (individuals.length > 0) {
-            add(`### Named Individuals`);
-            add(individuals.map(i => `[${i.data.label}](${getLink(i.id)})`).join(', '));
-            add(``);
-        }
-        add(`---`);
+    if (options.abstract && metadata.description) {
+        add(`## Abstract`);
+        add(`> ${metadata.description}`);
         add(``);
     }
 
-    // --- Helper to render a section for a node ---
-    const renderEntitySection = (node: Node<UMLNodeData>, typeName: string) => {
-        const label = node.data.label;
-        add(`### ${label}`);
+    const renderEntity = (node: Node<UMLNodeData>, type: string) => {
+        add(`### ${node.data.label}`);
+        add(`*${type}*`);
         add(``);
-        add(`*${typeName}*`);
-        add(``);
-        add(`**IRI:** \`${node.data.iri || `:${label}`}\``);
-        add(``);
+        add(`**IRI:** \`${node.data.iri || ':' + node.data.label}\``);
         
-        // Definition (rdfs:comment)
-        const desc = node.data.description || node.data.annotations?.find(a => a.property.endsWith('comment'))?.value;
-        if (desc) {
-            add(`> ${desc.replace(/"/g, '')}`);
+        if (node.data.description) add(`> ${node.data.description}`);
+        add(``);
+
+        if (options.annotations && node.data.annotations?.length) {
+            add(`**Annotations**`);
+            node.data.annotations.forEach(a => add(`- \`${a.property}\`: ${a.value}`));
             add(``);
         }
 
-        // Annotations (Other)
-        if (options.annotations) {
-            const otherAnns = node.data.annotations?.filter(a => !a.property.endsWith('comment')) || [];
-            if (otherAnns.length > 0) {
-                add(`**Annotations**`);
-                add(``);
-                add(`| Property | Value |`);
-                add(`| --- | --- |`);
-                otherAnns.forEach(a => {
-                    add(`| \`${a.property}\` | ${a.value.replace(/"/g, '')} |`);
-                });
-                add(``);
-            }
-        }
-
-        // Logic / Axioms
         if (options.axioms) {
-            // Inheritance
-            const parents = edges.filter(e => e.source === node.id && (e.label === 'subClassOf' || e.label === 'rdfs:subClassOf'));
-            const supers = node.data.methods.filter(m => m.name === 'SubClassOf');
-            
-            if (parents.length > 0 || supers.length > 0) {
-                add(`**Superclasses**`);
-                parents.forEach(e => add(`- [${getLabel(e.target)}](${getLink(e.target)})`));
-                supers.forEach(m => add(`- ${m.returnType}`)); // Anonymous superclasses
-                add(``);
-            }
-
-            // Disjointness
-            const disjointEdges = edges.filter(e => (e.source === node.id || e.target === node.id) && (e.label === 'owl:disjointWith'));
-            const disjointAxioms = node.data.methods.filter(m => m.name === 'DisjointWith');
-            
-            if (disjointEdges.length > 0 || disjointAxioms.length > 0) {
-                add(`**Disjoint With**`);
-                disjointEdges.forEach(e => {
-                    const targetId = e.source === node.id ? e.target : e.source;
-                    add(`- [${getLabel(targetId)}](${getLink(targetId)})`);
-                });
-                disjointAxioms.forEach(m => add(`- ${m.returnType}`));
-                add(``);
-            }
-
-            // Properties / Attributes (DataProps or Characteristics)
-            if (node.data.attributes && node.data.attributes.length > 0) {
-                const isClass = node.data.type === ElementType.OWL_CLASS;
-                add(`**${isClass ? 'Data Properties' : 'Characteristics'}**`);
-                node.data.attributes.forEach(a => {
-                    const typeStr = a.type ? ` [${a.type}]` : '';
-                    add(`- ${a.name}${typeStr}`);
+            // Edges
+            const outgoing = edges.filter(e => e.source === node.id);
+            if (outgoing.length > 0) {
+                add(`**Relationships**`);
+                outgoing.forEach(e => {
+                    const labelStr = typeof e.label === 'string' ? e.label : String(e.label || '');
+                    add(`- ${labelStr} [${getLabel(e.target)}](${getLink(e.target)})`);
                 });
                 add(``);
             }
 
-            // Other Axioms (Equivalence, etc.)
-            const otherAxioms = node.data.methods.filter(m => 
-                m.name !== 'SubClassOf' && m.name !== 'DisjointWith'
-            );
-            if (otherAxioms.length > 0) {
-                add(`**Other Axioms**`);
-                otherAxioms.forEach(m => {
-                    add(`- **${m.name}**: \`${m.returnType}\``);
+            // Methods (Axioms)
+            if (node.data.methods && node.data.methods.length > 0) {
+                add(`**Description Logic Axioms**`); // RENAMED SECTION
+                node.data.methods.forEach(m => {
+                    add(`- ${m.name}: \`${m.returnType}\``);
                 });
                 add(``);
             }
         }
-        
         add(`---`);
-        add(``);
     };
 
-    // --- Entity Sections ---
-    if (options.classes && classes.length > 0) {
+    if (options.classes) {
         add(`## Classes`);
-        add(``);
-        classes.forEach(node => renderEntitySection(node, 'Class'));
+        nodes.filter(n => n.data.type === ElementType.OWL_CLASS).forEach(n => renderEntity(n, 'Class'));
     }
-
-    if (options.objectProperties && objProps.length > 0) {
+    if (options.objectProperties) {
         add(`## Object Properties`);
-        add(``);
-        objProps.forEach(node => renderEntitySection(node, 'Object Property'));
+        nodes.filter(n => n.data.type === ElementType.OWL_OBJECT_PROPERTY).forEach(n => renderEntity(n, 'Object Property'));
     }
-
-    if (options.dataProperties && dataProps.length > 0) {
+    if (options.dataProperties) {
         add(`## Data Properties`);
-        add(``);
-        dataProps.forEach(node => renderEntitySection(node, 'Data Property'));
+        nodes.filter(n => n.data.type === ElementType.OWL_DATA_PROPERTY).forEach(n => renderEntity(n, 'Data Property'));
+    }
+    if (options.individuals) {
+        add(`## Individuals`);
+        nodes.filter(n => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL).forEach(n => renderEntity(n, 'Named Individual'));
     }
 
-    if (options.individuals && individuals.length > 0) {
-        add(`## Named Individuals`);
-        add(``);
-        individuals.forEach(node => renderEntitySection(node, 'Named Individual'));
-    }
-
-    // --- Serialization ---
     if (options.serialization) {
-        add(`## Serialization`);
-        add(``);
+        add(`## Serialization (Turtle)`);
         add(`\`\`\`turtle`);
         add(generateTurtle(nodes, edges, metadata));
         add(`\`\`\``);
-        add(``);
     }
 
+    return lines.join('\n');
+};
+
+export const generateLatex = (
+    nodes: Node<UMLNodeData>[], 
+    edges: Edge[], 
+    metadata: ProjectData,
+    options: DocOptions
+): string => {
+    const lines: string[] = [];
+    const add = (s: string = '') => lines.push(s);
+
+    const getLabel = (id: string) => nodes.find(n => n.id === id)?.data.label || id;
+
+    // Preamble
+    add(`\\documentclass{article}`);
+    add(`\\usepackage[utf8]{inputenc}`);
+    add(`\\usepackage[T1]{fontenc}`);
+    add(`\\usepackage{hyperref}`);
+    add(`\\usepackage{geometry}`);
+    add(`\\geometry{a4paper, margin=1in}`);
+    add(`\\title{${texEscape(metadata.name)}}`);
+    add(`\\date{\\today}`);
+    add(`\\author{Ontology Architect}`);
+    add(`\\begin{document}`);
+    add(`\\maketitle`);
+    add(`\\tableofcontents`);
+    add(`\\newpage`);
+
+    if (options.metadata) {
+        add(`\\section*{Metadata}`);
+        add(`\\begin{description}`);
+        add(`\\item[IRI] \\texttt{${texEscape(metadata.ontologyIri || metadata.baseIri)}}`);
+        if (metadata.versionIri) add(`\\item[Version] \\texttt{${texEscape(metadata.versionIri)}}`);
+        add(`\\end{description}`);
+    }
+
+    if (options.abstract && metadata.description) {
+        add(`\\section*{Abstract}`);
+        add(texEscape(metadata.description));
+    }
+
+    const renderEntityTex = (node: Node<UMLNodeData>, type: string) => {
+        add(`\\subsection{${texEscape(node.data.label)}}`);
+        add(`\\textit{${type}}`);
+        add(``);
+        add(`\\noindent \\textbf{IRI:} \\texttt{${texEscape(node.data.iri || ':' + node.data.label)}}`);
+        add(``);
+        
+        if (node.data.description) {
+            add(`\\begin{quote}`);
+            add(texEscape(node.data.description));
+            add(`\\end{quote}`);
+        }
+
+        if (options.annotations && node.data.annotations?.length) {
+            add(`\\subsubsection*{Annotations}`);
+            add(`\\begin{itemize}`);
+            node.data.annotations.forEach(a => {
+                add(`\\item \\textbf{${texEscape(a.property)}}: ${texEscape(a.value)}`);
+            });
+            add(`\\end{itemize}`);
+        }
+
+        if (options.axioms) {
+            // Edges
+            const outgoing = edges.filter(e => e.source === node.id);
+            if (outgoing.length > 0) {
+                add(`\\subsubsection*{Relationships}`);
+                add(`\\begin{itemize}`);
+                outgoing.forEach(e => {
+                    const label = typeof e.label === 'string' ? e.label : String(e.label || '');
+                    add(`\\item ${texEscape(label)} \\textbf{${texEscape(getLabel(e.target))}}`);
+                });
+                add(`\\end{itemize}`);
+            }
+
+            // Axioms
+            if (node.data.methods && node.data.methods.length > 0) {
+                add(`\\subsubsection*{Description Logic Axioms}`); // RENAMED SECTION
+                add(`\\begin{itemize}`);
+                node.data.methods.forEach(m => {
+                    add(`\\item \\textbf{${texEscape(m.name)}}: \\texttt{${texEscape(m.returnType)}}`);
+                });
+                add(`\\end{itemize}`);
+            }
+        }
+    };
+
+    if (options.classes) {
+        add(`\\section{Classes}`);
+        nodes.filter(n => n.data.type === ElementType.OWL_CLASS).forEach(n => renderEntityTex(n, 'Class'));
+    }
+    if (options.objectProperties) {
+        add(`\\section{Object Properties}`);
+        nodes.filter(n => n.data.type === ElementType.OWL_OBJECT_PROPERTY).forEach(n => renderEntityTex(n, 'Object Property'));
+    }
+    if (options.dataProperties) {
+        add(`\\section{Data Properties}`);
+        nodes.filter(n => n.data.type === ElementType.OWL_DATA_PROPERTY).forEach(n => renderEntityTex(n, 'Data Property'));
+    }
+    if (options.individuals) {
+        add(`\\section{Individuals}`);
+        nodes.filter(n => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL).forEach(n => renderEntityTex(n, 'Named Individual'));
+    }
+
+    if (options.serialization) {
+        add(`\\section{Serialization}`);
+        add(`\\begin{verbatim}`);
+        add(generateTurtle(nodes, edges, metadata));
+        add(`\\end{verbatim}`);
+    }
+
+    add(`\\end{document}`);
     return lines.join('\n');
 };

@@ -51,7 +51,6 @@ export const graphToTriples = (nodes: Node<UMLNodeData>[], edges: Edge[], defaul
     // Helper to register label
     const register = (iri: string, label: string) => {
         labelMap[iri] = label;
-        // Also map ID for internal navigation references
         labelMap[label] = label; 
     };
 
@@ -83,12 +82,9 @@ export const graphToTriples = (nodes: Node<UMLNodeData>[], edges: Edge[], defaul
         triples.push({ s, p: STANDARD_PREFIXES.rdf + 'type', o: typeIRI });
         triples.push({ s, p: STANDARD_PREFIXES.rdfs + 'label', o: label });
         
-        // Attributes (Data Properties / Characteristics)
+        // Attributes
         if (n.data.attributes) {
             n.data.attributes.forEach(attr => {
-                // For simplified querying, we treat attributes as direct properties if they simulate values
-                // But often in UML class diagrams, attributes are definitions.
-                // We'll expose them as "hasAttribute" for meta-querying
                 triples.push({ s, p: defaultBaseIRI + 'hasAttribute', o: attr.name });
             });
         }
@@ -162,23 +158,15 @@ export const executeSparql = (query: string, nodes: Node<UMLNodeData>[], edges: 
     
     const patternBlock = whereMatch[1];
     
-    // Split by dot, but be careful about dots inside quotes (simple split for now)
-    // Filter out empty lines and comments
     const patterns = patternBlock.split('.')
         .map(p => p.trim())
         .filter(p => p.length > 0 && !p.startsWith('#'))
         .map(p => {
-            // Split by whitespace
-            // Simple tokenizer: subject predicate object
             const parts = p.split(/\s+/);
             if (parts.length < 3) return null;
-            
-            // Re-assemble if object has spaces (e.g. literals), though basic split handles standard triples
             const s = parts[0];
             const pred = parts[1];
-            // Object might be the rest
             const o = parts.slice(2).join(' '); 
-            
             return { s, p: pred, o };
         })
         .filter(p => p !== null) as { s: string, p: string, o: string }[];
@@ -190,20 +178,15 @@ export const executeSparql = (query: string, nodes: Node<UMLNodeData>[], edges: 
         const newSolutions: Record<string, string>[] = [];
 
         for (const sol of solutions) {
-            // Resolve pattern with bindings
             const qS = pat.s.startsWith('?') ? (sol[pat.s.substring(1)] || null) : resolveIRI(pat.s, queryPrefixes);
             const qP = pat.p.startsWith('?') ? (sol[pat.p.substring(1)] || null) : resolveIRI(pat.p, queryPrefixes);
             const qO = pat.o.startsWith('?') ? (sol[pat.o.substring(1)] || null) : resolveIRI(pat.o, queryPrefixes);
 
-            // Find matching triples
             const matches = triples.filter(t => {
                 if (qS && t.s !== qS) return false;
                 if (qP && t.p !== qP) return false;
-                
-                // Object Matching (Handle Literals vs IRIs loosely)
                 if (qO) {
                     if (t.o === qO) return true;
-                    // Try loose match for literals
                     const cleanTO = t.o.replace(/^"|"$/g, '');
                     const cleanQO = qO.replace(/^"|"$/g, '');
                     if (cleanTO !== cleanQO) return false;
@@ -211,33 +194,19 @@ export const executeSparql = (query: string, nodes: Node<UMLNodeData>[], edges: 
                 return true;
             });
 
-            // Expand solution
             for (const m of matches) {
                 const newSol = { ...sol };
-                
-                if (pat.s.startsWith('?') && !newSol[pat.s.substring(1)]) {
-                    newSol[pat.s.substring(1)] = m.s;
-                }
-                if (pat.p.startsWith('?') && !newSol[pat.p.substring(1)]) {
-                    newSol[pat.p.substring(1)] = m.p;
-                }
-                if (pat.o.startsWith('?') && !newSol[pat.o.substring(1)]) {
-                    newSol[pat.o.substring(1)] = m.o;
-                }
+                if (pat.s.startsWith('?') && !newSol[pat.s.substring(1)]) newSol[pat.s.substring(1)] = m.s;
+                if (pat.p.startsWith('?') && !newSol[pat.p.substring(1)]) newSol[pat.p.substring(1)] = m.p;
+                if (pat.o.startsWith('?') && !newSol[pat.o.substring(1)]) newSol[pat.o.substring(1)] = m.o;
                 newSolutions.push(newSol);
             }
         }
         solutions = newSolutions;
     }
 
-    // 5. Projection & Limit
     const finalVars = isStar ? Array.from(new Set(solutions.flatMap(Object.keys))) : variables;
-    
-    // Apply Limit
     const limitedSolutions = solutions.slice(0, limit);
-
-    // Map IRIs to Labels for display if possible? 
-    // Usually SPARQL returns IRIs. We will return IRIs and let UI shorten them or show labels via tooltips.
     
     const rows = limitedSolutions.map(sol => {
         const row: Record<string, string> = {};
@@ -282,15 +251,5 @@ SELECT ?indiv ?type WHERE {
   ?indiv rdf:type ?type .
   ?type rdf:type owl:Class
 } LIMIT 50`
-    },
-    {
-        label: "Domain & Range",
-        desc: "Show domain and range axioms for properties.",
-        query: `PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-
-SELECT ?property ?domain ?range WHERE {
-  ?property rdfs:domain ?domain .
-  ?property rdfs:range ?range
-}`
     }
 ];

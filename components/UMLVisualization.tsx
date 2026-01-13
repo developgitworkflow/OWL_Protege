@@ -25,6 +25,9 @@ interface UMLVisualizationProps {
     edges: Edge[];
     searchTerm?: string;
     onNavigate?: (view: string, id: string) => void;
+    onDeleteEdge?: (id: string) => void;
+    onNodeMouseEnter?: (event: React.MouseEvent, node: Node) => void;
+    onNodeMouseLeave?: (event: React.MouseEvent, node: Node) => void;
 }
 
 const nodeTypes = {
@@ -67,7 +70,7 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => 
   return { nodes: layoutedNodes, edges };
 };
 
-const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, onNavigate }) => {
+const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, onNavigate, onDeleteEdge, onNodeMouseEnter, onNodeMouseLeave }) => {
     const { fitView } = useReactFlow();
     const [layoutNodes, setLayoutNodes, onNodesChange] = useNodesState([]);
     const [layoutEdges, setLayoutEdges, onEdgesChange] = useEdgesState([]);
@@ -87,6 +90,7 @@ const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, 
                 else relLabel = relLabel.replace('owl:', '').replace(':', '');
 
                 return {
+                    id: e.id, // Include edge ID for interaction
                     label: relLabel,
                     targetLabel: targetNode?.data.label || 'Unknown',
                     type: relLabel
@@ -99,7 +103,13 @@ const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, 
                 data: { 
                     ...n.data, 
                     isSearchMatch: searchTerm ? n.data.label.toLowerCase().includes(searchTerm.toLowerCase()) : false,
-                    relations: outgoing // Inject relations here
+                    relations: outgoing, // Inject relations here
+                    onRelationClick: (edgeId: string) => {
+                        if (onNavigate) onNavigate('uml', edgeId);
+                    },
+                    onRelationDelete: (edgeId: string) => {
+                        if (onDeleteEdge) onDeleteEdge(edgeId);
+                    }
                 }
             };
         });
@@ -136,7 +146,7 @@ const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, 
         // Fit view after a brief delay
         setTimeout(() => fitView({ padding: 0.2 }), 50);
 
-    }, [nodes, edges, searchTerm, fitView, setLayoutNodes, setLayoutEdges]);
+    }, [nodes, edges, searchTerm, fitView, setLayoutNodes, setLayoutEdges, onNavigate, onDeleteEdge]);
 
     const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
         if (onNavigate) {
@@ -152,6 +162,8 @@ const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, 
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
             onNodeClick={handleNodeClick}
+            onNodeMouseEnter={onNodeMouseEnter}
+            onNodeMouseLeave={onNodeMouseLeave}
             connectionMode={ConnectionMode.Loose}
             minZoom={0.1}
             nodesDraggable={true}

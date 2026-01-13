@@ -2,11 +2,13 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { Database, User, ArrowRightLeft, Tag, FileType, Box, Code2, Layers, Network, ArrowRight, Copy } from 'lucide-react';
+import { Database, User, ArrowRightLeft, Tag, FileType, Box, Code2, Layers, Network, ArrowRight, Copy, Pencil, Trash2 } from 'lucide-react';
 
 // Extend data type locally to support the injected relations
 interface ExtendedNodeData extends UMLNodeData {
-    relations?: { label: string; targetLabel: string; type: string }[];
+    relations?: { id: string; label: string; targetLabel: string; type: string }[];
+    onRelationClick?: (id: string) => void;
+    onRelationDelete?: (id: string) => void;
 }
 
 const ProfessionalNode = ({ data, selected }: NodeProps<ExtendedNodeData>) => {
@@ -65,31 +67,53 @@ const ProfessionalNode = ({ data, selected }: NodeProps<ExtendedNodeData>) => {
       {/* Content Body */}
       <div className="p-3 space-y-3">
         
-        {/* Relations Section (New) */}
+        {/* Relations Section (Interactive) */}
         {data.relations && data.relations.length > 0 && (
             <div className="space-y-1.5">
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     <Network size={10} /> Relations
                 </div>
                 <div className="space-y-1">
-                    {data.relations.slice(0, 4).map((rel, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-1.5 rounded bg-slate-800/30 border border-slate-700/30 hover:bg-slate-800 transition-colors group">
-                            <div className="flex items-center gap-2 overflow-hidden">
-                                <span className={`text-[10px] font-mono px-1.5 rounded-sm ${
+                    {data.relations.slice(0, 5).map((rel, idx) => (
+                        <div 
+                            key={idx} 
+                            className="group flex items-center justify-between p-1.5 rounded bg-slate-800/30 border border-slate-700/30 hover:bg-slate-800 transition-colors cursor-pointer"
+                            onClick={(e) => { e.stopPropagation(); data.onRelationClick && data.onRelationClick(rel.id); }}
+                        >
+                            <div className="flex items-center gap-2 overflow-hidden flex-1">
+                                <span className={`text-[10px] font-mono px-1.5 rounded-sm shrink-0 ${
                                     rel.type === 'subClassOf' ? 'bg-indigo-500/20 text-indigo-300' :
                                     rel.type === 'type' ? 'bg-teal-500/20 text-teal-300' :
                                     'bg-slate-700 text-slate-400'
                                 }`}>
                                     {rel.type === 'subClassOf' ? 'Is-A' : (rel.label || '->')}
                                 </span>
-                                <ArrowRight size={10} className="text-slate-600" />
+                                <ArrowRight size={10} className="text-slate-600 shrink-0" />
                                 <span className="text-xs text-slate-300 font-medium truncate" title={rel.targetLabel}>{rel.targetLabel}</span>
+                            </div>
+                            
+                            {/* Actions on Hover */}
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button 
+                                    className="p-1 text-slate-500 hover:text-blue-400 hover:bg-slate-700 rounded"
+                                    onClick={(e) => { e.stopPropagation(); data.onRelationClick && data.onRelationClick(rel.id); }}
+                                    title="Edit Relation"
+                                >
+                                    <Pencil size={10} />
+                                </button>
+                                <button 
+                                    className="p-1 text-slate-500 hover:text-red-400 hover:bg-slate-700 rounded"
+                                    onClick={(e) => { e.stopPropagation(); data.onRelationDelete && data.onRelationDelete(rel.id); }}
+                                    title="Delete Relation"
+                                >
+                                    <Trash2 size={10} />
+                                </button>
                             </div>
                         </div>
                     ))}
-                    {data.relations.length > 4 && (
+                    {data.relations.length > 5 && (
                         <div className="text-[9px] text-center text-slate-500 italic py-0.5">
-                            + {data.relations.length - 4} more links
+                            + {data.relations.length - 5} more links
                         </div>
                     )}
                 </div>

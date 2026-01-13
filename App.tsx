@@ -26,6 +26,7 @@ import Toast, { ToastMessage, ToastType } from './components/Toast';
 import ConfirmDialog from './components/ConfirmDialog';
 import ImportUrlModal from './components/ImportUrlModal';
 import ShortcutsModal from './components/ShortcutsModal';
+import ElementDescriptionPanel from './components/ElementDescriptionPanel';
 
 // Visualizations & Views
 import GraphVisualization from './components/GraphVisualization';
@@ -74,6 +75,7 @@ function App() {
   
   const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'entities' | 'owlviz' | 'workflow'>('design');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null); // Track hover
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -157,6 +159,14 @@ function App() {
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
     setSelectedEdgeId(null);
+  }, []);
+
+  const onNodeMouseEnter = useCallback((event: React.MouseEvent, node: Node) => {
+      setHoveredNodeId(node.id);
+  }, []);
+
+  const onNodeMouseLeave = useCallback((event: React.MouseEvent, node: Node) => {
+      setHoveredNodeId(null);
   }, []);
 
   const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
@@ -434,6 +444,11 @@ function App() {
 
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [selectedNodeId, nodes]);
   const selectedEdge = useMemo(() => edges.find(e => e.id === selectedEdgeId) || null, [selectedEdgeId, edges]);
+  const activeDescriptionNode = useMemo(() => {
+      if (hoveredNodeId) return nodes.find(n => n.id === hoveredNodeId)?.data || null;
+      if (selectedNodeId) return nodes.find(n => n.id === selectedNodeId)?.data || null;
+      return null;
+  }, [hoveredNodeId, selectedNodeId, nodes]);
 
   useEffect(() => {
       if (viewMode === 'design') {
@@ -491,6 +506,9 @@ function App() {
             )}
 
             <div className="flex-1 relative bg-slate-950">
+                {/* Natural Language Explanation Panel - ONLY for UML View */}
+                {viewMode === 'uml' && <ElementDescriptionPanel node={activeDescriptionNode} />}
+
                 {viewMode === 'design' && (
                     <ReactFlow
                         nodes={visibleNodes}
@@ -591,7 +609,15 @@ function App() {
                 )}
 
                 {viewMode === 'uml' && (
-                    <UMLVisualization nodes={visibleNodes} edges={edges} searchTerm={searchTerm} onNavigate={handleNavigate} />
+                    <UMLVisualization 
+                        nodes={visibleNodes} 
+                        edges={edges} 
+                        searchTerm={searchTerm} 
+                        onNavigate={handleNavigate} 
+                        onDeleteEdge={handleDeleteEdge}
+                        onNodeMouseEnter={onNodeMouseEnter}
+                        onNodeMouseLeave={onNodeMouseLeave}
+                    />
                 )}
 
                 {viewMode === 'peirce' && (

@@ -12,7 +12,8 @@ import ReactFlow, {
   ReactFlowProvider,
   BackgroundVariant,
   MiniMap,
-  useReactFlow
+  useReactFlow,
+  ConnectionMode
 } from 'reactflow';
 
 import TopBar from './components/TopBar';
@@ -570,6 +571,7 @@ function App() {
                         onDrop={onDrop}
                         onDragOver={onDragOver}
                         nodeTypes={nodeTypes}
+                        connectionMode={ConnectionMode.Loose}
                         fitView
                         className="bg-slate-950"
                         minZoom={0.1}

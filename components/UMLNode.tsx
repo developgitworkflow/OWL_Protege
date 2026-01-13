@@ -32,14 +32,12 @@ const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
           case ElementType.OWL_CLASS: return 'bg-gradient-to-r from-purple-600 to-indigo-600 border-purple-500';
           case ElementType.OWL_OBJECT_PROPERTY: return 'bg-gradient-to-r from-blue-600 to-cyan-600 border-blue-500';
           case ElementType.OWL_DATA_PROPERTY: return 'bg-gradient-to-r from-emerald-600 to-teal-600 border-emerald-500';
-          // Updated to Teal/Cyan gradient
           case ElementType.OWL_NAMED_INDIVIDUAL: return 'bg-gradient-to-r from-teal-600 to-cyan-600 border-teal-500';
           case ElementType.OWL_DATATYPE: return 'bg-gradient-to-r from-amber-600 to-orange-600 border-amber-500';
           default: return 'bg-slate-700 border-slate-600';
       }
   }
 
-  // Visual state for selection and search match
   const containerClasses = `
     uml-node group w-64 rounded-lg text-xs font-sans transition-all duration-300 ease-in-out
     ${selected 
@@ -51,7 +49,6 @@ const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
     bg-slate-900 border border-slate-700 overflow-hidden
   `;
 
-  // Dynamic Labels based on type
   let section1Label = 'Data Properties';
   let section2Label = 'Axioms';
   
@@ -73,6 +70,8 @@ const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
       }
   };
 
+  const handleClasses = "w-2.5 h-2.5 !bg-slate-400 border-2 border-slate-900 opacity-0 group-hover:opacity-100 transition-all hover:!bg-blue-500 hover:scale-125 hover:opacity-100";
+
   return (
     <div 
         className={containerClasses}
@@ -81,16 +80,14 @@ const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
         role="button" 
         aria-label={`${data.type.replace('owl_', '')}: ${data.label}`}
     >
-      <Handle 
-        type="target" 
-        position={Position.Top} 
-        className="!bg-slate-400 !w-2 !h-2 !-top-1 opacity-0 group-hover:opacity-100 transition-opacity" 
-      />
+      <Handle type="source" position={Position.Top} id="top" className={`${handleClasses} !-top-1.5 left-1/2 -translate-x-1/2`} />
+      <Handle type="source" position={Position.Right} id="right" className={`${handleClasses} !-right-1.5 top-1/2 -translate-y-1/2`} />
+      <Handle type="source" position={Position.Bottom} id="bottom" className={`${handleClasses} !-bottom-1.5 left-1/2 -translate-x-1/2`} />
+      <Handle type="source" position={Position.Left} id="left" className={`${handleClasses} !-left-1.5 top-1/2 -translate-y-1/2`} />
       
       {/* Header */}
       <div className={`relative px-3 py-2 flex flex-col justify-center ${getGradient()}`}>
         
-        {/* Type Badge */}
         <div className="absolute top-1 right-2 text-[9px] uppercase tracking-wider text-white/60 font-bold">
             {getTooltipText()}
         </div>
@@ -167,12 +164,6 @@ const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
         )}
         {(data.methods?.length || 0) > 4 && <div className="text-[9px] text-slate-600 mt-1 italic">...and more</div>}
       </div>
-
-      <Handle 
-        type="source" 
-        position={Position.Bottom} 
-        className="!bg-slate-400 !w-2 !h-2 !-bottom-1 opacity-0 group-hover:opacity-100 transition-opacity" 
-      />
     </div>
   );
 };

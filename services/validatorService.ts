@@ -98,14 +98,10 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[], meta
     });
   });
 
-  // --- 3. Build Class Hierarchy & Detect Metamodeling ---
+  // --- 3. Build Class Hierarchy ---
   const adjacency: Record<string, string[]> = {}; 
   const disjointPairs: [string, string][] = [];
   
-  // Punning Detection Sets
-  const usedAsClass = new Set<string>();
-  const usedAsIndividual = new Set<string>();
-
   // Init adjacency
   nodes.forEach(n => adjacency[n.id] = []);
 
@@ -116,28 +112,11 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[], meta
     // SubClassOf (Class -> Class)
     if (label === 'rdfs:subClassOf' || label === 'subClassOf') {
         adjacency[e.source].push(e.target);
-        usedAsClass.add(e.source);
-        usedAsClass.add(e.target);
     }
     
-    // Type Assertion (Individual -> Class)
-    if (label === 'rdf:type' || label === 'a') {
-        usedAsIndividual.add(e.source);
-        usedAsClass.add(e.target);
-    }
-
     // Disjoint (Class -> Class)
     if (label === 'owl:disjointWith' || label.includes('disjoint')) {
         disjointPairs.push([e.source, e.target]);
-        usedAsClass.add(e.source);
-        usedAsClass.add(e.target);
-    }
-
-    // Object/Data Property Assertion (Individual -> Individual/Literal)
-    if (!['rdf:type', 'a', 'subClassOf', 'rdfs:subClassOf', 'owl:disjointWith', 'disjointWith'].includes(label)) {
-        // Assuming custom property assertions are between individuals
-        usedAsIndividual.add(e.source);
-        // We can't strictly imply target is individual without checking property type, but mostly yes.
     }
   });
 
@@ -150,34 +129,12 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[], meta
           if (targetId) {
               if (name === 'subclassof') {
                   adjacency[n.id].push(targetId);
-                  usedAsClass.add(n.id);
-                  usedAsClass.add(targetId);
               }
               if (name === 'disjointwith') {
                   disjointPairs.push([n.id, targetId]);
-                  usedAsClass.add(n.id);
-                  usedAsClass.add(targetId);
-              }
-              if (name === 'type') {
-                  usedAsIndividual.add(n.id);
-                  usedAsClass.add(targetId);
               }
           }
       });
-  });
-
-  // Calculate Punning
-  nodes.forEach(n => {
-      if (usedAsClass.has(n.id) && usedAsIndividual.has(n.id)) {
-          punnedNodeIds.add(n.id);
-          issues.push({
-              id: `punning-${n.id}`,
-              elementId: n.id,
-              severity: 'info',
-              title: 'Metamodeling Detected',
-              message: `Entity '${n.data.label}' is used as both a Class and an Individual (OWL 2 Punning).`
-          });
-      }
   });
 
   // Cycle Detection (DFS)
@@ -363,7 +320,7 @@ export const validateOntology = (nodes: Node<UMLNodeData>[], edges: Edge[], meta
                   elementId: e.id,
                   severity: 'error',
                   title: 'Ambiguous Property Usage',
-                  message: `Property '${label}' is used as both ObjectProperty and DataProperty in the diagram (Punning violation).`
+                  message: `Property '${label}' is used as both ObjectProperty and DataProperty in the diagram.`
               });
           }
       }

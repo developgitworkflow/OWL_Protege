@@ -46,17 +46,15 @@ import DLAxiomModal from './components/DLAxiomModal';
 import ExpressivityModal from './components/ExpressivityModal';
 import DatalogModal from './components/DatalogModal';
 import OntoMetricsModal from './components/OntoMetricsModal';
-import VersionControlModal from './components/VersionControlModal';
 
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
-import { UMLNodeData, ElementType, ProjectData, Repository, Snapshot } from './types';
+import { UMLNodeData, ElementType, ProjectData } from './types';
 import { validateOntology, ValidationResult } from './services/validatorService';
 import { computeInferredEdges } from './services/reasonerService';
 import { parseTurtle } from './services/rdfParser';
 import { parseRdfXml } from './services/rdfXmlParser';
 import { parseManchesterSyntax } from './services/manchesterSyntaxParser';
 import { parseFunctionalSyntax } from './services/functionalSyntaxParser';
-import { initRepository } from './services/versionControlService';
 
 const nodeTypes = {
   umlNode: UMLNode,
@@ -92,13 +90,9 @@ function App() {
   const [isMetricsOpen, setIsMetricsOpen] = useState(false);
   const [isImportUrlOpen, setIsImportUrlOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
-  const [isVCOpen, setIsVCOpen] = useState(false);
   
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [confirmConfig, setConfirmConfig] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
-
-  // Version Control State
-  const [repository, setRepository] = useState<Repository>(() => initRepository({ nodes: INITIAL_NODES, edges: INITIAL_EDGES, metadata: { name: 'Init', defaultPrefix: 'ex' } }));
 
   // Hooks
   const { screenToFlowPosition } = useReactFlow();
@@ -434,9 +428,6 @@ function App() {
               
               if (result.metadata) setProjectData(prev => ({ ...prev, ...result.metadata }));
               addToast(`Imported ${result.nodes.length} entities.`, 'success');
-              
-              // Reset Repo on new project load
-              setRepository(initRepository({ nodes: result.nodes, edges: validEdges, metadata: result.metadata || projectData }));
           }
       } catch (e) {
           console.error(e);
@@ -481,13 +472,6 @@ function App() {
           // Toast handles UI, but we throw to let the modal know
           throw e; 
       }
-  };
-
-  const handleRestoreSnapshot = (snapshot: Snapshot) => {
-      setNodes(snapshot.nodes);
-      setEdges(snapshot.edges);
-      setProjectData(snapshot.metadata);
-      addToast('Restored version successfully.', 'success');
   };
 
   // Filter visible nodes based on "Show Individuals" toggle
@@ -549,8 +533,6 @@ function App() {
             onOpenExpressivity={() => setIsExpressivityOpen(true)}
             onOpenDatalog={() => setIsDatalogOpen(true)}
             onOpenMetrics={() => setIsMetricsOpen(true)}
-            onOpenVersionControl={() => setIsVCOpen(true)}
-            currentBranch={repository.currentBranch}
         />
 
         <div className="flex flex-1 overflow-hidden relative">
@@ -722,7 +704,7 @@ function App() {
             onClose={() => setIsSettingsOpen(false)} 
             projectData={projectData}
             onUpdateProjectData={setProjectData}
-            onNewProject={() => { setNodes([]); setEdges([]); setProjectData({ name: 'New Project', defaultPrefix: 'ex' }); setRepository(initRepository({ nodes: [], edges: [], metadata: { name: 'New Project', defaultPrefix: 'ex' } })); }}
+            onNewProject={() => { setNodes([]); setEdges([]); setProjectData({ name: 'New Project', defaultPrefix: 'ex' }); }}
             onExportJSON={() => {}} // Todo: Implement logic similar to previous versions if needed or rely on code viewer
             onExportTurtle={() => {}}
             onImportJSON={(e) => { if (e.target.files?.[0]) handleImportFile(e.target.files[0]); }}
@@ -743,7 +725,6 @@ function App() {
                 setNodes([]);
                 setEdges([]);
                 if (data.file) handleImportFile(data.file);
-                setRepository(initRepository({ nodes: [], edges: [], metadata: data }));
                 setIsCreateOpen(false);
             }}
         />
@@ -773,14 +754,6 @@ function App() {
         <DatalogModal isOpen={isDatalogOpen} onClose={() => setIsDatalogOpen(false)} nodes={nodes} edges={edges} />
         <OntoMetricsModal isOpen={isMetricsOpen} onClose={() => setIsMetricsOpen(false)} nodes={nodes} edges={edges} />
         <ShortcutsModal isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} />
-        <VersionControlModal 
-            isOpen={isVCOpen} 
-            onClose={() => setIsVCOpen(false)} 
-            repository={repository} 
-            onUpdateRepository={setRepository}
-            currentSnapshot={{ nodes, edges, metadata: projectData }}
-            onRestoreSnapshot={handleRestoreSnapshot}
-        />
         
         <ConfirmDialog 
             isOpen={!!confirmConfig}

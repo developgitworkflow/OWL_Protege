@@ -458,7 +458,7 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
   const getSuggestionIcon = (type: string) => {
       switch(type) {
           case 'Class': return <Database size={10} className="text-purple-400" />;
-          case 'Individual': return <User size={10} className="text-pink-400" />;
+          case 'Individual': return <User size={10} className="text-teal-400" />;
           case 'Property': return <ArrowRightLeft size={10} className="text-blue-400" />;
           case 'Keyword': return <Command size={10} className="text-amber-400" />;
           default: return <Info size={10} />;
@@ -663,12 +663,12 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                     </button>
                     <button 
                         onClick={() => setActiveTab('abox')}
-                        className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-between px-6 gap-2 ${activeTab === 'abox' ? 'border-b-2 border-pink-500 text-pink-400 bg-slate-800/50' : 'text-slate-500 hover:text-slate-300'}`}
+                        className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-between px-6 gap-2 ${activeTab === 'abox' ? 'border-b-2 border-teal-500 text-teal-400 bg-slate-800/50' : 'text-slate-500 hover:text-slate-300'}`}
                     >
                         <div className="flex items-center gap-2">
                             <User size={14} /> <span>ABox (Individuals)</span>
                         </div>
-                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${activeTab === 'abox' ? 'bg-pink-500/20 text-pink-300' : 'bg-slate-800 text-slate-500'}`}>
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${activeTab === 'abox' ? 'bg-teal-500/20 text-teal-300' : 'bg-slate-800 text-slate-500'}`}>
                             {axioms.abox.length}
                         </span>
                     </button>

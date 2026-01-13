@@ -53,7 +53,7 @@ const TreeNodeItem: React.FC<{
     const getIcon = () => {
         switch (node.type) {
             case ElementType.OWL_CLASS: return <Database size={14} className="text-purple-400" />;
-            case ElementType.OWL_NAMED_INDIVIDUAL: return <User size={14} className="text-pink-400" />;
+            case ElementType.OWL_NAMED_INDIVIDUAL: return <User size={14} className="text-teal-400" />;
             case ElementType.OWL_OBJECT_PROPERTY: return <ArrowRightLeft size={14} className="text-blue-400" />;
             case ElementType.OWL_DATA_PROPERTY: return <Tag size={14} className="text-green-400" />;
             case ElementType.OWL_DATATYPE: return <FileType size={14} className="text-amber-400" />;
@@ -80,7 +80,7 @@ const TreeNodeItem: React.FC<{
                     )}
                 </div>
                 {getIcon()}
-                <span className={`text-sm truncate ${isMatch ? 'text-yellow-200 font-bold' : (isSelected ? 'text-white font-medium' : (node.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'text-pink-200' : 'text-slate-200'))} ${node.isInferred ? 'italic text-amber-300' : ''}`}>
+                <span className={`text-sm truncate ${isMatch ? 'text-yellow-200 font-bold' : (isSelected ? 'text-white font-medium' : (node.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'text-teal-200' : 'text-slate-200'))} ${node.isInferred ? 'italic text-amber-300' : ''}`}>
                     {node.label}
                 </span>
                 {node.isInferred && (
@@ -295,7 +295,7 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ nodes, edges, sea
                 <TreeSection title="Object Properties" icon={<ArrowRightLeft size={16} className="text-blue-400"/>} nodes={objPropRoots} searchTerm={searchTerm} selectedNodeId={selectedNodeId} onNavigate={onNavigate} />
                 <TreeSection title="Data Properties" icon={<Tag size={16} className="text-green-400"/>} nodes={dataPropRoots} searchTerm={searchTerm} selectedNodeId={selectedNodeId} onNavigate={onNavigate} />
                 <TreeSection title="Datatypes" icon={<FileType size={16} className="text-amber-400"/>} nodes={datatypes} searchTerm={searchTerm} selectedNodeId={selectedNodeId} onNavigate={onNavigate} />
-                <TreeSection title="Named Individuals" icon={<User size={16} className="text-pink-400"/>} nodes={individuals} searchTerm={searchTerm} selectedNodeId={selectedNodeId} onNavigate={onNavigate} />
+                <TreeSection title="Named Individuals" icon={<User size={16} className="text-teal-400"/>} nodes={individuals} searchTerm={searchTerm} selectedNodeId={selectedNodeId} onNavigate={onNavigate} />
             </div>
         </div>
     );

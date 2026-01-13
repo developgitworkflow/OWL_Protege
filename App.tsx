@@ -471,10 +471,6 @@ function App() {
             showSidebarToggle={viewMode === 'design'}
             showIndividuals={showIndividuals}
             onToggleIndividuals={() => setShowIndividuals(!showIndividuals)}
-            showGrid={showGrid}
-            onToggleGrid={() => setShowGrid(!showGrid)}
-            showAnnotations={showAnnotations}
-            onToggleAnnotations={handleToggleAnnotations}
             onValidate={handleValidate}
             onOpenDLQuery={() => setIsDLQueryOpen(true)}
             onOpenSWRL={() => setIsSWRLOpen(true)}
@@ -675,6 +671,10 @@ function App() {
             onOpenMetrics={() => setIsMetricsOpen(true)}
             onExportDocs={() => setIsDocsOpen(true)}
             onOpenSPARQL={() => setIsSPARQLOpen(true)}
+            showGrid={showGrid}
+            onToggleGrid={() => setShowGrid(!showGrid)}
+            showAnnotations={showAnnotations}
+            onToggleAnnotations={handleToggleAnnotations}
         />
         <CreateProjectModal 
             isOpen={isCreateOpen}

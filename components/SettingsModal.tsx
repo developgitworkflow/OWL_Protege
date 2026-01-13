@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { X, Settings, Download, Upload, Save, Globe, Plus, Trash2, Link as LinkIcon, FilePlus, Wrench, ShieldCheck, Calculator, Search, ScrollText, Sigma, Terminal, Activity, CloudDownload, FileText, Database } from 'lucide-react';
+import { X, Settings, Download, Upload, Save, Globe, Plus, Trash2, Link as LinkIcon, FilePlus, Wrench, ShieldCheck, Calculator, Search, ScrollText, Sigma, Terminal, Activity, CloudDownload, FileText, Database, Layout, Eye, Quote, Grid, ToggleLeft, ToggleRight } from 'lucide-react';
 import { ProjectData } from '../types';
 import AnnotationManager from './AnnotationManager';
 
@@ -24,6 +24,11 @@ interface SettingsModalProps {
   onOpenMetrics: () => void;
   onExportDocs: () => void;
   onOpenSPARQL: () => void;
+  // View Settings
+  showGrid: boolean;
+  onToggleGrid: () => void;
+  showAnnotations: boolean;
+  onToggleAnnotations: () => void;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ 
@@ -44,9 +49,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenDatalog,
   onOpenMetrics,
   onExportDocs,
-  onOpenSPARQL
+  onOpenSPARQL,
+  showGrid,
+  onToggleGrid,
+  showAnnotations,
+  onToggleAnnotations
 }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'tools' | 'data'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'tools' | 'data'>('general');
   
   // State for new namespace entry
   const [newPrefix, setNewPrefix] = useState('');
@@ -121,6 +130,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                     <Globe size={16} />
                     Project
+                </button>
+                <button 
+                    onClick={() => setActiveTab('appearance')}
+                    className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'appearance' ? 'bg-blue-600/20 text-blue-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+                >
+                    <Layout size={16} />
+                    Appearance
                 </button>
                 <button 
                     onClick={() => setActiveTab('tools')}
@@ -278,6 +294,47 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     onUpdate={(anns) => handleChange('annotations', anns)}
                                     title="Ontology Annotations"
                                 />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'appearance' && (
+                    <div className="space-y-6">
+                        <div>
+                            <h3 className="text-md font-medium text-white mb-1">Canvas & Editor</h3>
+                            <p className="text-xs text-slate-500 mb-4">Customize the visual workspace.</p>
+                            
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between p-4 bg-slate-800 border border-slate-700 rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-slate-900 rounded-md text-blue-400">
+                                            <Grid size={18} />
+                                        </div>
+                                        <div>
+                                            <div className="font-medium text-slate-200 text-sm">Background Grid</div>
+                                            <p className="text-xs text-slate-500">Show or hide the graph background grid.</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={onToggleGrid} className="text-slate-400 hover:text-blue-400 transition-colors">
+                                        {showGrid ? <ToggleRight size={28} className="text-blue-500" /> : <ToggleLeft size={28} />}
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center justify-between p-4 bg-slate-800 border border-slate-700 rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-slate-900 rounded-md text-yellow-400">
+                                            <Quote size={18} />
+                                        </div>
+                                        <div>
+                                            <div className="font-medium text-slate-200 text-sm">Show Annotations</div>
+                                            <p className="text-xs text-slate-500">Display annotation compartments on nodes.</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={onToggleAnnotations} className="text-slate-400 hover:text-yellow-400 transition-colors">
+                                        {showAnnotations ? <ToggleRight size={28} className="text-yellow-500" /> : <ToggleLeft size={28} />}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

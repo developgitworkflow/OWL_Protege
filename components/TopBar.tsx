@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, EyeOff, ShieldCheck, Activity, Calculator, ScrollText, Sigma, ChevronRight, GitCommit, FileText, FolderOpen, Database, Grid, Quote } from 'lucide-react';
+import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, ShieldCheck, Activity, Calculator, ScrollText, Sigma, GitCommit, FileText, FolderOpen, Database } from 'lucide-react';
 
 interface TopBarProps {
     onOpenSettings: () => void;
@@ -23,10 +23,6 @@ interface TopBarProps {
     // Ontology Tools
     showIndividuals: boolean;
     onToggleIndividuals: () => void;
-    showGrid: boolean;
-    onToggleGrid: () => void;
-    showAnnotations: boolean;
-    onToggleAnnotations: () => void;
     onValidate: () => void;
     onOpenDLQuery: () => void;
     onOpenSWRL: () => void;
@@ -60,10 +56,6 @@ const TopBar: React.FC<TopBarProps> = ({
     showSidebarToggle,
     showIndividuals,
     onToggleIndividuals,
-    showGrid,
-    onToggleGrid,
-    showAnnotations,
-    onToggleAnnotations,
     onValidate,
     onOpenDLQuery,
     onOpenSWRL,
@@ -254,20 +246,6 @@ const TopBar: React.FC<TopBarProps> = ({
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-colors border ${showIndividuals ? 'bg-pink-500/10 text-pink-400 border-pink-500/20' : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-900 hover:text-slate-300'}`}
                 >
                     {showIndividuals ? "Individuals On" : "Individuals Off"}
-                </button>
-                <button
-                    onClick={onToggleGrid}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-colors border ${showGrid ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-900 hover:text-slate-300'}`}
-                    title={showGrid ? "Hide Grid" : "Show Grid"}
-                >
-                    <Grid size={14} /> {showGrid ? "Grid" : "No Grid"}
-                </button>
-                <button
-                    onClick={onToggleAnnotations}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-colors border ${showAnnotations ? 'bg-yellow-900/30 text-yellow-400 border-yellow-700/50' : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-900 hover:text-slate-300'}`}
-                    title={showAnnotations ? "Hide Annotations" : "Show Annotations"}
-                >
-                    <Quote size={14} /> {showAnnotations ? "Notes On" : "Notes Off"}
                 </button>
             </div>
 

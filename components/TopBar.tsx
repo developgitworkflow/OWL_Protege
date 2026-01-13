@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, EyeOff, ShieldCheck, Activity, Calculator, ScrollText, Sigma, ChevronRight } from 'lucide-react';
+import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, EyeOff, ShieldCheck, Activity, Calculator, ScrollText, Sigma, ChevronRight, GitCommit } from 'lucide-react';
 
 interface TopBarProps {
     onOpenSettings: () => void;
@@ -30,6 +30,8 @@ interface TopBarProps {
     onOpenExpressivity: () => void;
     onOpenDatalog: () => void;
     onOpenMetrics: () => void;
+    onOpenVersionControl: () => void;
+    currentBranch: string;
 }
 
 const TopBar: React.FC<TopBarProps> = ({ 
@@ -57,7 +59,9 @@ const TopBar: React.FC<TopBarProps> = ({
     onOpenDLAxioms,
     onOpenExpressivity,
     onOpenDatalog,
-    onOpenMetrics
+    onOpenMetrics,
+    onOpenVersionControl,
+    currentBranch
 }) => {
 
   const views = [
@@ -135,6 +139,16 @@ const TopBar: React.FC<TopBarProps> = ({
                 </div>
 
                 <div className="h-8 w-px bg-slate-800 mx-1"></div>
+
+                {/* Git Version Control */}
+                <button 
+                    onClick={onOpenVersionControl}
+                    className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-lg transition-all text-xs font-bold group"
+                    title="Version Control (Git)"
+                >
+                    <GitCommit size={16} className="text-green-400" />
+                    <span className="font-mono text-xs">{currentBranch}</span>
+                </button>
 
                 {/* History */}
                 <div className="flex bg-slate-900 rounded-lg border border-slate-800 p-0.5">

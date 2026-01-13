@@ -57,6 +57,7 @@ export interface UMLNodeData {
   stereotype?: string;     // Used for <<Stereotypes>>
   description?: string;    // Deprecated in favor of annotations
   isSearchMatch?: boolean; // UI State for search highlighting
+  showAnnotations?: boolean; // UI State for showing annotations compartment
 }
 
 export type UMLNode = Node<UMLNodeData>;

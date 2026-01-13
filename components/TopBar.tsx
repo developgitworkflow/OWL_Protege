@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, EyeOff, ShieldCheck, Activity, Calculator, ScrollText, Sigma, ChevronRight, GitCommit, FileText, FolderOpen, Database, Grid } from 'lucide-react';
+import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, EyeOff, ShieldCheck, Activity, Calculator, ScrollText, Sigma, ChevronRight, GitCommit, FileText, FolderOpen, Database, Grid, Quote } from 'lucide-react';
 
 interface TopBarProps {
     onOpenSettings: () => void;
@@ -25,6 +25,8 @@ interface TopBarProps {
     onToggleIndividuals: () => void;
     showGrid: boolean;
     onToggleGrid: () => void;
+    showAnnotations: boolean;
+    onToggleAnnotations: () => void;
     onValidate: () => void;
     onOpenDLQuery: () => void;
     onOpenSWRL: () => void;
@@ -60,6 +62,8 @@ const TopBar: React.FC<TopBarProps> = ({
     onToggleIndividuals,
     showGrid,
     onToggleGrid,
+    showAnnotations,
+    onToggleAnnotations,
     onValidate,
     onOpenDLQuery,
     onOpenSWRL,
@@ -257,6 +261,13 @@ const TopBar: React.FC<TopBarProps> = ({
                     title={showGrid ? "Hide Grid" : "Show Grid"}
                 >
                     <Grid size={14} /> {showGrid ? "Grid" : "No Grid"}
+                </button>
+                <button
+                    onClick={onToggleAnnotations}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-colors border ${showAnnotations ? 'bg-yellow-900/30 text-yellow-400 border-yellow-700/50' : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-900 hover:text-slate-300'}`}
+                    title={showAnnotations ? "Hide Annotations" : "Show Annotations"}
+                >
+                    <Quote size={14} /> {showAnnotations ? "Notes On" : "Notes Off"}
                 </button>
             </div>
 

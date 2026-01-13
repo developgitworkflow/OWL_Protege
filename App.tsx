@@ -83,6 +83,7 @@ function App() {
   const [showInferred, setShowInferred] = useState(false);
   const [showIndividuals, setShowIndividuals] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
+  const [showAnnotations, setShowAnnotations] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   
   // Modals State
@@ -112,6 +113,17 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Handlers ---
+
+  const handleToggleAnnotations = useCallback(() => {
+      setShowAnnotations(prev => {
+          const next = !prev;
+          setNodes(nds => nds.map(n => ({
+              ...n,
+              data: { ...n.data, showAnnotations: next }
+          })));
+          return next;
+      });
+  }, [setNodes]);
 
   const addToast = (message: string, type: ToastType = 'info') => {
     const id = Date.now().toString();
@@ -202,7 +214,8 @@ function App() {
             label: label, 
             type: elementType,
             attributes: [],
-            methods: [] 
+            methods: [],
+            showAnnotations: showAnnotations
         },
       };
 
@@ -211,7 +224,7 @@ function App() {
       setSelectedEdgeId(null);
       addToast(`Created ${label}`, 'success');
     },
-    [screenToFlowPosition, setNodes]
+    [screenToFlowPosition, setNodes, showAnnotations]
   );
 
   const handleNavigate = (view: string, id?: string) => {
@@ -292,7 +305,8 @@ function App() {
               label,
               type,
               attributes: [],
-              methods: []
+              methods: [],
+              showAnnotations: showAnnotations
           }
       };
       setNodes(nds => [...nds, newNode]);
@@ -359,7 +373,13 @@ function App() {
                   validNodeIds.has(e.source) && validNodeIds.has(e.target)
               );
 
-              setNodes(result.nodes);
+              // Preserve showAnnotations state on import
+              const nodesWithState = result.nodes.map((n: any) => ({
+                  ...n,
+                  data: { ...n.data, showAnnotations: showAnnotations }
+              }));
+
+              setNodes(nodesWithState);
               setEdges(validEdges);
               
               if (result.metadata) setProjectData(prev => ({ ...prev, ...result.metadata }));
@@ -442,6 +462,8 @@ function App() {
             onToggleIndividuals={() => setShowIndividuals(!showIndividuals)}
             showGrid={showGrid}
             onToggleGrid={() => setShowGrid(!showGrid)}
+            showAnnotations={showAnnotations}
+            onToggleAnnotations={handleToggleAnnotations}
             onValidate={handleValidate}
             onOpenDLQuery={() => setIsDLQueryOpen(true)}
             onOpenSWRL={() => setIsSWRLOpen(true)}

@@ -2,7 +2,7 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { Database, User, FileType, ArrowRightLeft, Tag, Code2, Layers, Key } from 'lucide-react';
+import { Database, User, FileType, ArrowRightLeft, Tag, Code2, Layers, Key, Info, Link as LinkIcon, AlertTriangle, Quote } from 'lucide-react';
 
 const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
   const getIcon = () => {
@@ -28,7 +28,20 @@ const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
       }
   };
 
+  const isDeprecated = data.annotations?.some(a => 
+      (a.property === 'owl:deprecated' || a.property === 'deprecated') && a.value.includes('true')
+  );
+
   const getColors = () => {
+      if (isDeprecated) {
+          return {
+              header: 'bg-slate-300 dark:bg-slate-700',
+              border: 'border-slate-500',
+              text: 'text-slate-600 dark:text-slate-400 line-through',
+              iconColor: 'text-slate-500'
+          };
+      }
+
       switch(data.type) {
           case ElementType.OWL_CLASS: 
               return { 
@@ -79,6 +92,7 @@ const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
             : 'shadow-md hover:shadow-lg'
     }
     bg-white dark:bg-slate-900 border ${colors.border}
+    ${isDeprecated ? 'opacity-70 grayscale' : ''}
   `;
 
   let section1Label = 'Attributes';
@@ -108,7 +122,12 @@ const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
       <Handle type="target" position={Position.Left} id="left" className={`${handleClasses} !-left-1`} />
       
       {/* Header (Enterprise Architect Style) */}
-      <div className={`px-2 py-1.5 border-b ${colors.border} ${colors.header} text-center`}>
+      <div className={`px-2 py-1.5 border-b ${colors.border} ${colors.header} text-center relative`}>
+        {isDeprecated && (
+            <div className="absolute top-1 right-1 text-red-500" title="Deprecated">
+                <AlertTriangle size={12} fill="currentColor" className="text-red-100" />
+            </div>
+        )}
         <div className={`text-[10px] ${colors.text} opacity-80 italic font-serif`}>
             {getStereotype()}
         </div>
@@ -119,7 +138,7 @@ const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
       </div>
 
       {/* Attributes Compartment */}
-      <div className="px-2 py-1 bg-white dark:bg-slate-950 border-b border-dashed border-slate-300 dark:border-slate-700 min-h-[20px]">
+      <div className={`px-2 py-1 bg-white dark:bg-slate-950 border-b border-dashed border-slate-300 dark:border-slate-700 min-h-[20px] ${data.showAnnotations && data.annotations && data.annotations.length > 0 ? '' : 'rounded-b'}`}>
         {(data.attributes && data.attributes.length > 0) ? (
           data.attributes.slice(0, 6).map((attr) => (
             <div key={attr.id} className="flex items-center text-[11px] leading-tight py-0.5 text-slate-700 dark:text-slate-300">
@@ -136,7 +155,7 @@ const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
       </div>
 
       {/* Operations/Axioms Compartment */}
-      <div className="px-2 py-1 bg-white dark:bg-slate-950 min-h-[20px] rounded-b">
+      <div className={`px-2 py-1 bg-white dark:bg-slate-950 min-h-[20px] ${data.showAnnotations && data.annotations && data.annotations.length > 0 ? 'border-b border-slate-300 dark:border-slate-700 border-dashed' : 'rounded-b'}`}>
         {(data.methods && data.methods.length > 0) ? (
           data.methods.slice(0, 5).map((method) => (
             <div key={method.id} className="flex items-center text-[11px] leading-tight py-0.5 text-slate-700 dark:text-slate-300 border-b border-transparent hover:border-slate-100 dark:hover:border-slate-800">
@@ -158,10 +177,37 @@ const UMLNode = ({ id, data, selected }: NodeProps<UMLNodeData>) => {
             </div>
         )}
       </div>
+
+      {/* Annotations Compartment (Toggled) */}
+      {data.showAnnotations && data.annotations && data.annotations.length > 0 && (
+          <div className="px-2 py-1 bg-yellow-50 dark:bg-yellow-900/10 rounded-b min-h-[20px]">
+              {data.annotations.map(ann => {
+                  let icon = <Quote size={8} />;
+                  if (ann.property.includes('comment')) icon = <Info size={8} />;
+                  if (ann.property.includes('seeAlso')) icon = <LinkIcon size={8} />;
+                  if (ann.property.includes('deprecated')) icon = <AlertTriangle size={8} />;
+                  
+                  const isComment = ann.property.includes('comment');
+                  const propName = ann.property.split(/[:#]/).pop();
+
+                  return (
+                      <div key={ann.id} className="flex items-start text-[10px] leading-tight py-0.5 text-slate-600 dark:text-slate-300">
+                          <span className="text-slate-400 mr-1 mt-0.5 shrink-0" title={ann.property}>{icon}</span>
+                          <div className="flex flex-col w-full overflow-hidden">
+                              {!isComment && <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">{propName}:</span>}
+                              <span className={`truncate ${isComment ? 'italic text-slate-500' : ''}`}>
+                                  {ann.value.replace(/^"|"$/g, '')}
+                              </span>
+                          </div>
+                      </div>
+                  );
+              })}
+          </div>
+      )}
       
       {/* Footer Info (Base IRI) */}
       {data.iri && (
-          <div className="px-2 py-0.5 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 text-[8px] text-slate-400 font-mono truncate text-center">
+          <div className="px-2 py-0.5 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 text-[8px] text-slate-400 font-mono truncate text-center rounded-b">
               {data.iri}
           </div>
       )}

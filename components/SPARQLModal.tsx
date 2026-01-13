@@ -18,6 +18,7 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
   const [result, setResult] = useState<SparqlResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'editor' | 'results'>('editor');
+  const backdropRef = useRef<HTMLDivElement>(null);
   
   const handleRun = () => {
       try {
@@ -44,6 +45,46 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
         );
     }
     return <span className="text-slate-300 truncate" title={value}>{value}</span>;
+  };
+
+  const highlightSPARQL = (code: string) => {
+    if (!code) return null;
+    // Split by delimiters but keep them
+    const parts = code.split(/(\s+|[{}().,;]|#.*$|"[^"]*"|'[^']*'|<[^>]*>|\?[a-zA-Z0-9_]+|[a-zA-Z0-9_]+:[a-zA-Z0-9_]+)/m);
+    
+    return parts.map((token, i) => {
+        if (!token) return null;
+        if (/^\s+$/.test(token)) return token;
+        
+        // Comments
+        if (token.startsWith('#')) return <span key={i} className="text-slate-500 italic">{token}</span>;
+        
+        // Strings
+        if (token.startsWith('"') || token.startsWith("'")) return <span key={i} className="text-green-400">{token}</span>;
+        
+        // IRIs
+        if (token.startsWith('<') && token.endsWith('>')) return <span key={i} className="text-cyan-400">{token}</span>;
+        
+        // Variables
+        if (token.startsWith('?')) return <span key={i} className="text-amber-400">{token}</span>;
+        
+        // Prefixed Names
+        if (/^[a-zA-Z0-9_]+:[a-zA-Z0-9_]+$/.test(token)) return <span key={i} className="text-blue-300">{token}</span>;
+        
+        // Keywords
+        const keywords = ['SELECT', 'WHERE', 'LIMIT', 'PREFIX', 'OPTIONAL', 'UNION', 'FILTER', 'DISTINCT', 'ORDER', 'BY', 'AS', 'BASE', 'FROM', 'GRAPH', 'a'];
+        if (keywords.includes(token.toUpperCase())) return <span key={i} className="text-purple-400 font-bold">{token}</span>;
+        
+        // Default
+        return <span key={i} className="text-slate-200">{token}</span>;
+    });
+  };
+
+  const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+      if (backdropRef.current) {
+          backdropRef.current.scrollTop = e.currentTarget.scrollTop;
+          backdropRef.current.scrollLeft = e.currentTarget.scrollLeft;
+      }
   };
 
   if (!isOpen) return null;
@@ -96,15 +137,29 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
 
                 <div className="flex-1 overflow-hidden relative">
                     {activeTab === 'editor' && (
-                        <div className="h-full relative">
+                        <div className="h-full relative font-mono text-sm">
+                            {/* Backdrop for highlighting */}
+                            <div 
+                                ref={backdropRef}
+                                className="absolute inset-0 p-6 whitespace-pre-wrap break-words pointer-events-none text-transparent z-0 overflow-hidden leading-relaxed"
+                                aria-hidden="true"
+                            >
+                                {highlightSPARQL(query)}
+                            </div>
+
+                            {/* Transparent Textarea for input */}
                             <textarea 
-                                className="absolute inset-0 w-full h-full bg-slate-950 p-6 text-sm font-mono text-slate-200 outline-none resize-none leading-relaxed"
+                                className="absolute inset-0 w-full h-full bg-transparent p-6 text-transparent caret-white outline-none resize-none leading-relaxed z-10"
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
+                                onScroll={handleScroll}
                                 spellCheck={false}
+                                autoCapitalize="off"
+                                autoComplete="off"
                             />
+                            
                             {error && (
-                                <div className="absolute bottom-0 left-0 right-0 bg-red-900/90 border-t border-red-700 p-4 text-red-100 text-sm font-mono flex items-center gap-3">
+                                <div className="absolute bottom-0 left-0 right-0 bg-red-900/90 border-t border-red-700 p-4 text-red-100 text-sm font-mono flex items-center gap-3 z-20">
                                     <div className="p-1 bg-red-800 rounded"><X size={14}/></div>
                                     {error}
                                 </div>

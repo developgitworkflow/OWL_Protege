@@ -6,9 +6,9 @@ import { convertFunctionalToHuman } from './swrlService';
 // --- 1. Lexical Analysis (Tokenizer) ---
 
 type TokenType = 
-    | 'WHITESPACE' | 'COMMENT' | 'STRING' | 'FULL_IRI' | 'LANGTAG' 
-    | 'DATATYPE_SEP' | 'PNAME_LN' | 'PNAME_NS' | 'NODE_ID' 
-    | 'FLOAT' | 'DECIMAL' | 'INTEGER' | 'DELIMITER' | 'KEYWORD' | 'EOF';
+    | 'WHITESPACE' | 'COMMENT' | 'STRING' | 'FULL_IRI' | 'ABBREV_IRI' 
+    | 'DATATYPE_SEP' | 'NODE_ID' | 'OPEN_PAREN' | 'CLOSE_PAREN' 
+    | 'EQUALS' | 'KEYWORD' | 'EOF';
 
 interface Token {
     type: TokenType;
@@ -16,67 +16,50 @@ interface Token {
     pos: number;
 }
 
-// Delimiters defined in OWL 2 Specification
-const DELIMITERS = new Set(['(', ')', '<', '>', '=', '@', '^', '.']);
-
-// Regex Definitions (Order matters for greedy matching!)
-const TERMINALS: { type: TokenType, regex: RegExp }[] = [
-    { type: 'COMMENT', regex: /^#[^\x0A\x0D]*/ },
-    { type: 'STRING', regex: /^"(?:[^"\\]|\\.)*"/ },
-    { type: 'FULL_IRI', regex: /^<[^>]*>/ },
-    { type: 'LANGTAG', regex: /^@[a-zA-Z]+(?:-[a-zA-Z0-9]+)*/ },
-    { type: 'DATATYPE_SEP', regex: /^\^\^/ },
-    { type: 'NODE_ID', regex: /^_:[a-zA-Z0-9._-]+/ },
-    { type: 'PNAME_LN', regex: /^(?:[a-zA-Z][a-zA-Z0-9_-]*)?:[a-zA-Z0-9._-]+/ },
-    { type: 'PNAME_NS', regex: /^(?:[a-zA-Z][a-zA-Z0-9_-]*)?:/ },
-    { type: 'FLOAT', regex: /^[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+|[0-9]+)[eE][+-]?[0-9]+/ },
-    { type: 'DECIMAL', regex: /^[+-]?[0-9]*\.[0-9]+/ },
-    { type: 'INTEGER', regex: /^[+-]?[0-9]+/ },
-    { type: 'DELIMITER', regex: /^[()<>@=^.]/ }, // Added dot to delimiters to safely tokenize Turtle artifacts if mixed
-    { type: 'KEYWORD', regex: /^[a-zA-Z][a-zA-Z0-9._-]*/ }, // Allow dots in keywords/identifiers
-    { type: 'WHITESPACE', regex: /^[\x20\x09\x0A\x0D]+/ }
-];
-
 const tokenize = (input: string): Token[] => {
     const tokens: Token[] = [];
     let pos = 0;
 
-    while (pos < input.length) {
-        let bestMatch: { type: TokenType, value: string } | null = null;
+    // Regex patterns
+    const patterns: { type: TokenType, regex: RegExp }[] = [
+        { type: 'COMMENT', regex: /^#[^\n\r]*/ },
+        { type: 'WHITESPACE', regex: /^[\s]+/ },
+        { type: 'STRING', regex: /^"(?:[^"\\]|\\.)*"/ },
+        { type: 'FULL_IRI', regex: /^<[^>]*>/ },
+        { type: 'DATATYPE_SEP', regex: /^\^\^/ },
+        { type: 'NODE_ID', regex: /^_:[a-zA-Z0-9._-]+/ },
+        { type: 'OPEN_PAREN', regex: /^\(/ },
+        { type: 'CLOSE_PAREN', regex: /^\)/ },
+        { type: 'EQUALS', regex: /^=/ },
+        // Expanded to capture QNames like rdf:type or :Person
+        { type: 'ABBREV_IRI', regex: /^[a-zA-Z0-9._-]*:[a-zA-Z0-9._-]*/ }, 
+        // Keywords / Identifiers
+        { type: 'KEYWORD', regex: /^[a-zA-Z][a-zA-Z0-9._-]*/ }, 
+    ];
 
-        // 1. Greedy Match
-        for (const term of TERMINALS) {
-            const match = input.substring(pos).match(term.regex);
+    while (pos < input.length) {
+        let matched = false;
+
+        for (const { type, regex } of patterns) {
+            const substr = input.slice(pos);
+            const match = substr.match(regex);
+
             if (match) {
                 const val = match[0];
-                if (!bestMatch || val.length > bestMatch.value.length) {
-                    bestMatch = { type: term.type, value: val };
+                if (type !== 'WHITESPACE' && type !== 'COMMENT') {
+                    tokens.push({ type, value: val, pos });
                 }
+                pos += val.length;
+                matched = true;
+                break;
             }
         }
 
-        if (!bestMatch) {
-            // Skip unknown char if safe, or throw. For now throw to find issues.
-            throw new Error(`Syntax Error: Unexpected character '${input[pos]}' at position ${pos}`);
+        if (!matched) {
+            // Safe skip for unknown chars to prevent infinite loop
+            console.warn(`Unexpected character at ${pos}: ${input[pos]}`);
+            pos++;
         }
-
-        // 2. Boundary Check (Simplified)
-        if (bestMatch.type !== 'WHITESPACE' && bestMatch.type !== 'COMMENT') {
-            const lastChar = bestMatch.value[bestMatch.value.length - 1];
-            const nextChar = (pos + bestMatch.value.length < input.length) ? input[pos + bestMatch.value.length] : '';
-            const isLastDelim = DELIMITERS.has(lastChar);
-            const isNextDelim = DELIMITERS.has(nextChar) || nextChar === '' || /[\s#]/.test(nextChar);
-
-            // Allow keywords/identifiers to be followed by anything that breaks a token
-            // The regex matching ensures we consumed the full identifier.
-        }
-
-        // 3. Emit Token
-        if (bestMatch.type !== 'WHITESPACE' && bestMatch.type !== 'COMMENT') {
-            tokens.push({ type: bestMatch.type, value: bestMatch.value, pos });
-        }
-
-        pos += bestMatch.value.length;
     }
 
     tokens.push({ type: 'EOF', value: '', pos });
@@ -85,76 +68,30 @@ const tokenize = (input: string): Token[] => {
 
 // --- 2. Parser ---
 
-// Standard Prefixes
 const STANDARD_PREFIXES: Record<string, string> = {
     'rdf:': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
     'rdfs:': 'http://www.w3.org/2000/01/rdf-schema#',
     'xsd:': 'http://www.w3.org/2001/XMLSchema#',
     'owl:': 'http://www.w3.org/2002/07/owl#',
-    'swrl:': 'http://www.w3.org/2003/11/swrl#',
-    'swrlb:': 'http://www.w3.org/2003/11/swrlb#'
 };
 
 export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>[], edges: Edge[], metadata: ProjectData } => {
-    let tokens: Token[];
-    try {
-        tokens = tokenize(input);
-    } catch (e) {
-        console.error("Tokenization failed", e);
-        throw e;
-    }
-
+    const tokens = tokenize(input);
     let current = 0;
+
     const nodes: Node<UMLNodeData>[] = [];
     const edges: Edge[] = [];
     const metadata: ProjectData = { name: 'Imported Ontology', defaultPrefix: 'ex', baseIri: 'http://example.org/ontology#', rules: [] };
     
     const prefixes: Record<string, string> = { ...STANDARD_PREFIXES };
-    const declaredPrefixes = new Set<string>();
     const iriToNodeId: Record<string, string> = {};
     let nodeCounter = 0;
 
-    // Helper: Expand Abbreviated IRIs
-    const resolveIRI = (tokenValue: string): string => {
-        if (tokenValue.startsWith('<')) return tokenValue.replace(/[<>]/g, '');
-        const colonIndex = tokenValue.indexOf(':');
-        if (colonIndex !== -1) {
-            const prefix = tokenValue.substring(0, colonIndex + 1);
-            const local = tokenValue.substring(colonIndex + 1);
-            if (prefixes[prefix]) return prefixes[prefix] + local;
-            // Best effort fallback
-            return tokenValue;
-        }
-        return tokenValue;
-    };
-
-    const getOrCreateNodeId = (iriOrLabel: string, type: ElementType, isIRI = false): string => {
-        const fullIRI = isIRI ? resolveIRI(iriOrLabel) : undefined;
-        const key = fullIRI || iriOrLabel;
-        if (iriToNodeId[key]) return iriToNodeId[key];
-        
-        let label = iriOrLabel;
-        if (isIRI) {
-            if (label.startsWith('<')) label = label.replace(/[<>]/g, '');
-            if (label.includes('#')) label = label.split('#')[1];
-            else if (label.includes('/')) label = label.split('/').pop() || label;
-            else if (label.includes(':')) label = label.split(':')[1];
-        }
-
-        const id = `node-${++nodeCounter}`;
-        const newNode: Node<UMLNodeData> = {
-            id,
-            type: 'umlNode',
-            position: { x: Math.random() * 800, y: Math.random() * 600 },
-            data: { label, type, iri: fullIRI, attributes: [], methods: [] }
-        };
-        nodes.push(newNode);
-        iriToNodeId[key] = id;
-        return id;
-    };
+    // --- Helper Functions ---
 
     const peek = () => tokens[current];
     const consume = () => tokens[current++];
+    
     const match = (val: string) => {
         if (peek().value === val) {
             current++;
@@ -162,172 +99,310 @@ export const parseFunctionalSyntax = (input: string): { nodes: Node<UMLNodeData>
         }
         return false;
     };
+
     const expect = (val: string) => {
         if (!match(val)) throw new Error(`Expected '${val}' but got '${peek().value}' at pos ${peek().pos}`);
     };
 
     const parseIRI = (): string | null => {
         const t = peek();
-        if (t.type === 'FULL_IRI' || t.type === 'PNAME_LN' || t.type === 'PNAME_NS' || t.type === 'KEYWORD') {
+        if (t.type === 'FULL_IRI' || t.type === 'ABBREV_IRI') {
             return consume().value;
+        }
+        // Sometimes "owl:Thing" is tokenized as KEYWORD if the colon logic is loose, 
+        // but our ABBREV_IRI regex should catch it.
+        if (t.type === 'KEYWORD' && t.value.includes(':')) {
+             return consume().value;
         }
         return null;
     };
 
+    // Recursively consume balanced parentheses
     const consumeBalanced = (): string => {
         let str = '';
         let balance = 0;
+        
+        // Initial token should be parsed outside or we start here
+        if (peek().type !== 'OPEN_PAREN' && balance === 0) {
+             // Just a single token
+             return consume().value;
+        }
+
         do {
             const t = consume();
             str += t.value + ' ';
-            if (t.value === '(') balance++;
-            if (t.value === ')') balance--;
-        } while (balance > 0 && current < tokens.length);
+            if (t.type === 'OPEN_PAREN') balance++;
+            if (t.type === 'CLOSE_PAREN') balance--;
+        } while (balance > 0 && peek().type !== 'EOF');
+        
         return str.trim();
     };
 
-    // --- Parser Loop ---
-    
-    // 1. Prefix Declarations
-    while (peek().value === 'Prefix') {
-        consume(); 
-        expect('(');
-        let prefixName = ':'; 
-        // Prefix name can be PNAME_NS (foo:) or just KEYWORD (foo) if parser is loose
-        if (peek().type === 'PNAME_NS' || peek().type === 'KEYWORD') {
-            prefixName = consume().value;
-            // Normalize "foo" to "foo:" if needed, though usually it appears as PNAME_NS
+    const resolveIRI = (raw: string): string => {
+        if (raw.startsWith('<')) return raw.replace(/[<>]/g, '');
+        const parts = raw.split(':');
+        if (parts.length === 2) {
+            const p = parts[0] + ':';
+            if (prefixes[p]) return prefixes[p] + parts[1];
         }
+        return raw;
+    };
+
+    const getOrCreateNodeId = (rawIRI: string, type: ElementType): string => {
+        const fullIRI = resolveIRI(rawIRI);
+        if (iriToNodeId[fullIRI]) return iriToNodeId[fullIRI];
+
+        // Label extraction
+        let label = rawIRI;
+        if (label.startsWith('<')) label = label.split(/[#/]/).pop()?.replace('>', '') || 'Entity';
+        else if (label.includes(':')) label = label.split(':')[1];
+
+        const id = `node-${++nodeCounter}`;
+        
+        const newNode: Node<UMLNodeData> = {
+            id,
+            type: 'umlNode',
+            position: { x: 0, y: 0 }, // Layout calculated later
+            data: {
+                label,
+                type,
+                iri: fullIRI,
+                attributes: [],
+                methods: []
+            }
+        };
+        
+        nodes.push(newNode);
+        iriToNodeId[fullIRI] = id;
+        return id;
+    };
+
+    // --- Grammar Parsing ---
+
+    // 1. PrefixDeclaration := 'Prefix' '(' prefixName '=' fullIRI ')'
+    while (peek().value === 'Prefix') {
+        consume(); // Prefix
+        expect('(');
+        
+        let pName = ':';
+        if (peek().type === 'ABBREV_IRI' || peek().type === 'KEYWORD') {
+            pName = consume().value; // e.g. "xsd:" or ":"
+        }
+        
         expect('=');
-        const iriTok = consume();
+        const iriTok = consume(); // <http://...>
         expect(')');
 
-        if (prefixName.endsWith(':')) {
-            prefixes[prefixName] = iriTok.value.replace(/[<>]/g, '');
-            declaredPrefixes.add(prefixName);
-            if (prefixName === ':') metadata.baseIri = prefixes[prefixName];
-            else metadata.defaultPrefix = prefixName.replace(':', '');
+        if (pName.endsWith(':')) {
+            prefixes[pName] = iriTok.value.replace(/[<>]/g, '');
+            if (pName === ':') metadata.baseIri = prefixes[pName];
+            else metadata.defaultPrefix = pName.replace(':', '');
         }
     }
 
-    // 2. Ontology Header
+    // 2. Ontology := 'Ontology' '(' [ ontologyIRI [ versionIRI ] ] directlyImportsDocuments ontologyAnnotations axioms ')'
     if (match('Ontology')) {
         expect('(');
-        if (peek().value !== ')' && peek().value !== 'Import' && peek().value !== 'Annotation') {
-             const iri = parseIRI();
-             if (iri) metadata.baseIri = resolveIRI(iri);
-             if (peek().value !== ')' && peek().value !== 'Import') parseIRI(); // Version IRI
-        }
-    }
-
-    // 3. Imports & Annotations
-    while (peek().value === 'Import' || peek().value === 'Annotation') {
-        consume();
-        expect('(');
-        consumeBalanced();
-    }
-
-    // 4. Axioms
-    while (peek().value !== ')' && peek().type !== 'EOF') {
-        const t = peek();
         
-        if (t.value === 'Declaration') {
-            consume();
-            expect('(');
-            const typeTok = consume();
-            expect('(');
-            const iri = parseIRI();
-            consumeBalanced(); // Consume remaining parens
-            
-            if (iri) {
-                let type: ElementType | null = null;
-                if (typeTok.value === 'Class') type = ElementType.OWL_CLASS;
-                if (typeTok.value === 'NamedIndividual') type = ElementType.OWL_NAMED_INDIVIDUAL;
-                if (typeTok.value === 'ObjectProperty') type = ElementType.OWL_OBJECT_PROPERTY;
-                if (typeTok.value === 'DataProperty') type = ElementType.OWL_DATA_PROPERTY;
-                if (typeTok.value === 'Datatype') type = ElementType.OWL_DATATYPE;
-                if (type) getOrCreateNodeId(iri, type, true);
+        // Optional IRIs
+        const first = parseIRI();
+        if (first) {
+            metadata.ontologyIri = resolveIRI(first);
+            const second = parseIRI();
+            if (second) {
+                metadata.versionIri = resolveIRI(second);
             }
         }
-        else if (t.value === 'SubClassOf') {
-            consume(); expect('(');
-            const sub = parseIRI();
-            const supIRI = parseIRI();
-            if (sub && supIRI) {
-                const subId = getOrCreateNodeId(sub, ElementType.OWL_CLASS, true);
-                const supId = getOrCreateNodeId(supIRI, ElementType.OWL_CLASS, true);
-                edges.push({ id: `e-${Math.random()}`, source: subId, target: supId, label: 'rdfs:subClassOf', type: 'smoothstep' });
-            } else if (sub) {
-                 const expr = consumeBalanced();
-                 const subId = getOrCreateNodeId(sub, ElementType.OWL_CLASS, true);
-                 const node = nodes.find(n => n.id === subId);
-                 if(node) node.data.methods.push({ id: `m-${Math.random()}`, name: 'SubClassOf', returnType: expr.replace(/\)$/, ''), visibility: '+' });
-            } else {
-                consumeBalanced();
+
+        // Parse Body: Imports, Annotations, Axioms
+        while (peek().type !== 'CLOSE_PAREN' && peek().type !== 'EOF') {
+            const token = peek();
+
+            if (token.value === 'Import') {
+                consume(); expect('(');
+                parseIRI(); // Consume import IRI
+                expect(')');
+            } 
+            else if (token.value === 'Annotation') {
+                consume(); expect('(');
+                consumeBalanced(); // Skip annotation content for now or parse it
             }
-            if (peek().value === ')') consume();
-        }
-        else if (t.value === 'ClassAssertion') {
-             consume(); expect('(');
-             const cls = parseIRI();
-             const indiv = parseIRI();
-             if (peek().value === ')') consume();
-             if (cls && indiv) {
-                 const cId = getOrCreateNodeId(cls, ElementType.OWL_CLASS, true);
-                 const iId = getOrCreateNodeId(indiv, ElementType.OWL_NAMED_INDIVIDUAL, true);
-                 edges.push({ id: `e-${Math.random()}`, source: iId, target: cId, label: 'rdf:type', type: 'smoothstep' });
-             }
-        }
-        else if (t.value === 'ObjectPropertyAssertion') {
-             consume(); expect('(');
-             const prop = parseIRI();
-             const sub = parseIRI();
-             const obj = parseIRI();
-             if (peek().value === ')') consume();
-             if (prop && sub && obj) {
-                 const sId = getOrCreateNodeId(sub, ElementType.OWL_NAMED_INDIVIDUAL, true);
-                 const oId = getOrCreateNodeId(obj, ElementType.OWL_NAMED_INDIVIDUAL, true);
-                 edges.push({ id: `e-${Math.random()}`, source: sId, target: oId, label: resolveIRI(prop), type: 'smoothstep' });
-             }
-        }
-        else if (t.value === 'DLSafeRule') {
-             // Parse SWRL Rule
-             // Format: DLSafeRule( Annotation(...) Body(...) Head(...) )
-             consume(); 
-             const fullRuleStr = consumeBalanced(); // This gets everything inside DLSafeRule()
-             
-             // Extract optional annotation for comment
-             let comment = '';
-             const annMatch = fullRuleStr.match(/Annotation\s*\(\s*rdfs:comment\s+"([^"]+)"\s*\)/);
-             if (annMatch) comment = annMatch[1];
-             
-             // Convert functional body/head to human readable
-             const humanExpr = convertFunctionalToHuman(fullRuleStr);
-             
-             const newRule: SWRLRule = {
-                 id: `rule-${Math.random()}`,
-                 name: `Rule-${(metadata.rules?.length || 0) + 1}`,
-                 expression: humanExpr,
-                 comment: comment
-             };
-             
-             if (!metadata.rules) metadata.rules = [];
-             metadata.rules.push(newRule);
-        }
-        else {
-            // Skip unknown axiom
-            if (peek().value === '(') consumeBalanced();
+            else if (token.value === 'Declaration') {
+                // Declaration( EntityType( IRI ) )
+                consume(); expect('(');
+                const entityType = consume().value;
+                expect('(');
+                const iri = parseIRI();
+                expect(')'); // Close EntityType
+                expect(')'); // Close Declaration
+
+                if (iri) {
+                    let type: ElementType | null = null;
+                    if (entityType === 'Class') type = ElementType.OWL_CLASS;
+                    else if (entityType === 'NamedIndividual') type = ElementType.OWL_NAMED_INDIVIDUAL;
+                    else if (entityType === 'ObjectProperty') type = ElementType.OWL_OBJECT_PROPERTY;
+                    else if (entityType === 'DataProperty') type = ElementType.OWL_DATA_PROPERTY;
+                    else if (entityType === 'Datatype') type = ElementType.OWL_DATATYPE;
+
+                    if (type) getOrCreateNodeId(iri, type);
+                }
+            }
+            else if (token.value === 'SubClassOf') {
+                // SubClassOf( sub super )
+                consume(); expect('(');
+                const sub = parseIRI();
+                const sup = parseIRI();
+                
+                // If simple inheritance
+                if (sub && sup) {
+                    const sId = getOrCreateNodeId(sub, ElementType.OWL_CLASS);
+                    const tId = getOrCreateNodeId(sup, ElementType.OWL_CLASS);
+                    edges.push({ id: `e-${Math.random()}`, source: sId, target: tId, label: 'subClassOf', type: 'smoothstep' });
+                } 
+                // If complex (Expression)
+                else if (sub) {
+                    // sub is IRI, sup is expression
+                    // We need to consume the expression
+                    const expr = consumeBalanced(); // consumes super class expression
+                    const sId = getOrCreateNodeId(sub, ElementType.OWL_CLASS);
+                    const node = nodes.find(n => n.id === sId);
+                    if (node) {
+                        node.data.methods.push({ 
+                            id: `m-${Math.random()}`, 
+                            name: 'SubClassOf', 
+                            returnType: expr.replace(/\)$/, ''), 
+                            visibility: '+' 
+                        });
+                    }
+                } else {
+                    // Complex sub and super (General Class Axiom), skip for diagram
+                    consumeBalanced();
+                }
+                
+                if (peek().type === 'CLOSE_PAREN') consume();
+            }
+            else if (token.value === 'ClassAssertion') {
+                // ClassAssertion( type individual )
+                consume(); expect('(');
+                const cls = parseIRI();
+                const ind = parseIRI();
+                expect(')');
+                
+                if (cls && ind) {
+                    const cId = getOrCreateNodeId(cls, ElementType.OWL_CLASS);
+                    const iId = getOrCreateNodeId(ind, ElementType.OWL_NAMED_INDIVIDUAL);
+                    edges.push({ id: `e-${Math.random()}`, source: iId, target: cId, label: 'rdf:type', type: 'smoothstep' });
+                }
+            }
+            else if (token.value === 'ObjectPropertyAssertion') {
+                consume(); expect('(');
+                const prop = parseIRI();
+                const sub = parseIRI();
+                const obj = parseIRI();
+                expect(')');
+
+                if (prop && sub && obj) {
+                    const sId = getOrCreateNodeId(sub, ElementType.OWL_NAMED_INDIVIDUAL);
+                    const oId = getOrCreateNodeId(obj, ElementType.OWL_NAMED_INDIVIDUAL);
+                    
+                    let label = prop;
+                    if (label.includes(':')) label = label.split(':')[1];
+                    else if (label.startsWith('<')) label = label.split(/[#/]/).pop()?.replace('>', '') || label;
+
+                    edges.push({ id: `e-${Math.random()}`, source: sId, target: oId, label: label, type: 'smoothstep' });
+                }
+            }
+            else if (token.value === 'DataPropertyAssertion') {
+                consume(); expect('(');
+                const prop = parseIRI();
+                const sub = parseIRI();
+                const lit = consume().value; // Literal value
+                // Optional type
+                if (peek().type === 'DATATYPE_SEP') {
+                    consume(); // ^^
+                    consume(); // type
+                }
+                expect(')');
+
+                if (prop && sub) {
+                    const sId = getOrCreateNodeId(sub, ElementType.OWL_NAMED_INDIVIDUAL);
+                    const node = nodes.find(n => n.id === sId);
+                    if (node) {
+                        let label = prop;
+                        if (label.includes(':')) label = label.split(':')[1];
+                        node.data.attributes.push({
+                            id: `attr-${Math.random()}`,
+                            name: `${label} = ${lit}`,
+                            type: 'Literal',
+                            visibility: '+'
+                        });
+                    }
+                }
+            }
+            else if (token.value === 'DLSafeRule') {
+                consume(); 
+                const fullRuleStr = consumeBalanced(); // Everything inside DLSafeRule(...)
+                
+                // Extract optional annotation
+                let comment = '';
+                if (fullRuleStr.includes('Annotation')) {
+                    // Primitive extraction
+                    const match = fullRuleStr.match(/"([^"]+)"/);
+                    if (match) comment = match[1];
+                }
+
+                // Convert to human readable
+                const humanExpr = convertFunctionalToHuman(fullRuleStr);
+                
+                metadata.rules = metadata.rules || [];
+                metadata.rules.push({
+                    id: `rule-${Math.random()}`,
+                    name: `Rule-${metadata.rules.length + 1}`,
+                    expression: humanExpr,
+                    comment
+                });
+            }
             else {
-                consume();
-                if (peek().value === '(') consumeBalanced();
+                // Generic Axiom Consumer (consume until balanced)
+                // e.g. DisjointClasses, EquivalentClasses, etc.
+                const axiomKeyword = consume().value;
+                if (peek().type === 'OPEN_PAREN') {
+                    expect('(');
+                    // We try to attach these to the first entity found in the axiom if possible
+                    const possibleSubject = parseIRI();
+                    const remainder = consumeBalanced(); // Consumes rest of args and closing paren
+                    
+                    // Note: consumeBalanced returns string without the final paren usually if called inside loop
+                    // But here we are at top level axiom.
+                    // Let's simplified: just attach as method if subject exists
+                    if (possibleSubject) {
+                        const sId = getOrCreateNodeId(possibleSubject, ElementType.OWL_CLASS); // Assume class context mostly
+                        const node = nodes.find(n => n.id === sId);
+                        if (node) {
+                            node.data.methods.push({
+                                id: `m-${Math.random()}`,
+                                name: axiomKeyword,
+                                returnType: remainder.replace(/\)$/, ''),
+                                visibility: '+'
+                            });
+                        }
+                    }
+                }
             }
         }
+        
+        expect(')'); // Close Ontology
     }
 
-    // Grid Layout
+    // Grid Layout for nodes
     const cols = Math.ceil(Math.sqrt(nodes.length));
+    const SPACING_X = 350;
+    const SPACING_Y = 200;
     nodes.forEach((n, idx) => {
-        n.position = { x: (idx % cols) * 320 + 50, y: Math.floor(idx / cols) * 250 + 50 };
+        n.position = { 
+            x: (idx % cols) * SPACING_X + 100, 
+            y: Math.floor(idx / cols) * SPACING_Y + 100 
+        };
     });
 
     return { nodes, edges, metadata };

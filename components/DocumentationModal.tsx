@@ -53,7 +53,7 @@ const DocumentationModal: React.FC<DocumentationModalProps> = ({ isOpen, onClose
 
   const handleFormatChange = (newFormat: 'markdown' | 'latex') => {
       setFormat(newFormat);
-      // Force 'code' view for LaTeX since we can't render it in-browser easily
+      // For LaTeX, default to 'code' view as preview isn't a rendered PDF
       if (newFormat === 'latex') {
           setViewMode('code');
       } else {
@@ -111,9 +111,8 @@ const DocumentationModal: React.FC<DocumentationModalProps> = ({ isOpen, onClose
           <div className="flex items-center bg-slate-800 p-1 rounded-lg border border-slate-700">
               <button 
                 onClick={() => setViewMode('preview')}
-                disabled={format === 'latex'}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'preview' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed'}`}
-                title={format === 'latex' ? 'Preview not available for LaTeX' : 'View Rendered'}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'preview' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+                title="View Rendered"
               >
                   <Eye size={14} /> Preview
               </button>
@@ -208,8 +207,16 @@ const DocumentationModal: React.FC<DocumentationModalProps> = ({ isOpen, onClose
             {/* Main Content */}
             <div className="flex-1 bg-slate-900 overflow-y-auto custom-scrollbar">
                 <div className="max-w-4xl mx-auto p-8">
-                    {viewMode === 'code' ? (
-                        <pre className="whitespace-pre-wrap font-mono text-xs text-slate-300 leading-relaxed bg-slate-950 p-6 rounded-lg border border-slate-800">{content}</pre>
+                    {/* Render LaTeX as source code even in 'preview' mode for now, or Markdown preview */}
+                    {viewMode === 'code' || format === 'latex' ? (
+                        <div className="relative group">
+                            {format === 'latex' && viewMode === 'preview' && (
+                                <div className="bg-amber-900/30 border border-amber-800/50 p-3 rounded mb-4 text-xs text-amber-200 flex items-center gap-2">
+                                    <Sigma size={14} /> LaTeX rendering requires an external compiler (e.g., Overleaf). Showing source code below.
+                                </div>
+                            )}
+                            <pre className="whitespace-pre-wrap font-mono text-xs text-slate-300 leading-relaxed bg-slate-950 p-6 rounded-lg border border-slate-800">{content}</pre>
+                        </div>
                     ) : (
                         <div className="prose prose-invert prose-sm max-w-none">
                             <MarkdownPreview content={content} />

@@ -198,22 +198,24 @@ export const generateTurtle = (nodes: Node<UMLNodeData>[], edges: Edge[], metada
           }
           else {
               // Cardinality
-              // Format: "1 Class"
-              const cardMatch = rest.match(/^(\d+)\s+(.*)$/);
+              // Format: "1 Class" or just "1" (Unqualified)
+              // Updated Regex to handle optional Class part
+              const cardMatch = rest.match(/^(\d+)(\s+.*)?$/);
               if (cardMatch) {
                   const num = cardMatch[1];
-                  const target = cardMatch[2].trim();
+                  const targetRaw = cardMatch[2] ? cardMatch[2].trim() : '';
+                  const isQualified = targetRaw && targetRaw !== 'owl:Thing' && targetRaw !== 'Thing';
                   
                   let pred = 'owl:cardinality';
-                  if (type === 'min') pred = target ? 'owl:minQualifiedCardinality' : 'owl:minCardinality';
-                  if (type === 'max') pred = target ? 'owl:maxQualifiedCardinality' : 'owl:maxCardinality';
-                  if (type === 'exactly') pred = target ? 'owl:qualifiedCardinality' : 'owl:cardinality';
+                  if (type === 'min') pred = isQualified ? 'owl:minQualifiedCardinality' : 'owl:minCardinality';
+                  if (type === 'max') pred = isQualified ? 'owl:maxQualifiedCardinality' : 'owl:maxCardinality';
+                  if (type === 'exactly') pred = isQualified ? 'owl:qualifiedCardinality' : 'owl:cardinality';
                   
                   add(`${bn} ${pred} "${num}"^^xsd:nonNegativeInteger .`);
                   
-                  if (target) {
-                      const onProp = target.startsWith('xsd:') ? 'owl:onDataRange' : 'owl:onClass';
-                      add(`${bn} ${onProp} ${parseManchesterExpression(target)} .`);
+                  if (isQualified) {
+                      const onProp = targetRaw.startsWith('xsd:') ? 'owl:onDataRange' : 'owl:onClass';
+                      add(`${bn} ${onProp} ${parseManchesterExpression(targetRaw)} .`);
                   }
               }
           }

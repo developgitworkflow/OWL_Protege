@@ -12,10 +12,18 @@ const translateExpression = (expr: string): string => {
     s = s.replace(/(\w+)\s+only\s+(\w+)/g, "relates via '$1' only to '$2'");
     s = s.replace(/(\w+)\s+value\s+(\w+)/g, "relates via '$1' specifically to '$2'");
     
-    // Cardinality
+    // Cardinality (Qualified & Unqualified)
+    // Regex: property min/max/exactly N Class(optional)
+    
+    // Qualified: prop min N Class
     s = s.replace(/(\w+)\s+min\s+(\d+)\s+(\w+)/g, "has at least $2 '$1' relationships to '$3'");
     s = s.replace(/(\w+)\s+max\s+(\d+)\s+(\w+)/g, "has at most $2 '$1' relationships to '$3'");
     s = s.replace(/(\w+)\s+exactly\s+(\d+)\s+(\w+)/g, "has exactly $2 '$1' relationships to '$3'");
+    
+    // Unqualified: prop min N (followed by end of string or non-word)
+    s = s.replace(/(\w+)\s+min\s+(\d+)(?!\s+\w)/g, "has at least $2 '$1' relationships");
+    s = s.replace(/(\w+)\s+max\s+(\d+)(?!\s+\w)/g, "has at most $2 '$1' relationships");
+    s = s.replace(/(\w+)\s+exactly\s+(\d+)(?!\s+\w)/g, "has exactly $2 '$1' relationships");
     
     // Logical Operators
     s = s.replace(/\band\b/g, "and");

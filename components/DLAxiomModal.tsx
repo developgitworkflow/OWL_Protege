@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { X, Sigma, BookOpen, Database, User, ArrowRightLeft, Info, Plus, Check, ListFilter, Tag, Command } from 'lucide-react';
+import { X, Sigma, BookOpen, Database, User, ArrowRightLeft, Info, Plus, Check, ListFilter, Tag, Command, Hash } from 'lucide-react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
 import { validateManchesterSyntax } from '../services/manchesterValidator';
@@ -124,14 +124,24 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
 
   // Add Axiom State
   const [isAdding, setIsAdding] = useState(false);
+  const [builderMode, setBuilderMode] = useState<'expression' | 'cardinality'>('expression');
+  
+  // Expression Builder State
   const [newSubject, setNewSubject] = useState('');
   const [newPredicate, setNewPredicate] = useState('SubClassOf');
   const [newObject, setNewObject] = useState('');
+  
+  // Cardinality Builder State
+  const [cardProp, setCardProp] = useState('');
+  const [cardType, setCardType] = useState('min');
+  const [cardValue, setCardValue] = useState('1');
+  const [cardQualification, setCardQualification] = useState('');
+
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // Intellisense State
   const [suggestions, setSuggestions] = useState<{label: string, type: string}[]>([]);
-  const [activeInput, setActiveInput] = useState<'subject' | 'object' | null>(null);
+  const [activeInput, setActiveInput] = useState<'subject' | 'object' | 'prop' | 'qual'>('subject');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const handleMouseMove = (e: React.MouseEvent, text: string) => {
@@ -163,59 +173,50 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
           }));
   };
 
-  const handleSubjectChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value;
-      setNewSubject(val);
-      if (val.length > 0) {
-          const matches = getEntitySuggestions(val);
-          setSuggestions(matches.slice(0, 8));
-          setActiveInput('subject');
-          setSelectedIndex(0);
-      } else {
-          setSuggestions([]);
-          setActiveInput(null);
-      }
-  };
-
-  const handleObjectChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value;
-      setNewObject(val);
-      setValidationError(null); // Clear error on typing
+  const handleInputChange = (val: string, field: 'subject' | 'object' | 'prop' | 'qual') => {
+      if (field === 'subject') setNewSubject(val);
+      if (field === 'object') setNewObject(val);
+      if (field === 'prop') setCardProp(val);
+      if (field === 'qual') setCardQualification(val);
       
-      // Suggest based on the last word being typed
+      setValidationError(null); // Clear error
+      setActiveInput(field);
+
       const words = val.split(/([\s()]+)/);
       const lastToken = words[words.length - 1];
-      
+
       if (lastToken && lastToken.trim().length > 0) {
           const q = lastToken.toLowerCase();
           const entityMatches = getEntitySuggestions(lastToken);
-          const keywordMatches = MANCHESTER_KEYWORDS
-              .filter(k => k.startsWith(q))
-              .map(k => ({ label: k, type: 'Keyword' }));
           
-          const allMatches = [...keywordMatches, ...entityMatches].slice(0, 8);
-          if (allMatches.length > 0) {
-              setSuggestions(allMatches);
-              setActiveInput('object');
+          let matches = entityMatches;
+          
+          if (field === 'object') {
+              const keywordMatches = MANCHESTER_KEYWORDS
+                  .filter(k => k.startsWith(q))
+                  .map(k => ({ label: k, type: 'Keyword' }));
+              matches = [...keywordMatches, ...entityMatches];
+          }
+
+          if (matches.length > 0) {
+              setSuggestions(matches.slice(0, 8));
               setSelectedIndex(0);
           } else {
               setSuggestions([]);
-              setActiveInput(null);
           }
       } else {
           setSuggestions([]);
-          setActiveInput(null);
       }
   };
 
   const applySuggestion = (suggestion: {label: string}) => {
-      if (activeInput === 'subject') {
-          setNewSubject(suggestion.label);
-      } else if (activeInput === 'object') {
+      if (activeInput === 'subject') setNewSubject(suggestion.label);
+      else if (activeInput === 'prop') setCardProp(suggestion.label);
+      else if (activeInput === 'qual') setCardQualification(suggestion.label);
+      else if (activeInput === 'object') {
           const words = newObject.split(/(\s+|[()])/);
           let i = words.length - 1;
           while (i >= 0 && !words[i]) i--; 
-          
           if (i >= 0) {
               words[i] = suggestion.label + ' '; 
               setNewObject(words.join(''));
@@ -224,7 +225,6 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
           }
       }
       setSuggestions([]);
-      setActiveInput(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -240,7 +240,6 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
               applySuggestion(suggestions[selectedIndex]);
           } else if (e.key === 'Escape') {
               setSuggestions([]);
-              setActiveInput(null);
           }
       }
   };
@@ -248,32 +247,55 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
   // --- End Intellisense ---
 
   const handleAddAxiom = () => {
-      if (!newSubject.trim() || !newObject.trim()) return;
+      let finalSubject = newSubject.trim();
+      let finalObject = '';
+      let finalPredicate = newPredicate;
+
+      if (builderMode === 'cardinality') {
+          if (!cardProp.trim() || !cardValue) {
+              setValidationError("Property and Value are required.");
+              return;
+          }
+          finalSubject = newSubject.trim(); // User still defines the subject class
+          if (!finalSubject) {
+              setValidationError("Subject Class is required.");
+              return;
+          }
+          // Construct: property min/max/exactly N Class
+          finalObject = `${cardProp} ${cardType} ${cardValue}`;
+          if (cardQualification.trim()) {
+              finalObject += ` ${cardQualification.trim()}`;
+          }
+          finalPredicate = 'SubClassOf'; // Cardinality restrictions are typically used in SubClassOf axioms
+      } else {
+          finalObject = fromDL(newObject.trim());
+      }
+
+      if (!finalSubject || !finalObject) return;
 
       // 1. Validate Syntax
-      const objectStr = fromDL(newObject);
-      const validation = validateManchesterSyntax(objectStr);
+      const validation = validateManchesterSyntax(finalObject);
       if (!validation.isValid) {
           setValidationError(validation.error);
           return;
       }
 
       // 2. Resolve or Create Subject Node
-      let subjectNode = nodes.find(n => n.data.label === newSubject);
+      let subjectNode = nodes.find(n => n.data.label === finalSubject);
       const newNodes = [...nodes];
       const newEdges = [...edges];
 
       if (!subjectNode) {
           // Infer type from relation
           let type = ElementType.OWL_CLASS;
-          if (['Type', 'SameAs', 'DifferentFrom'].includes(newPredicate)) type = ElementType.OWL_NAMED_INDIVIDUAL;
+          if (['Type', 'SameAs', 'DifferentFrom'].includes(finalPredicate)) type = ElementType.OWL_NAMED_INDIVIDUAL;
           
           subjectNode = {
               id: `node-${Date.now()}`,
               type: 'umlNode',
               position: { x: Math.random() * 400, y: Math.random() * 400 },
               data: {
-                  label: newSubject,
+                  label: finalSubject,
                   type: type,
                   attributes: [],
                   methods: []
@@ -282,33 +304,32 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
           newNodes.push(subjectNode);
       }
 
-      // 3. Process Object & Relation
-      const simpleEntity = objectStr.match(/^[a-zA-Z0-9_]+$/) && !['some','only','and','or','not'].includes(objectStr);
-      
+      // 3. Process Object & Relation (Simple edge case)
+      const simpleEntity = finalObject.match(/^[a-zA-Z0-9_]+$/) && !['some','only','and','or','not','min','max','exactly'].includes(finalObject);
       let addedAsEdge = false;
 
-      // Try to resolve object node if simple
       if (simpleEntity) {
-          let objectNode = newNodes.find(n => n.data.label === objectStr);
+          // Logic for simple edges (subClassOf A B)
+          let objectNode = newNodes.find(n => n.data.label === finalObject);
           if (!objectNode) {
               let objType = ElementType.OWL_CLASS;
-              if (newPredicate === 'Type') objType = ElementType.OWL_CLASS; 
-              else if (['SameAs', 'DifferentFrom'].includes(newPredicate)) objType = ElementType.OWL_NAMED_INDIVIDUAL;
+              if (finalPredicate === 'Type') objType = ElementType.OWL_CLASS; 
+              else if (['SameAs', 'DifferentFrom'].includes(finalPredicate)) objType = ElementType.OWL_NAMED_INDIVIDUAL;
               else if (subjectNode.data.type === ElementType.OWL_CLASS) objType = ElementType.OWL_CLASS;
 
               objectNode = {
                   id: `node-${Date.now()}-obj`,
                   type: 'umlNode',
                   position: { x: Math.random() * 400, y: Math.random() * 400 },
-                  data: { label: objectStr, type: objType, attributes: [], methods: [] }
+                  data: { label: finalObject, type: objType, attributes: [], methods: [] }
               };
               newNodes.push(objectNode);
           }
 
           let edgeLabel = '';
-          if (newPredicate === 'SubClassOf') edgeLabel = 'subClassOf';
-          else if (newPredicate === 'Type') edgeLabel = 'rdf:type';
-          else if (newPredicate === 'DisjointWith') edgeLabel = 'owl:disjointWith';
+          if (finalPredicate === 'SubClassOf') edgeLabel = 'subClassOf';
+          else if (finalPredicate === 'Type') edgeLabel = 'rdf:type';
+          else if (finalPredicate === 'DisjointWith') edgeLabel = 'owl:disjointWith';
           
           if (edgeLabel) {
               newEdges.push({
@@ -326,8 +347,8 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
           // Add as Method (Axiom)
           const newMethod = {
               id: `m-${Date.now()}`,
-              name: newPredicate,
-              returnType: objectStr,
+              name: finalPredicate,
+              returnType: finalObject,
               visibility: '+' as const
           };
           const idx = newNodes.findIndex(n => n.id === subjectNode!.id);
@@ -341,6 +362,8 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
       
       // Reset
       setNewObject('');
+      setCardProp('');
+      setCardQualification('');
       setValidationError(null);
       setIsAdding(false);
   };
@@ -465,6 +488,24 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
       }
   };
 
+  const renderSuggestionList = (field: 'subject' | 'object' | 'prop' | 'qual') => {
+      if (activeInput !== field || suggestions.length === 0) return null;
+      return (
+          <div className="absolute top-full left-0 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 mt-1 max-h-40 overflow-y-auto">
+              {suggestions.map((s, i) => (
+                  <button 
+                      key={i} 
+                      className={`w-full text-left px-2 py-1.5 text-xs flex items-center gap-2 ${i === selectedIndex ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
+                      onClick={() => applySuggestion(s)}
+                  >
+                      {getSuggestionIcon(s.type)}
+                      {s.label}
+                  </button>
+              ))}
+          </div>
+      );
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -521,9 +562,8 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                     <div className="flex justify-between items-center"><span className="font-mono text-indigo-400">∀</span> Universal (ONLY)</div>
                     <div className="flex justify-between items-center"><span className="font-mono text-indigo-400">⊑</span> Subsumption (SubClass)</div>
                     <div className="flex justify-between items-center"><span className="font-mono text-indigo-400">≡</span> Equivalence</div>
-                    <div className="flex justify-between items-center"><span className="font-mono text-indigo-400">⊥</span> Bottom (Empty)</div>
-                    <div className="flex justify-between items-center"><span className="font-mono text-indigo-400">⊤</span> Top (Thing)</div>
-                    <div className="flex justify-between items-center"><span className="font-mono text-indigo-400">⁻</span> Inverse</div>
+                    <div className="flex justify-between items-center"><span className="font-mono text-indigo-400">≥</span> Min Cardinality</div>
+                    <div className="flex justify-between items-center"><span className="font-mono text-indigo-400">≤</span> Max Cardinality</div>
                 </div>
                 
                 <div className="mt-8 p-3 bg-slate-900 border border-slate-800 rounded-lg">
@@ -543,97 +583,139 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                 {isAdding && (
                     <div className="p-4 bg-slate-800/50 border-b border-slate-700 animate-in slide-in-from-top-2">
                         <div className="flex justify-between items-center mb-3">
-                            <h3 className="text-xs font-bold text-slate-300 uppercase">Construct Axiom</h3>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => setBuilderMode('expression')} 
+                                    className={`text-[10px] px-2 py-1 rounded font-bold uppercase transition-colors ${builderMode === 'expression' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-500'}`}
+                                >
+                                    Standard
+                                </button>
+                                <button 
+                                    onClick={() => setBuilderMode('cardinality')} 
+                                    className={`text-[10px] px-2 py-1 rounded font-bold uppercase transition-colors ${builderMode === 'cardinality' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-500'}`}
+                                >
+                                    Cardinality
+                                </button>
+                            </div>
                             <button onClick={() => setIsAdding(false)} className="text-slate-500 hover:text-white"><X size={14}/></button>
                         </div>
-                        <div className="flex items-center gap-2 relative">
-                            {/* Subject Input */}
-                            <div className="relative w-1/4">
-                                <input 
-                                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder-slate-600"
-                                    placeholder="Subject (e.g. Person)"
-                                    value={newSubject}
-                                    onChange={handleSubjectChange}
-                                    onKeyDown={handleKeyDown}
-                                />
-                                {activeInput === 'subject' && suggestions.length > 0 && (
-                                    <div className="absolute top-full left-0 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 mt-1 max-h-40 overflow-y-auto">
-                                        {suggestions.map((s, i) => (
-                                            <button 
-                                                key={i} 
-                                                className={`w-full text-left px-2 py-1.5 text-xs flex items-center gap-2 ${i === selectedIndex ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
-                                                onClick={() => applySuggestion(s)}
-                                            >
-                                                {getSuggestionIcon(s.type)}
-                                                {s.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            
-                            <select 
-                                className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-blue-400 font-bold outline-none focus:border-blue-500"
-                                value={newPredicate}
-                                onChange={(e) => setNewPredicate(e.target.value)}
-                            >
-                                <option value="SubClassOf">⊑ (SubClass)</option>
-                                <option value="EquivalentTo">≡ (Equivalent)</option>
-                                <option value="DisjointWith">⊓..⊑⊥ (Disjoint)</option>
-                                <option value="Type">: (Instance Of)</option>
-                            </select>
 
-                            {/* Object Input */}
-                            <div className="flex-1 relative group">
-                                <input 
-                                    className={`w-full bg-slate-950 border rounded px-2 py-1.5 text-xs text-slate-200 outline-none font-mono placeholder-slate-600 ${validationError ? 'border-red-500 focus:border-red-600' : 'border-slate-700 focus:border-blue-500'}`}
-                                    placeholder="Expression (e.g. ∃hasChild.Person)"
-                                    value={newObject}
-                                    onChange={handleObjectChange}
-                                    onKeyDown={handleKeyDown}
-                                />
-                                
-                                {activeInput === 'object' && suggestions.length > 0 && (
-                                    <div className="absolute top-full left-0 min-w-[200px] bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 mt-1 max-h-40 overflow-y-auto">
-                                        {suggestions.map((s, i) => (
-                                            <button 
-                                                key={i} 
-                                                className={`w-full text-left px-2 py-1.5 text-xs flex items-center gap-2 ${i === selectedIndex ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
-                                                onClick={() => applySuggestion(s)}
-                                            >
-                                                {getSuggestionIcon(s.type)}
-                                                <span className="font-mono">{s.label}</span>
-                                            </button>
-                                        ))}
+                        {builderMode === 'expression' ? (
+                            <div className="flex items-center gap-2 relative">
+                                <div className="relative w-1/4">
+                                    <input 
+                                        className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder-slate-600"
+                                        placeholder="Subject (e.g. Person)"
+                                        value={newSubject}
+                                        onChange={(e) => handleInputChange(e.target.value, 'subject')}
+                                        onKeyDown={handleKeyDown}
+                                    />
+                                    {renderSuggestionList('subject')}
+                                </div>
+                                <select 
+                                    className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-blue-400 font-bold outline-none focus:border-blue-500"
+                                    value={newPredicate}
+                                    onChange={(e) => setNewPredicate(e.target.value)}
+                                >
+                                    <option value="SubClassOf">⊑ (SubClass)</option>
+                                    <option value="EquivalentTo">≡ (Equivalent)</option>
+                                    <option value="DisjointWith">⊓..⊑⊥ (Disjoint)</option>
+                                    <option value="Type">: (Instance Of)</option>
+                                </select>
+                                <div className="flex-1 relative group">
+                                    <input 
+                                        className={`w-full bg-slate-950 border rounded px-2 py-1.5 text-xs text-slate-200 outline-none font-mono placeholder-slate-600 ${validationError ? 'border-red-500 focus:border-red-600' : 'border-slate-700 focus:border-blue-500'}`}
+                                        placeholder="Expression (e.g. ∃hasChild.Person)"
+                                        value={newObject}
+                                        onChange={(e) => handleInputChange(e.target.value, 'object')}
+                                        onKeyDown={handleKeyDown}
+                                    />
+                                    {renderSuggestionList('object')}
+                                    {/* Symbol Palette */}
+                                    <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-focus-within:opacity-100 transition-opacity bg-slate-950/80 p-0.5 rounded pointer-events-none group-hover:pointer-events-auto">
+                                        <button onClick={() => insertSymbol('∃')} className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-blue-600 rounded text-[10px] text-white">∃</button>
+                                        <button onClick={() => insertSymbol('∀')} className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-blue-600 rounded text-[10px] text-white">∀</button>
+                                        <button onClick={() => insertSymbol('⊓')} className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-blue-600 rounded text-[10px] text-white">⊓</button>
+                                        <button onClick={() => insertSymbol('⊔')} className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-blue-600 rounded text-[10px] text-white">⊔</button>
+                                        <button onClick={() => insertSymbol('¬')} className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-blue-600 rounded text-[10px] text-white">¬</button>
                                     </div>
-                                )}
-
-                                {/* Symbol Palette */}
-                                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-focus-within:opacity-100 transition-opacity bg-slate-950/80 p-0.5 rounded pointer-events-none group-hover:pointer-events-auto">
-                                    <button onClick={() => insertSymbol('∃')} className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-blue-600 rounded text-[10px] text-white">∃</button>
-                                    <button onClick={() => insertSymbol('∀')} className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-blue-600 rounded text-[10px] text-white">∀</button>
-                                    <button onClick={() => insertSymbol('⊓')} className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-blue-600 rounded text-[10px] text-white">⊓</button>
-                                    <button onClick={() => insertSymbol('⊔')} className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-blue-600 rounded text-[10px] text-white">⊔</button>
-                                    <button onClick={() => insertSymbol('¬')} className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-blue-600 rounded text-[10px] text-white">¬</button>
                                 </div>
                             </div>
-
-                            <button 
-                                onClick={handleAddAxiom}
-                                className="bg-green-600 hover:bg-green-500 text-white p-1.5 rounded transition-colors"
-                                title="Add to Ontology"
-                            >
-                                <Check size={16} />
-                            </button>
-                        </div>
-                        {validationError && (
-                            <div className="mt-2 text-[10px] text-red-400 bg-red-950/20 p-1.5 rounded border border-red-900/30 flex items-center gap-2">
-                                <Info size={12} /> {validationError}
+                        ) : (
+                            <div className="flex items-center gap-2">
+                                <div className="relative w-1/5">
+                                    <input 
+                                        className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder-slate-600"
+                                        placeholder="Subject (Class)"
+                                        value={newSubject}
+                                        onChange={(e) => handleInputChange(e.target.value, 'subject')}
+                                        onKeyDown={handleKeyDown}
+                                    />
+                                    {renderSuggestionList('subject')}
+                                </div>
+                                <span className="text-slate-500 text-[10px]">has</span>
+                                <div className="relative w-1/5">
+                                    <input 
+                                        className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-blue-300 outline-none focus:border-blue-500 placeholder-slate-600"
+                                        placeholder="Property"
+                                        value={cardProp}
+                                        onChange={(e) => handleInputChange(e.target.value, 'prop')}
+                                        onKeyDown={handleKeyDown}
+                                    />
+                                    {renderSuggestionList('prop')}
+                                </div>
+                                <select 
+                                    className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-yellow-400 font-bold outline-none focus:border-blue-500"
+                                    value={cardType}
+                                    onChange={(e) => setCardType(e.target.value)}
+                                >
+                                    <option value="min">at least (≥)</option>
+                                    <option value="max">at most (≤)</option>
+                                    <option value="exactly">exactly (=)</option>
+                                </select>
+                                <input 
+                                    type="number"
+                                    className="w-12 bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500 text-center"
+                                    value={cardValue}
+                                    onChange={(e) => setCardValue(e.target.value)}
+                                    min="0"
+                                />
+                                <div className="relative flex-1">
+                                    <input 
+                                        className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder-slate-600"
+                                        placeholder="Qualification (Optional Class)"
+                                        value={cardQualification}
+                                        onChange={(e) => handleInputChange(e.target.value, 'qual')}
+                                        onKeyDown={handleKeyDown}
+                                    />
+                                    {renderSuggestionList('qual')}
+                                    {!cardQualification && (
+                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-slate-600 italic">Unqualified (Thing)</span>
+                                    )}
+                                </div>
                             </div>
                         )}
-                        <p className="text-[9px] text-slate-500 mt-2">
-                            New subjects will be created as nodes. Symbols ($\exists, \forall, etc.$) are converted to Manchester Syntax on save.
-                        </p>
+
+                        <div className="mt-2 flex justify-between items-center">
+                            <div>
+                                {validationError && (
+                                    <div className="text-[10px] text-red-400 bg-red-950/20 px-2 py-1 rounded border border-red-900/30 flex items-center gap-1">
+                                        <Info size={12} /> {validationError}
+                                    </div>
+                                )}
+                                {builderMode === 'cardinality' && !validationError && (
+                                    <div className="text-[10px] text-slate-500 flex gap-2">
+                                        <span>Preview: <span className="font-mono text-indigo-300">{newSubject} ⊑ {cardProp} {cardType === 'min' ? '≥' : (cardType === 'max' ? '≤' : '=')}{cardValue} {cardQualification || '⊤'}</span></span>
+                                    </div>
+                                )}
+                            </div>
+                            <button 
+                                onClick={handleAddAxiom}
+                                className="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1"
+                            >
+                                <Check size={14} /> Add
+                            </button>
+                        </div>
                     </div>
                 )}
 

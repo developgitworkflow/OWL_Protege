@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { UMLNodeData } from '../types';
 import { verbalizeNode } from '../services/verbalizer';
 import { BookOpen } from 'lucide-react';
@@ -9,13 +9,26 @@ interface ElementDescriptionPanelProps {
 }
 
 const ElementDescriptionPanel: React.FC<ElementDescriptionPanelProps> = ({ node }) => {
+    const [isVisible, setIsVisible] = useState(false);
     
     const content = useMemo(() => {
         if (!node) return null;
         return verbalizeNode(node);
     }, [node]);
 
-    if (!node || !content) {
+    useEffect(() => {
+        if (node) {
+            setIsVisible(true);
+            const timer = setTimeout(() => {
+                setIsVisible(false);
+            }, 5000);
+            return () => clearTimeout(timer);
+        } else {
+            setIsVisible(false);
+        }
+    }, [node]);
+
+    if (!node || !content || !isVisible) {
         return null;
     }
 

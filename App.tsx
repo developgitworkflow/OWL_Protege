@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import ReactFlow, {
   useNodesState,
@@ -617,6 +616,7 @@ function App() {
                         onDeleteEdge={handleDeleteEdge}
                         onNodeMouseEnter={onNodeMouseEnter}
                         onNodeMouseLeave={onNodeMouseLeave}
+                        onNodesChange={onNodesChange}
                     />
                 )}
 
@@ -782,10 +782,10 @@ function App() {
   );
 }
 
-export default function AppWrapper() {
-  return (
-    <ReactFlowProvider>
-      <App />
-    </ReactFlowProvider>
-  );
-}
+const AppWrapper = () => (
+  <ReactFlowProvider>
+    <App />
+  </ReactFlowProvider>
+);
+
+export default AppWrapper;

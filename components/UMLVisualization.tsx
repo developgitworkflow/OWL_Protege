@@ -13,7 +13,9 @@ import ReactFlow, {
   ReactFlowProvider,
   useReactFlow,
   Panel,
-  Position
+  Position,
+  NodeChange,
+  applyNodeChanges
 } from 'reactflow';
 import dagre from 'dagre';
 import { UMLNodeData, ElementType } from '../types';
@@ -28,6 +30,7 @@ interface UMLVisualizationProps {
     onDeleteEdge?: (id: string) => void;
     onNodeMouseEnter?: (event: React.MouseEvent, node: Node) => void;
     onNodeMouseLeave?: (event: React.MouseEvent, node: Node) => void;
+    onNodesChange?: (changes: NodeChange[]) => void;
 }
 
 const nodeTypes = {
@@ -70,16 +73,15 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => 
   return { nodes: layoutedNodes, edges };
 };
 
-const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, onNavigate, onDeleteEdge, onNodeMouseEnter, onNodeMouseLeave }) => {
+const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, onNavigate, onDeleteEdge, onNodeMouseEnter, onNodeMouseLeave, onNodesChange: onNodesChangeProp }) => {
     const { fitView } = useReactFlow();
-    const [layoutNodes, setLayoutNodes, onNodesChange] = useNodesState([]);
+    const [layoutNodes, setLayoutNodes, onNodesChangeInternal] = useNodesState([]);
     const [layoutEdges, setLayoutEdges, onEdgesChange] = useEdgesState([]);
     const [isAutoLayout, setIsAutoLayout] = useState(true);
 
-    // Transform and Layout
-    useEffect(() => {
-        // 1. Transform Nodes to Professional Type and Inject Relations
-        const transformedNodes = nodes.map(n => {
+    // Transform logic extracted to reuse
+    const getTransformedNodes = useCallback(() => {
+        return nodes.map(n => {
             // Find outgoing edges for this node
             const outgoing = edges.filter(e => e.source === n.id).map(e => {
                 const targetNode = nodes.find(tn => tn.id === e.target);
@@ -104,7 +106,7 @@ const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, 
                 data: { 
                     ...n.data, 
                     isSearchMatch: searchTerm ? n.data.label.toLowerCase().includes(searchTerm.toLowerCase()) : false,
-                    relations: outgoing, // Inject relations here
+                    relations: outgoing, 
                     onRelationClick: (edgeId: string) => {
                         if (onNavigate) onNavigate('uml', edgeId);
                     },
@@ -114,6 +116,11 @@ const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, 
                 }
             };
         });
+    }, [nodes, edges, searchTerm, onNavigate, onDeleteEdge]);
+
+    // Transform and Layout Effect
+    useEffect(() => {
+        const transformedNodes = getTransformedNodes();
 
         // 2. Transform Edges to Professional Style with Custom Markers
         const transformedEdges = edges.map(e => {
@@ -143,15 +150,17 @@ const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, 
             const { nodes: lNodes, edges: lEdges } = getLayoutedElements(transformedNodes, transformedEdges);
             setLayoutNodes(lNodes);
             setLayoutEdges(lEdges);
-            // Fit view after a brief delay
-            setTimeout(() => fitView({ padding: 0.2 }), 50);
+            // Fit view after a brief delay only on initial layout or meaningful change
+            // We avoid fitting view constantly if user is just panning, but here dependencies include nodes/edges structure
+            // Using a debounce or check if structure changed might be better, but simple timeout is okay for this scope.
         } else {
-            // Use existing positions from the source nodes
+            // When auto-layout is off, we trust the incoming nodes' positions (which should be synced via onNodesChange)
+            // But we must apply the 'professional' data transformation
             setLayoutNodes(transformedNodes);
             setLayoutEdges(transformedEdges);
         }
 
-    }, [nodes, edges, searchTerm, fitView, setLayoutNodes, setLayoutEdges, onNavigate, onDeleteEdge, isAutoLayout]);
+    }, [nodes, edges, isAutoLayout, setLayoutNodes, setLayoutEdges, getTransformedNodes]);
 
     const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
         if (onNavigate) {
@@ -159,11 +168,39 @@ const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, 
         }
     }, [onNavigate]);
 
+    const handleToggleLayout = () => {
+        if (isAutoLayout) {
+            // Switching FROM Auto TO Manual
+            // We need to sync the current Auto-calculated positions back to the parent
+            // so they don't snap back to (0,0) or old positions.
+            if (onNodesChangeProp) {
+                const changes: NodeChange[] = layoutNodes.map(n => ({
+                    id: n.id,
+                    type: 'position',
+                    position: n.position,
+                    dragging: false,
+                }));
+                onNodesChangeProp(changes);
+            }
+        }
+        setIsAutoLayout(!isAutoLayout);
+    };
+
+    // Wrapper for node changes to support manual dragging
+    const handleNodesChange = useCallback((changes: NodeChange[]) => {
+        onNodesChangeInternal(changes); // Update local view immediately
+        
+        // Propagate to parent if manual mode
+        if (!isAutoLayout && onNodesChangeProp) {
+            onNodesChangeProp(changes);
+        }
+    }, [isAutoLayout, onNodesChangeProp, onNodesChangeInternal]);
+
     return (
         <ReactFlow
             nodes={layoutNodes}
             edges={layoutEdges}
-            onNodesChange={onNodesChange}
+            onNodesChange={handleNodesChange}
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
             onNodeClick={handleNodeClick}
@@ -171,9 +208,9 @@ const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, 
             onNodeMouseLeave={onNodeMouseLeave}
             connectionMode={ConnectionMode.Loose}
             minZoom={0.1}
-            nodesDraggable={true}
+            nodesDraggable={!isAutoLayout} // Only allow dragging when auto-layout is off
             nodesConnectable={false}
-            fitView
+            fitView={isAutoLayout} // Only auto-fit when auto-layout is on initially
             className="bg-slate-950"
         >
             {/* Custom SVG Definitions for UML Arrows */}
@@ -205,9 +242,9 @@ const UMLCanvas: React.FC<UMLVisualizationProps> = ({ nodes, edges, searchTerm, 
             <Panel position="top-right" className="flex gap-2">
                 <div className="bg-slate-900/90 backdrop-blur border border-slate-700 p-2 rounded-lg shadow-xl text-xs text-slate-400 flex items-center gap-4">
                     <button 
-                        onClick={() => setIsAutoLayout(!isAutoLayout)}
+                        onClick={handleToggleLayout}
                         className={`flex items-center gap-2 transition-colors ${isAutoLayout ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
-                        title="Toggle Automatic Layout"
+                        title="Toggle Automatic Layout. Turn off to manually place nodes."
                     >
                         <Layout size={14} />
                         <span className="font-bold">Auto-Layout</span>

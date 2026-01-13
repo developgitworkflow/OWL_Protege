@@ -33,8 +33,28 @@ const ProfessionalNode = ({ data, selected }: NodeProps<ExtendedNodeData>) => {
   const config = getTypeConfig();
   const Icon = config.icon;
 
+  // Construct a rich tooltip string including description and annotations
+  const getTooltipContent = () => {
+      let tooltip = `${data.label} (${config.label})\n`;
+      if (data.iri) tooltip += `IRI: ${data.iri}\n`;
+      if (data.description) tooltip += `\n${data.description}\n`;
+      
+      if (data.annotations && data.annotations.length > 0) {
+          tooltip += '\nAnnotations:\n';
+          data.annotations.forEach(ann => {
+              // Skip comment if same as description
+              if (ann.property === 'rdfs:comment' && ann.value.replace(/"/g, '') === data.description) return;
+              tooltip += `• ${ann.property}: ${ann.value.replace(/"/g, '')}\n`;
+          });
+      }
+      return tooltip.trim();
+  };
+
   return (
-    <div className={`relative w-[280px] rounded-xl border bg-slate-900/90 backdrop-blur-xl transition-all duration-300 shadow-2xl ${selected ? 'border-white ring-1 ring-white/50 scale-105 z-50' : 'border-slate-700 hover:border-slate-600'}`}>
+    <div 
+        className={`relative w-[280px] rounded-xl border bg-slate-900/90 backdrop-blur-xl transition-all duration-300 shadow-2xl ${selected ? 'border-white ring-1 ring-white/50 scale-105 z-50' : 'border-slate-700 hover:border-slate-600'}`}
+        title={getTooltipContent()}
+    >
       
       {/* Invisible Handles for Layout */}
       <Handle type="target" position={Position.Top} className="opacity-0" />

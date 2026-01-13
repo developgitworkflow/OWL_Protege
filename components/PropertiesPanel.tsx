@@ -253,9 +253,9 @@ const AxiomInput: React.FC<AxiomInputProps> = ({ value, onChange, placeholder, a
                     onChange={handleInput}
                     onKeyDown={handleKeyDown}
                     placeholder={placeholder}
-                    rows={1}
-                    className={`w-full bg-slate-950 border rounded px-2 py-2 text-[11px] text-slate-300 font-mono focus:outline-none focus:ring-1 resize-none overflow-hidden min-h-[32px] ${!validation.isValid && value ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-800 focus:border-blue-500/50 focus:ring-blue-500/20'}`}
-                    style={{ height: Math.max(32, value.split('\n').length * 18) + 'px' }}
+                    rows={2}
+                    className={`w-full bg-slate-950 border rounded px-3 py-2 text-xs text-slate-300 font-mono focus:outline-none focus:ring-1 resize-none overflow-hidden min-h-[50px] ${!validation.isValid && value ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-800 focus:border-blue-500/50 focus:ring-blue-500/20'}`}
+                    style={{ height: Math.max(50, value.split('\n').length * 20) + 'px' }}
                 />
                 
                 {/* Validation Icon */}

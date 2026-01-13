@@ -771,6 +771,7 @@ function App() {
             nodes={nodes}
             edges={edges}
             projectData={projectData}
+            onNavigate={handleNavigate}
         />
         
         <ConfirmDialog 

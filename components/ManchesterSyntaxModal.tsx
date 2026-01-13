@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { X, Copy, Download, Database, User, ArrowRightLeft, Tag, FileType, Box, Circle, Filter, Eye, EyeOff } from 'lucide-react';
+import { X, Copy, Download, Database, User, ArrowRightLeft, Tag, FileType, Box, Circle, Filter, Eye, EyeOff, Layers, List, Network, FolderTree } from 'lucide-react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ProjectData, ElementType } from '../types';
 import { generateManchesterSyntax } from '../services/manchesterSyntaxGenerator';
@@ -11,13 +11,14 @@ interface ManchesterSyntaxModalProps {
   nodes: Node<UMLNodeData>[];
   edges: Edge[];
   projectData: ProjectData;
+  onNavigate: (view: string, id: string) => void;
 }
 
 const MANCHESTER_KEYWORDS = [
     'some', 'only', 'value', 'min', 'max', 'exactly', 'that', 'not', 'and', 'or', 'self'
 ];
 
-const ManchesterSyntaxModal: React.FC<ManchesterSyntaxModalProps> = ({ isOpen, onClose, nodes, edges, projectData }) => {
+const ManchesterSyntaxModal: React.FC<ManchesterSyntaxModalProps> = ({ isOpen, onClose, nodes, edges, projectData, onNavigate }) => {
   const [copied, setCopied] = useState(false);
   
   // Filter States
@@ -101,12 +102,49 @@ const ManchesterSyntaxModal: React.FC<ManchesterSyntaxModalProps> = ({ isOpen, o
       const hasContent = equivalent.length > 0 || subClass.length > 0 || disjoint.length > 0 || general.length > 0 || parentEdges.length > 0 || (data.attributes && data.attributes.length > 0);
 
       return (
-          <div className="bg-[#1e293b] border border-slate-700 rounded-lg overflow-hidden shadow-sm mb-6">
+          <div className="bg-[#1e293b] border border-slate-700 rounded-lg overflow-hidden shadow-sm mb-6 group/frame">
               {/* Entity Header */}
               <div className="bg-[#334155] px-4 py-2 flex items-center gap-3 border-b border-slate-600">
                   {getIcon(data.type)}
                   <span className="font-bold text-slate-100 text-lg">{data.label}</span>
-                  <span className="text-slate-400 text-xs font-mono ml-auto opacity-70">{data.iri || data.label}</span>
+                  
+                  <div className="ml-auto flex items-center gap-4">
+                      <span className="text-slate-400 text-xs font-mono opacity-50 hidden sm:block truncate max-w-[200px]">
+                          {data.iri || data.label}
+                      </span>
+                      
+                      {/* Navigation Actions */}
+                      <div className="flex items-center gap-1 opacity-0 group-hover/frame:opacity-100 transition-opacity bg-slate-800 rounded-lg border border-slate-700 p-0.5 shadow-lg">
+                          <button 
+                              onClick={(e) => { e.stopPropagation(); onNavigate('design', node.id); onClose(); }} 
+                              className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-slate-700 rounded transition-colors"
+                              title="View in Graph"
+                          >
+                              <Layers size={14} />
+                          </button>
+                          <button 
+                              onClick={(e) => { e.stopPropagation(); onNavigate('entities', node.id); onClose(); }} 
+                              className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-slate-700 rounded transition-colors"
+                              title="View in Catalog"
+                          >
+                              <List size={14} />
+                          </button>
+                          <button 
+                              onClick={(e) => { e.stopPropagation(); onNavigate('owlviz', node.id); onClose(); }} 
+                              className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-slate-700 rounded transition-colors"
+                              title="View Hierarchy"
+                          >
+                              <Network size={14} />
+                          </button>
+                          <button 
+                              onClick={(e) => { e.stopPropagation(); onNavigate('tree', node.id); onClose(); }} 
+                              className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-slate-700 rounded transition-colors"
+                              title="View in Tree"
+                          >
+                              <FolderTree size={14} />
+                          </button>
+                      </div>
+                  </div>
               </div>
 
               {/* Content Body */}

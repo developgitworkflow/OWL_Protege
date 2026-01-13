@@ -152,21 +152,24 @@ function App() {
     setSelectedEdgeId(null);
   }, []);
 
+  // --- Drag & Drop Handlers ---
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
-    event.dataTransfer.dropEffect = 'copy';
+    event.dataTransfer.dropEffect = 'move';
   }, []);
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
 
+      // 1. Handle File Drops (Import)
       if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
           const file = event.dataTransfer.files[0];
           handleImportFile(file);
           return;
       }
 
+      // 2. Handle Sidebar Item Drops
       const type = event.dataTransfer.getData('application/reactflow');
       const elementType = event.dataTransfer.getData('application/elementType') as ElementType;
 

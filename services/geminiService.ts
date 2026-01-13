@@ -247,9 +247,14 @@ export const suggestSWRLRules = async (ontologyContext: string): Promise<{ label
         }
       }
     });
+    
     const text = response.text;
-    if (!text) return [];
-    return JSON.parse(text);
+    if (!text || !text.trim()) return [];
+    
+    // Attempt to clean markdown if present (though responseMimeType usually handles it)
+    const cleanText = text.replace(/```json\n?|\n?```/g, '').trim();
+    
+    return JSON.parse(cleanText);
   } catch (error) {
     console.error("Error suggesting SWRL:", error);
     return [];

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Database, User, FileType, ArrowRightLeft, Tag, Info } from 'lucide-react';
+import { Database, User, FileType, ArrowRightLeft, Tag, Info, GripVertical } from 'lucide-react';
 import { ElementType, UMLNodeData } from '../types';
 import { Node } from 'reactflow';
 
@@ -10,18 +10,34 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ selectedNode }) => {
   const onDragStart = (event: React.DragEvent, nodeType: string, elementType: ElementType) => {
+    // Set data for the drop event
     event.dataTransfer.setData('application/reactflow', nodeType);
     event.dataTransfer.setData('application/elementType', elementType);
     event.dataTransfer.effectAllowed = 'move';
+    
+    // Visual feedback
+    if (event.currentTarget instanceof HTMLElement) {
+        event.currentTarget.style.opacity = '0.5';
+    }
+  };
+
+  const onDragEnd = (event: React.DragEvent) => {
+      if (event.currentTarget instanceof HTMLElement) {
+          event.currentTarget.style.opacity = '1';
+      }
   };
 
   const ToolboxItem = ({ type, label, icon: Icon, color, desc }: { type: ElementType, label: string, icon: any, color: string, desc: string }) => (
       <div className="relative group">
         <div 
-            className="flex items-center p-3 bg-slate-900 border border-slate-800 rounded-lg cursor-grab hover:bg-slate-800 hover:border-slate-700 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+            className="flex items-center p-3 bg-slate-900 border border-slate-800 rounded-lg cursor-grab active:cursor-grabbing hover:bg-slate-800 hover:border-slate-700 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 select-none"
             onDragStart={(event) => onDragStart(event, 'umlNode', type)}
+            onDragEnd={onDragEnd}
             draggable
         >
+            <div className="mr-2 text-slate-600">
+                <GripVertical size={14} />
+            </div>
             <div className={`p-2 rounded-md bg-slate-950 ${color.replace('text-', 'text-opacity-80 text-')}`}>
                 <Icon className={`w-5 h-5 ${color}`} />
             </div>
@@ -43,7 +59,6 @@ const Sidebar: React.FC<SidebarProps> = ({ selectedNode }) => {
   const getSelectionIcon = (type: ElementType) => {
       switch(type) {
           case ElementType.OWL_CLASS: return <Database size={16} className="text-purple-400" />;
-          // Updated Individual Color
           case ElementType.OWL_NAMED_INDIVIDUAL: return <User size={16} className="text-teal-400" />;
           case ElementType.OWL_OBJECT_PROPERTY: return <ArrowRightLeft size={16} className="text-blue-400" />;
           case ElementType.OWL_DATA_PROPERTY: return <Tag size={16} className="text-green-400" />;
@@ -53,7 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({ selectedNode }) => {
   };
 
   return (
-    <aside className="w-64 bg-slate-950 border-r border-slate-800 flex flex-col h-full z-10 shadow-xl text-slate-200">
+    <aside className="w-64 bg-slate-950 border-r border-slate-800 flex flex-col h-full z-10 shadow-xl text-slate-200 shrink-0">
       <div className="p-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm">
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
             Toolbox
@@ -90,7 +105,6 @@ const Sidebar: React.FC<SidebarProps> = ({ selectedNode }) => {
                 desc="A relationship between an individual and a literal value." 
             />
 
-            {/* Updated Individual Color */}
             <ToolboxItem 
                 type={ElementType.OWL_NAMED_INDIVIDUAL} 
                 label="Individual" 

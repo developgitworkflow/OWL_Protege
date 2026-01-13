@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
-import { X, Play, Code, Database, Table, Download, FileJson, FileSpreadsheet, Sparkles, BookOpen, Layers, List } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { X, Play, Code, Database, Table, FileJson, FileSpreadsheet, BookOpen, Layers, List, Tag, ArrowRight, User } from 'lucide-react';
 import { Node, Edge } from 'reactflow';
-import { UMLNodeData } from '../types';
+import { UMLNodeData, ElementType } from '../types';
 import { executeSparql, SPARQL_TEMPLATES, SparqlResult } from '../services/sparqlService';
 
 interface SPARQLModalProps {
@@ -13,11 +13,44 @@ interface SPARQLModalProps {
   onNavigate?: (view: string, id: string) => void;
 }
 
+// Prefixes for display shortening
+const DISPLAY_PREFIXES: Record<string, string> = {
+    'http://www.w3.org/1999/02/22-rdf-syntax-ns#': 'rdf:',
+    'http://www.w3.org/2000/01/rdf-schema#': 'rdfs:',
+    'http://www.w3.org/2002/07/owl#': 'owl:',
+    'http://www.w3.org/2001/XMLSchema#': 'xsd:',
+    'http://example.org/ontology#': ':', // Default
+};
+
+const formatIRI = (iri: string) => {
+    if (!iri) return '';
+    for (const [ns, pfx] of Object.entries(DISPLAY_PREFIXES)) {
+        if (iri.startsWith(ns)) {
+            return iri.replace(ns, pfx);
+        }
+    }
+    // Fallback for generic http
+    if (iri.startsWith('http://')) {
+        const parts = iri.split(/[#/]/);
+        return `...${parts[parts.length - 1]}`;
+    }
+    return iri;
+};
+
 const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges, onNavigate }) => {
   const [query, setQuery] = useState(SPARQL_TEMPLATES[0].query);
   const [result, setResult] = useState<SparqlResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'editor' | 'results'>('editor');
+  const [sidebarMode, setSidebarMode] = useState<'templates' | 'schema'>('templates');
+  const backdropRef = useRef<HTMLDivElement>(null);
+
+  const schemaItems = useMemo(() => {
+      const classes = nodes.filter(n => n.data.type === ElementType.OWL_CLASS);
+      const props = nodes.filter(n => n.data.type === ElementType.OWL_OBJECT_PROPERTY || n.data.type === ElementType.OWL_DATA_PROPERTY);
+      const indivs = nodes.filter(n => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL);
+      return { classes, props, indivs };
+  }, [nodes]);
 
   const handleRun = () => {
       try {
@@ -31,9 +64,74 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
       }
   };
 
-  const handleTemplateClick = (tQuery: string) => {
-      setQuery(tQuery);
-      setError(null);
+  const insertText = (text: string) => {
+      setQuery(prev => prev + ' ' + text);
+  };
+
+  const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+      if (backdropRef.current) {
+          backdropRef.current.scrollTop = e.currentTarget.scrollTop;
+          backdropRef.current.scrollLeft = e.currentTarget.scrollLeft;
+      }
+  };
+
+  const renderHighlightedQuery = () => {
+      // Basic highlighting regex
+      const parts = query.split(/(\b(?:SELECT|WHERE|PREFIX|LIMIT|FILTER|OPTIONAL|UNION|DISTINCT)\b|[?][a-zA-Z0-9_]+|[<][^>]+[>]|[:][a-zA-Z0-9_]+)/g);
+      
+      return parts.map((part, i) => {
+          if (['SELECT', 'WHERE', 'PREFIX', 'LIMIT', 'FILTER', 'OPTIONAL', 'UNION', 'DISTINCT'].includes(part)) {
+              return <span key={i} className="text-purple-400 font-bold">{part}</span>;
+          }
+          if (part.startsWith('?')) {
+              return <span key={i} className="text-amber-400">{part}</span>;
+          }
+          if (part.startsWith('<') || part.includes(':')) {
+              return <span key={i} className="text-blue-300">{part}</span>;
+          }
+          return <span key={i} className="text-slate-300">{part}</span>;
+      });
+  };
+
+  const renderCell = (value: string) => {
+    if (!value) return <span className="text-slate-600 italic">null</span>;
+    
+    // Format IRI for display
+    const displayValue = formatIRI(value);
+    
+    // Attempt to find node by matching IRI or Label
+    // Note: executeSparql returns IRIs.
+    const node = nodes.find(n => 
+        (n.data.iri && n.data.iri === value) || 
+        n.data.label === value || 
+        value.endsWith(n.data.label)
+    );
+
+    if (node && onNavigate) {
+        return (
+            <div className="flex items-center justify-between group/cell gap-2">
+                <span className="font-mono text-blue-300 truncate" title={value}>{displayValue}</span>
+                <div className="flex gap-1 opacity-0 group-hover/cell:opacity-100 transition-opacity bg-slate-800 rounded p-0.5 border border-slate-700 shadow-lg z-10 shrink-0">
+                    <button 
+                        onClick={() => { onNavigate('design', node.id); onClose(); }}
+                        className="p-1 hover:bg-indigo-500/20 hover:text-indigo-400 rounded transition-colors"
+                        title="View in Graph"
+                    >
+                        <Layers size={12} />
+                    </button>
+                    <button 
+                        onClick={() => { onNavigate('entities', node.id); onClose(); }}
+                        className="p-1 hover:bg-blue-500/20 hover:text-blue-400 rounded transition-colors"
+                        title="View in Catalog"
+                    >
+                        <List size={12} />
+                    </button>
+                </div>
+            </div>
+        );
+    }
+    
+    return <span className="text-slate-300 truncate font-mono" title={value}>{displayValue}</span>;
   };
 
   const downloadJSON = () => {
@@ -59,47 +157,6 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
       a.click();
   };
 
-  const renderCell = (value: string) => {
-    if (!value) return <span className="text-slate-600 italic">null</span>;
-    
-    // Attempt to find node
-    // Remove <> if present
-    const cleanVal = value.startsWith('<') && value.endsWith('>') ? value.slice(1, -1) : value;
-    
-    const node = nodes.find(n => 
-        n.id === cleanVal || 
-        n.data.label === cleanVal || 
-        n.data.iri === cleanVal ||
-        (n.data.label && cleanVal.includes(n.data.label)) // Loose match for prefixed like ex:Person
-    );
-
-    if (node && onNavigate) {
-        return (
-            <div className="flex items-center justify-between group/cell">
-                <span className="font-medium text-blue-200">{value}</span>
-                <div className="flex gap-1 opacity-0 group-hover/cell:opacity-100 transition-opacity bg-slate-800 rounded p-0.5 border border-slate-700 absolute right-2 top-1/2 -translate-y-1/2 shadow-lg z-10">
-                    <button 
-                        onClick={() => { onNavigate('design', node.id); onClose(); }}
-                        className="p-1 hover:bg-indigo-500/20 hover:text-indigo-400 rounded transition-colors"
-                        title="View in Graph"
-                    >
-                        <Layers size={12} />
-                    </button>
-                    <button 
-                        onClick={() => { onNavigate('entities', node.id); onClose(); }}
-                        className="p-1 hover:bg-blue-500/20 hover:text-blue-400 rounded transition-colors"
-                        title="View in Catalog"
-                    >
-                        <List size={12} />
-                    </button>
-                </div>
-            </div>
-        );
-    }
-    
-    return value;
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -119,7 +176,7 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
              </div>
              <div>
                 <h2 className="text-lg font-bold text-slate-100">SPARQL Endpoint</h2>
-                <p className="text-xs text-slate-400">Query your ontology using standard patterns</p>
+                <p className="text-xs text-slate-400">Execute graph pattern queries against the active ontology</p>
              </div>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-300 hover:bg-slate-800 p-2 rounded-full transition-all">
@@ -129,24 +186,78 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
 
         <div className="flex flex-1 overflow-hidden">
             
-            {/* Sidebar: Templates */}
+            {/* Sidebar */}
             <div className="w-64 bg-slate-950/50 border-r border-slate-800 flex flex-col">
-                <div className="p-4 border-b border-slate-800">
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                        <BookOpen size={14} /> Templates
-                    </h3>
+                <div className="flex border-b border-slate-800">
+                    <button 
+                        onClick={() => setSidebarMode('templates')}
+                        className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${sidebarMode === 'templates' ? 'text-pink-400 border-b-2 border-pink-500 bg-slate-800/30' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        Templates
+                    </button>
+                    <button 
+                        onClick={() => setSidebarMode('schema')}
+                        className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${sidebarMode === 'schema' ? 'text-blue-400 border-b-2 border-blue-500 bg-slate-800/30' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        Schema
+                    </button>
                 </div>
+
                 <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                    {SPARQL_TEMPLATES.map((tpl, i) => (
-                        <button
-                            key={i}
-                            onClick={() => handleTemplateClick(tpl.query)}
-                            className="w-full text-left p-3 rounded-lg hover:bg-slate-800 transition-colors group border border-transparent hover:border-slate-700"
-                        >
-                            <div className="text-sm font-bold text-slate-300 group-hover:text-blue-300 mb-1">{tpl.label}</div>
-                            <div className="text-[10px] text-slate-500 leading-snug">{tpl.desc}</div>
-                        </button>
-                    ))}
+                    {sidebarMode === 'templates' ? (
+                        SPARQL_TEMPLATES.map((tpl, i) => (
+                            <button
+                                key={i}
+                                onClick={() => { setQuery(tpl.query); setError(null); }}
+                                className="w-full text-left p-3 rounded-lg hover:bg-slate-800 transition-colors group border border-transparent hover:border-slate-700"
+                            >
+                                <div className="text-sm font-bold text-slate-300 group-hover:text-blue-300 mb-1">{tpl.label}</div>
+                                <div className="text-[10px] text-slate-500 leading-snug">{tpl.desc}</div>
+                            </button>
+                        ))
+                    ) : (
+                        <div className="space-y-4 p-2">
+                            {schemaItems.classes.length > 0 && (
+                                <div>
+                                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Layers size={10}/> Classes</h4>
+                                    <div className="space-y-1">
+                                        {schemaItems.classes.map(c => (
+                                            <button key={c.id} onClick={() => insertText(`:${c.data.label}`)} className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-slate-800 text-xs text-purple-300 hover:text-white transition-colors">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
+                                                {c.data.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {schemaItems.props.length > 0 && (
+                                <div>
+                                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Tag size={10}/> Properties</h4>
+                                    <div className="space-y-1">
+                                        {schemaItems.props.map(p => (
+                                            <button key={p.id} onClick={() => insertText(`:${p.data.label}`)} className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-slate-800 text-xs text-blue-300 hover:text-white transition-colors">
+                                                <div className="w-1.5 h-1.5 rounded-sm bg-blue-500"></div>
+                                                {p.data.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {schemaItems.indivs.length > 0 && (
+                                <div>
+                                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1"><User size={10}/> Individuals</h4>
+                                    <div className="space-y-1">
+                                        {schemaItems.indivs.map(i => (
+                                            <button key={i.id} onClick={() => insertText(`:${i.data.label}`)} className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-slate-800 text-xs text-teal-300 hover:text-white transition-colors">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-teal-500"></div>
+                                                {i.data.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -182,16 +293,30 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
 
                 <div className="flex-1 overflow-hidden relative">
                     {activeTab === 'editor' && (
-                        <div className="h-full flex flex-col">
-                            <textarea 
-                                className="flex-1 w-full bg-slate-950 p-6 font-mono text-sm text-slate-200 outline-none resize-none leading-relaxed"
-                                value={query}
-                                onChange={(e) => setQuery(e.target.value)}
-                                spellCheck={false}
-                                placeholder="SELECT * WHERE { ?s ?p ?o }"
-                            />
+                        <div className="h-full flex flex-col relative">
+                            {/* Editor with Backdrop for Highlight */}
+                            <div className="flex-1 relative font-mono text-sm">
+                                {/* Backdrop */}
+                                <div 
+                                    ref={backdropRef}
+                                    className="absolute inset-0 p-6 whitespace-pre-wrap break-words pointer-events-none overflow-hidden leading-relaxed text-transparent bg-slate-950 z-0"
+                                    aria-hidden="true"
+                                >
+                                    {renderHighlightedQuery()}
+                                </div>
+                                {/* Input */}
+                                <textarea 
+                                    className="absolute inset-0 w-full h-full bg-transparent p-6 text-transparent caret-white outline-none resize-none leading-relaxed z-10"
+                                    value={query}
+                                    onChange={(e) => setQuery(e.target.value)}
+                                    onScroll={handleScroll}
+                                    spellCheck={false}
+                                    autoCapitalize="off"
+                                />
+                            </div>
+                            
                             {error && (
-                                <div className="absolute bottom-0 left-0 right-0 bg-red-900/90 border-t border-red-700 p-4 text-red-100 text-sm font-mono flex items-center gap-3">
+                                <div className="absolute bottom-0 left-0 right-0 bg-red-900/90 border-t border-red-700 p-4 text-red-100 text-sm font-mono flex items-center gap-3 z-20">
                                     <div className="p-1 bg-red-800 rounded"><X size={14}/></div>
                                     {error}
                                 </div>
@@ -202,11 +327,11 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
                     {activeTab === 'results' && result && (
                         <div className="h-full flex flex-col">
                             <div className="flex-1 overflow-auto bg-slate-950 p-6">
-                                <table className="w-full text-left border-collapse">
+                                <table className="w-full text-left border-collapse table-fixed">
                                     <thead>
                                         <tr>
                                             {result.columns.map(col => (
-                                                <th key={col} className="p-3 border-b border-slate-800 bg-slate-900/50 text-xs font-bold text-slate-400 uppercase tracking-wider sticky top-0">
+                                                <th key={col} className="p-3 border-b border-slate-800 bg-slate-900/50 text-xs font-bold text-slate-400 uppercase tracking-wider sticky top-0 text-left">
                                                     ?{col}
                                                 </th>
                                             ))}
@@ -216,7 +341,7 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
                                         {result.rows.map((row, i) => (
                                             <tr key={i} className="hover:bg-slate-800/30 transition-colors">
                                                 {result.columns.map(col => (
-                                                    <td key={col} className="p-3 text-slate-300 relative group/cell">
+                                                    <td key={col} className="p-3 text-slate-300 truncate relative group/cell">
                                                         {renderCell(row[col] || '')}
                                                     </td>
                                                 ))}

@@ -14,128 +14,200 @@ export interface SparqlResult {
     executionTime: number;
 }
 
-// 1. Convert Graph to Triples
-export const graphToTriples = (nodes: Node<UMLNodeData>[], edges: Edge[]): { triples: Triple[], labelMap: Record<string, string> } => {
-    const triples: Triple[] = [];
-    const labelMap: Record<string, string> = {};
+const STANDARD_PREFIXES: Record<string, string> = {
+    'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+    'rdfs': 'http://www.w3.org/2000/01/rdf-schema#',
+    'owl': 'http://www.w3.org/2002/07/owl#',
+    'xsd': 'http://www.w3.org/2001/XMLSchema#'
+};
 
-    // Helper to store labels for display
-    const register = (id: string, label: string) => {
-        labelMap[id] = label;
-        // Also map the label to itself for literals/IRIs
-        labelMap[label] = label;
+// Helper: Normalize to full IRI if possible
+const resolveIRI = (val: string, prefixes: Record<string, string>): string => {
+    if (!val) return '';
+    const clean = val.trim();
+    if (clean.startsWith('<') && clean.endsWith('>')) return clean.slice(1, -1);
+    
+    const parts = clean.split(':');
+    if (parts.length === 2) {
+        const p = parts[0];
+        const local = parts[1];
+        if (prefixes[p]) return prefixes[p] + local;
+    }
+    return clean;
+};
+
+// 1. Convert Graph to Triples (IRI-centric)
+export const graphToTriples = (nodes: Node<UMLNodeData>[], edges: Edge[], defaultBaseIRI = 'http://example.org/ontology#'): { triples: Triple[], labelMap: Record<string, string> } => {
+    const triples: Triple[] = [];
+    const labelMap: Record<string, string> = {}; // IRI -> Label
+
+    // Helper to get Node IRI
+    const getNodeIRI = (n: Node<UMLNodeData>) => {
+        if (n.data.iri) return n.data.iri;
+        // Generate a local IRI based on label if missing
+        return `${defaultBaseIRI}${n.data.label.replace(/\s+/g, '_')}`;
     };
 
-    // Nodes -> Type Triples
-    nodes.forEach(n => {
-        const id = n.id;
-        const label = n.data.label;
-        const iri = n.data.iri || `:${label}`;
-        register(id, label);
-        register(iri, label);
+    // Helper to register label
+    const register = (iri: string, label: string) => {
+        labelMap[iri] = label;
+        // Also map ID for internal navigation references
+        labelMap[label] = label; 
+    };
 
+    const nodeIdToIRI = new Map<string, string>();
+
+    // Pass 1: Map IDs to IRIs
+    nodes.forEach(n => {
+        const iri = getNodeIRI(n);
+        nodeIdToIRI.set(n.id, iri);
+        register(iri, n.data.label);
+        register(n.id, n.data.label); // Fallback for ID lookups
+    });
+
+    // Pass 2: Generate Node Triples
+    nodes.forEach(n => {
+        const s = nodeIdToIRI.get(n.id)!;
+        const label = n.data.label;
+
+        // Type Definition
         let typeIRI = '';
         switch(n.data.type) {
-            case ElementType.OWL_CLASS: typeIRI = 'owl:Class'; break;
-            case ElementType.OWL_NAMED_INDIVIDUAL: typeIRI = 'owl:NamedIndividual'; break;
-            case ElementType.OWL_OBJECT_PROPERTY: typeIRI = 'owl:ObjectProperty'; break;
-            case ElementType.OWL_DATA_PROPERTY: typeIRI = 'owl:DatatypeProperty'; break;
-            case ElementType.OWL_DATATYPE: typeIRI = 'rdfs:Datatype'; break;
+            case ElementType.OWL_CLASS: typeIRI = STANDARD_PREFIXES.owl + 'Class'; break;
+            case ElementType.OWL_NAMED_INDIVIDUAL: typeIRI = STANDARD_PREFIXES.owl + 'NamedIndividual'; break;
+            case ElementType.OWL_OBJECT_PROPERTY: typeIRI = STANDARD_PREFIXES.owl + 'ObjectProperty'; break;
+            case ElementType.OWL_DATA_PROPERTY: typeIRI = STANDARD_PREFIXES.owl + 'DatatypeProperty'; break;
+            case ElementType.OWL_DATATYPE: typeIRI = STANDARD_PREFIXES.rdfs + 'Datatype'; break;
         }
 
-        // Entity Declaration
-        triples.push({ s: id, p: 'rdf:type', o: typeIRI });
-        triples.push({ s: id, p: 'rdfs:label', o: label });
+        triples.push({ s, p: STANDARD_PREFIXES.rdf + 'type', o: typeIRI });
+        triples.push({ s, p: STANDARD_PREFIXES.rdfs + 'label', o: label });
         
-        // Attributes
+        // Attributes (Data Properties / Characteristics)
         if (n.data.attributes) {
             n.data.attributes.forEach(attr => {
-                // If Class, it's a Property definition usually, but simple mapping:
-                // Node hasAttribute AttrName
-                triples.push({ s: id, p: 'ex:hasAttribute', o: attr.name });
+                // For simplified querying, we treat attributes as direct properties if they simulate values
+                // But often in UML class diagrams, attributes are definitions.
+                // We'll expose them as "hasAttribute" for meta-querying
+                triples.push({ s, p: defaultBaseIRI + 'hasAttribute', o: attr.name });
             });
         }
     });
 
-    // Edges -> Relation Triples
+    // Pass 3: Edge Triples
     edges.forEach(e => {
-        let pred = (e.label as string) || 'ex:relatedTo';
-        
-        // Normalize standard predicates
-        if (pred === 'subClassOf' || pred === 'rdfs:subClassOf') pred = 'rdfs:subClassOf';
-        else if (pred === 'type' || pred === 'rdf:type' || pred === 'a') pred = 'rdf:type';
-        else if (pred.includes('disjoint')) pred = 'owl:disjointWith';
+        const s = nodeIdToIRI.get(e.source);
+        const o = nodeIdToIRI.get(e.target);
+        if (!s || !o) return;
 
-        triples.push({ s: e.source, p: pred, o: e.target });
+        let pred = (e.label as string) || 'relatedTo';
+        let pIRI = pred;
+
+        // Resolve standard predicates
+        if (pred === 'subClassOf' || pred === 'rdfs:subClassOf') pIRI = STANDARD_PREFIXES.rdfs + 'subClassOf';
+        else if (pred === 'type' || pred === 'rdf:type' || pred === 'a') pIRI = STANDARD_PREFIXES.rdf + 'type';
+        else if (pred.includes('disjoint')) pIRI = STANDARD_PREFIXES.owl + 'disjointWith';
+        else {
+            // Check if it's a known property IRI from nodes
+            const propNode = nodes.find(n => n.data.label === pred && (n.data.type === ElementType.OWL_OBJECT_PROPERTY || n.data.type === ElementType.OWL_DATA_PROPERTY));
+            if (propNode) {
+                pIRI = getNodeIRI(propNode);
+            } else if (!pred.startsWith('http')) {
+                // Assume local property
+                pIRI = `${defaultBaseIRI}${pred.replace(/\s+/g, '_')}`;
+            }
+        }
+
+        triples.push({ s, p: pIRI, o });
     });
 
     return { triples, labelMap };
 };
 
-// 2. Simple Query Engine (Basic Graph Patterns)
-// Supports: SELECT ?v1 ?v2 WHERE { ?s ?p ?o . ... }
+// 2. Query Engine
 export const executeSparql = (query: string, nodes: Node<UMLNodeData>[], edges: Edge[]): SparqlResult => {
     const startTime = performance.now();
     const { triples, labelMap } = graphToTriples(nodes, edges);
 
-    // Parse (Very simplified regex parser for client-side lightness)
-    // 1. Extract Variables
-    const selectMatch = query.match(/SELECT\s+(.+?)\s+WHERE/i);
+    // 1. Parse Prefixes
+    const queryPrefixes: Record<string, string> = { ...STANDARD_PREFIXES };
+    // Default base for this session (mock)
+    queryPrefixes[':'] = 'http://example.org/ontology#';
+    queryPrefixes['ex'] = 'http://example.org/ontology#';
+
+    const prefixLines = query.match(/PREFIX\s+([a-zA-Z0-9_-]*:)\s*<([^>]+)>/gi);
+    if (prefixLines) {
+        prefixLines.forEach(line => {
+            const match = line.match(/PREFIX\s+([a-zA-Z0-9_-]*:)\s*<([^>]+)>/i);
+            if (match) {
+                queryPrefixes[match[1].replace(':', '')] = match[2];
+            }
+        });
+    }
+
+    // 2. Parse Variables & Limit
+    const selectMatch = query.match(/SELECT\s+(.+?)\s+(WHERE|FROM|LIMIT)/i);
     if (!selectMatch) throw new Error("Invalid SPARQL: Missing SELECT clause");
     
     const varsRaw = selectMatch[1].trim();
     const isStar = varsRaw === '*';
     const variables = isStar ? [] : varsRaw.split(/\s+/).map(v => v.replace('?', ''));
 
-    // 2. Extract Pattern
+    const limitMatch = query.match(/LIMIT\s+(\d+)/i);
+    const limit = limitMatch ? parseInt(limitMatch[1], 10) : Infinity;
+
+    // 3. Extract WHERE pattern
     const whereMatch = query.match(/WHERE\s*\{([\s\S]*)\}/i);
     if (!whereMatch) throw new Error("Invalid SPARQL: Missing WHERE clause");
     
-    const patternStr = whereMatch[1];
-    // Split by dot, filter empty
-    const patterns = patternStr.split('.').map(p => p.trim()).filter(p => p.length > 0).map(p => {
-        // Remove trailing dot if split missed it
-        const clean = p.replace(/\.$/, '').trim();
-        const parts = clean.split(/\s+/);
-        if (parts.length < 3) return null;
-        return { s: parts[0], p: parts[1], o: parts.slice(2).join(' ') }; // Object might have spaces if literal
-    }).filter(p => p !== null) as { s: string, p: string, o: string }[];
+    const patternBlock = whereMatch[1];
+    
+    // Split by dot, but be careful about dots inside quotes (simple split for now)
+    // Filter out empty lines and comments
+    const patterns = patternBlock.split('.')
+        .map(p => p.trim())
+        .filter(p => p.length > 0 && !p.startsWith('#'))
+        .map(p => {
+            // Split by whitespace
+            // Simple tokenizer: subject predicate object
+            const parts = p.split(/\s+/);
+            if (parts.length < 3) return null;
+            
+            // Re-assemble if object has spaces (e.g. literals), though basic split handles standard triples
+            const s = parts[0];
+            const pred = parts[1];
+            // Object might be the rest
+            const o = parts.slice(2).join(' '); 
+            
+            return { s, p: pred, o };
+        })
+        .filter(p => p !== null) as { s: string, p: string, o: string }[];
 
-    // 3. Execution (Join)
-    // Initial solution: [{}]
+    // 4. Execution (Join)
     let solutions: Record<string, string>[] = [{}];
 
     for (const pat of patterns) {
         const newSolutions: Record<string, string>[] = [];
 
         for (const sol of solutions) {
-            // Resolve pattern with current solution bindings
-            const qS = pat.s.startsWith('?') ? (sol[pat.s.substring(1)] || null) : pat.s;
-            const qP = pat.p.startsWith('?') ? (sol[pat.p.substring(1)] || null) : pat.p;
-            const qO = pat.o.startsWith('?') ? (sol[pat.o.substring(1)] || null) : pat.o;
+            // Resolve pattern with bindings
+            const qS = pat.s.startsWith('?') ? (sol[pat.s.substring(1)] || null) : resolveIRI(pat.s, queryPrefixes);
+            const qP = pat.p.startsWith('?') ? (sol[pat.p.substring(1)] || null) : resolveIRI(pat.p, queryPrefixes);
+            const qO = pat.o.startsWith('?') ? (sol[pat.o.substring(1)] || null) : resolveIRI(pat.o, queryPrefixes);
 
             // Find matching triples
             const matches = triples.filter(t => {
-                // Match S
-                if (qS && t.s !== qS) {
-                    // Try matching by Label/IRI if strict ID match fails (simulating IRI awareness)
-                    const sLabel = labelMap[t.s];
-                    if (sLabel !== qS && t.s !== qS) return false; 
-                }
+                if (qS && t.s !== qS) return false;
+                if (qP && t.p !== qP) return false;
                 
-                // Match P
-                // Loose matching for predicates
-                if (qP) {
-                    const match = t.p === qP || t.p.endsWith(`:${qP}`) || t.p.split(':')[1] === qP;
-                    if (!match) return false;
+                // Object Matching (Handle Literals vs IRIs loosely)
+                if (qO) {
+                    if (t.o === qO) return true;
+                    // Try loose match for literals
+                    const cleanTO = t.o.replace(/^"|"$/g, '');
+                    const cleanQO = qO.replace(/^"|"$/g, '');
+                    if (cleanTO !== cleanQO) return false;
                 }
-
-                // Match O
-                if (qO && t.o !== qO) {
-                     const oLabel = labelMap[t.o];
-                     if (oLabel !== qO && t.o !== qO) return false;
-                }
-
                 return true;
             });
 
@@ -144,13 +216,13 @@ export const executeSparql = (query: string, nodes: Node<UMLNodeData>[], edges: 
                 const newSol = { ...sol };
                 
                 if (pat.s.startsWith('?') && !newSol[pat.s.substring(1)]) {
-                    newSol[pat.s.substring(1)] = labelMap[m.s] || m.s;
+                    newSol[pat.s.substring(1)] = m.s;
                 }
                 if (pat.p.startsWith('?') && !newSol[pat.p.substring(1)]) {
                     newSol[pat.p.substring(1)] = m.p;
                 }
                 if (pat.o.startsWith('?') && !newSol[pat.o.substring(1)]) {
-                    newSol[pat.o.substring(1)] = labelMap[m.o] || m.o;
+                    newSol[pat.o.substring(1)] = m.o;
                 }
                 newSolutions.push(newSol);
             }
@@ -158,11 +230,16 @@ export const executeSparql = (query: string, nodes: Node<UMLNodeData>[], edges: 
         solutions = newSolutions;
     }
 
-    // 4. Projection
+    // 5. Projection & Limit
     const finalVars = isStar ? Array.from(new Set(solutions.flatMap(Object.keys))) : variables;
     
-    // Filter rows to only requested vars
-    const rows = solutions.map(sol => {
+    // Apply Limit
+    const limitedSolutions = solutions.slice(0, limit);
+
+    // Map IRIs to Labels for display if possible? 
+    // Usually SPARQL returns IRIs. We will return IRIs and let UI shorten them or show labels via tooltips.
+    
+    const rows = limitedSolutions.map(sol => {
         const row: Record<string, string> = {};
         finalVars.forEach(v => row[v] = sol[v] || '');
         return row;
@@ -179,48 +256,41 @@ export const SPARQL_TEMPLATES = [
     {
         label: "All Classes",
         desc: "List every defined class in the ontology.",
-        query: `SELECT ?class WHERE {
+        query: `PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+
+SELECT ?class WHERE {
   ?class rdf:type owl:Class
 }`
     },
     {
         label: "Class Hierarchy",
         desc: "Show parent-child relationships.",
-        query: `SELECT ?sub ?super WHERE {
+        query: `PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?sub ?super WHERE {
   ?sub rdfs:subClassOf ?super
 }`
     },
     {
         label: "Individuals & Types",
         desc: "List individuals and their instantiated class.",
-        query: `SELECT ?indiv ?type WHERE {
+        query: `PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+
+SELECT ?indiv ?type WHERE {
   ?indiv rdf:type ?type .
   ?type rdf:type owl:Class
-}`
+} LIMIT 50`
     },
     {
-        label: "Object Properties",
-        desc: "Show relationships between individuals.",
-        query: `SELECT ?subject ?predicate ?object WHERE {
-  ?subject ?predicate ?object .
-  ?subject rdf:type owl:NamedIndividual .
-  ?object rdf:type owl:NamedIndividual
-}`
-    },
-    {
-        label: "Data Properties",
-        desc: "Show literal values assigned to individuals.",
-        query: `SELECT ?subject ?predicate ?value WHERE {
-  ?subject ?predicate ?value .
-  ?subject rdf:type owl:NamedIndividual .
-  ?predicate rdf:type owl:DatatypeProperty
-}`
-    },
-    {
-        label: "Disjoint Classes",
-        desc: "Pairs of classes that cannot share instances.",
-        query: `SELECT ?c1 ?c2 WHERE {
-  ?c1 owl:disjointWith ?c2
+        label: "Domain & Range",
+        desc: "Show domain and range axioms for properties.",
+        query: `PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?property ?domain ?range WHERE {
+  ?property rdfs:domain ?domain .
+  ?property rdfs:range ?range
 }`
     }
 ];

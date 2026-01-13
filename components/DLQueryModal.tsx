@@ -411,7 +411,7 @@ const DLQueryModal: React.FC<DLQueryModalProps> = ({ isOpen, onClose, nodes, edg
                                     <div className="absolute inset-0 bg-purple-500/5 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity" />
                                     <div className="relative flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-lg shadow-sm hover:border-purple-500/50 transition-colors">
                                         <div className="flex items-center gap-3 overflow-hidden">
-                                            <div className={`p-2 rounded-md ${node.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'bg-teal-900/20 text-teal-400' : (node.data.type === ElementType.OWL_OBJECT_PROPERTY || node.data.type === ElementType.OWL_DATA_PROPERTY ? 'bg-green-900/20 text-green-400' : 'bg-blue-900/20 text-blue-400')}`}>
+                                            <div className={`p-2 rounded-md ${node.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'bg-pink-900/20 text-pink-400' : (node.data.type === ElementType.OWL_OBJECT_PROPERTY || node.data.type === ElementType.OWL_DATA_PROPERTY ? 'bg-green-900/20 text-green-400' : 'bg-blue-900/20 text-blue-400')}`}>
                                                 {node.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? <User size={18} /> : (node.data.type === ElementType.OWL_CLASS ? <Database size={18} /> : <ArrowDownCircle size={18} />)}
                                             </div>
                                             <div className="overflow-hidden">

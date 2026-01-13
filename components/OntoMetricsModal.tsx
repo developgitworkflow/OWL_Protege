@@ -211,7 +211,7 @@ const OntoMetricsModal: React.FC<OntoMetricsModalProps> = ({ isOpen, onClose, no
                     value={metrics.complexity.numIndividuals}
                     icon={<Layers />}
                     description="Number of instantiated entities ($I$) in the ABox."
-                    color="text-teal-400"
+                    color="text-pink-400"
                 />
                 <MetricCard 
                     title="Logical Axioms"

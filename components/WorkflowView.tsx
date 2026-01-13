@@ -100,9 +100,9 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({
             title: 'Instantiation',
             subtitle: 'Populate the ontology with data (ABox).',
             icon: User,
-            color: 'text-teal-400',
-            bg: 'bg-teal-900/20',
-            border: 'border-teal-500/30',
+            color: 'text-pink-400',
+            bg: 'bg-pink-900/20',
+            border: 'border-pink-500/30',
             stats: [
                 { label: 'Named Individuals', value: stats.individuals }
             ],

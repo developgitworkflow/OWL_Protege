@@ -336,6 +336,17 @@ function App() {
       const res = validateOntology(nodes, edges, projectData);
       setValidationResult(res);
       setIsValidationOpen(true);
+      
+      // Update nodes with punning information
+      if (res.punnedNodeIds.length > 0) {
+          setNodes(nds => nds.map(n => ({
+              ...n,
+              data: {
+                  ...n.data,
+                  isPunned: res.punnedNodeIds.includes(n.id)
+              }
+          })));
+      }
   };
 
   const handleLoadContent = async (content: string, fileName: string) => {
@@ -549,6 +560,7 @@ function App() {
                         onSelectNode={setSelectedNodeId}
                         onNavigate={handleNavigate}
                         selectedNodeId={selectedNodeId}
+                        unsatisfiableNodeIds={validationResult?.unsatisfiableNodeIds}
                     />
                 )}
 

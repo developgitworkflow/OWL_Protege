@@ -2,7 +2,7 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
-import { Database, User, ArrowRightLeft, Tag, FileType, Box, Code2, Layers, Network, ArrowRight } from 'lucide-react';
+import { Database, User, ArrowRightLeft, Tag, FileType, Box, Code2, Layers, Network, ArrowRight, Copy } from 'lucide-react';
 
 // Extend data type locally to support the injected relations
 interface ExtendedNodeData extends UMLNodeData {
@@ -50,6 +50,11 @@ const ProfessionalNode = ({ data, selected }: NodeProps<ExtendedNodeData>) => {
         <div className="relative flex-1 min-w-0">
             <div className="text-[10px] font-bold uppercase tracking-wider opacity-70 flex items-center gap-1">
                 {config.label}
+                {data.isPunned && (
+                    <span className="ml-auto bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded text-[9px] flex items-center gap-1 border border-amber-500/30" title="Metamodeling (Punning): Used as both Class and Individual">
+                        <Copy size={8} /> Meta
+                    </span>
+                )}
             </div>
             <div className="font-bold text-sm text-white truncate" title={data.label}>
                 {data.label}

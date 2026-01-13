@@ -58,6 +58,7 @@ export interface UMLNodeData {
   description?: string;    // Deprecated in favor of annotations
   isSearchMatch?: boolean; // UI State for search highlighting
   showAnnotations?: boolean; // UI State for showing annotations compartment
+  isPunned?: boolean;      // Metamodeling status (used as both Class and Individual)
 }
 
 export type UMLNode = Node<UMLNodeData>;

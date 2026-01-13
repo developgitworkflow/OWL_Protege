@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { X, Settings, Download, Upload, Save, Globe, Plus, Trash2, Link as LinkIcon, FilePlus, Wrench, ShieldCheck, Calculator, Search, ScrollText, Sigma, Terminal, Activity, CloudDownload } from 'lucide-react';
+import { X, Settings, Download, Upload, Save, Globe, Plus, Trash2, Link as LinkIcon, FilePlus, Wrench, ShieldCheck, Calculator, Search, ScrollText, Sigma, Terminal, Activity, CloudDownload, FileText, Database } from 'lucide-react';
 import { ProjectData } from '../types';
 import AnnotationManager from './AnnotationManager';
 
@@ -22,6 +22,8 @@ interface SettingsModalProps {
   onOpenExpressivity: () => void;
   onOpenDatalog: () => void;
   onOpenMetrics: () => void;
+  onExportDocs: () => void;
+  onOpenSPARQL: () => void;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ 
@@ -40,7 +42,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenDLAxioms,
   onOpenExpressivity,
   onOpenDatalog,
-  onOpenMetrics
+  onOpenMetrics,
+  onExportDocs,
+  onOpenSPARQL
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'tools' | 'data'>('general');
   
@@ -76,6 +80,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       { id: 'metrics', label: 'Ontology Metrics', icon: Activity, desc: 'View statistics and structural analysis.', action: onOpenMetrics, color: 'text-cyan-400' },
       { id: 'expressivity', label: 'DL Expressivity', icon: Calculator, desc: 'Calculate the Description Logic complexity profile.', action: onOpenExpressivity, color: 'text-pink-400' },
       { id: 'dlquery', label: 'DL Query', icon: Search, desc: 'Execute Manchester Syntax queries against the reasoner.', action: onOpenDLQuery, color: 'text-purple-400' },
+      { id: 'sparql', label: 'SPARQL Endpoint', icon: Database, desc: 'Execute SPARQL queries on the graph.', action: onOpenSPARQL, color: 'text-pink-400' },
       { id: 'swrl', label: 'SWRL Rules', icon: ScrollText, desc: 'Edit Semantic Web Rule Language definitions.', action: onOpenSWRL, color: 'text-amber-400' },
       { id: 'axioms', label: 'Logical Axioms', icon: Sigma, desc: 'View TBox, RBox, and ABox axioms explicitly.', action: onOpenDLAxioms, color: 'text-indigo-400' },
       { id: 'datalog', label: 'Datalog Export', icon: Terminal, desc: 'Translate ontology to Datalog rules.', action: onOpenDatalog, color: 'text-green-400' },
@@ -326,6 +331,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 >
                                     <div className="font-semibold text-slate-200 group-hover:text-green-400 mb-1">Turtle (RDF .ttl)</div>
                                     <p className="text-xs text-slate-500">Standard semantic web format (.ttl) for use in Protégé, etc.</p>
+                                </button>
+                                <button 
+                                    onClick={() => { onExportDocs(); onClose(); }}
+                                    className="p-4 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 hover:border-purple-500 transition-all text-left group"
+                                >
+                                    <div className="font-semibold text-slate-200 group-hover:text-purple-400 mb-1 flex items-center gap-2"><FileText size={16}/> Documentation</div>
+                                    <p className="text-xs text-slate-500">Generate standard ontology documentation (Widoco-style).</p>
                                 </button>
                             </div>
                         </div>

@@ -49,6 +49,7 @@ import DatalogModal from './components/DatalogModal';
 import OntoMetricsModal from './components/OntoMetricsModal';
 import VersionControlModal from './components/VersionControlModal';
 import DocumentationModal from './components/DocumentationModal';
+import SPARQLModal from './components/SPARQLModal';
 
 import { INITIAL_NODES, INITIAL_EDGES } from './constants';
 import { UMLNodeData, ElementType, ProjectData, Repository, Snapshot } from './types';
@@ -96,6 +97,7 @@ function App() {
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isVCOpen, setIsVCOpen] = useState(false);
   const [isDocsOpen, setIsDocsOpen] = useState(false);
+  const [isSPARQLOpen, setIsSPARQLOpen] = useState(false);
   
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [confirmConfig, setConfirmConfig] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
@@ -429,6 +431,7 @@ function App() {
                   validNodeIds.has(e.source) && validNodeIds.has(e.target)
               );
 
+              // Use direct state update to avoid potential #310 issues with functional updates on complex objects
               setNodes(result.nodes);
               setEdges(validEdges);
               
@@ -548,6 +551,7 @@ function App() {
             onOpenMetrics={() => setIsMetricsOpen(true)}
             onOpenVersionControl={() => setIsVCOpen(true)}
             onOpenDocs={() => setIsDocsOpen(true)}
+            onOpenSPARQL={() => setIsSPARQLOpen(true)}
             onImport={() => fileInputRef.current?.click()}
             currentBranch={repository.currentBranch}
         />
@@ -731,6 +735,7 @@ function App() {
             onOpenDatalog={() => setIsDatalogOpen(true)}
             onOpenMetrics={() => setIsMetricsOpen(true)}
             onExportDocs={() => setIsDocsOpen(true)}
+            onOpenSPARQL={() => setIsSPARQLOpen(true)}
         />
         <CreateProjectModal 
             isOpen={isCreateOpen}
@@ -784,6 +789,12 @@ function App() {
             nodes={nodes} 
             edges={edges} 
             projectData={projectData} 
+        />
+        <SPARQLModal 
+            isOpen={isSPARQLOpen} 
+            onClose={() => setIsSPARQLOpen(false)} 
+            nodes={nodes} 
+            edges={edges} 
         />
         
         <ConfirmDialog 

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, EyeOff, ShieldCheck, Activity, Calculator, ScrollText, Sigma, ChevronRight, GitCommit, FileText, FolderOpen } from 'lucide-react';
+import { Layers, Search, Brain, CheckCircle2, Undo2, Redo2, Settings, PanelLeftClose, PanelLeftOpen, Box, GitBranch, List, Map, Feather, GitGraph, FolderTree, Terminal, Eye, EyeOff, ShieldCheck, Activity, Calculator, ScrollText, Sigma, ChevronRight, GitCommit, FileText, FolderOpen, Database } from 'lucide-react';
 
 interface TopBarProps {
     onOpenSettings: () => void;
@@ -33,6 +33,7 @@ interface TopBarProps {
     onOpenVersionControl: () => void;
     onOpenDocs: () => void;
     onImport: () => void;
+    onOpenSPARQL: () => void;
     currentBranch: string;
 }
 
@@ -65,6 +66,7 @@ const TopBar: React.FC<TopBarProps> = ({
     onOpenVersionControl,
     onOpenDocs,
     onImport,
+    onOpenSPARQL,
     currentBranch
 }) => {
 
@@ -277,6 +279,9 @@ const TopBar: React.FC<TopBarProps> = ({
                 </span>
                 <button onClick={onOpenDLQuery} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-purple-400 hover:bg-slate-900 transition-colors">
                     <Search size={14} /> Query
+                </button>
+                <button onClick={onOpenSPARQL} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-pink-400 hover:bg-slate-900 transition-colors">
+                    <Database size={14} /> SPARQL
                 </button>
                 <button onClick={onOpenSWRL} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-amber-400 hover:bg-slate-900 transition-colors">
                     <ScrollText size={14} /> SWRL

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Play, Code, Database, Table, Download, FileJson, FileSpreadsheet, Sparkles, BookOpen } from 'lucide-react';
+import { X, Play, Code, Database, Table, Download, FileJson, FileSpreadsheet, Sparkles, BookOpen, Layers, List } from 'lucide-react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData } from '../types';
 import { executeSparql, SPARQL_TEMPLATES, SparqlResult } from '../services/sparqlService';
@@ -10,9 +10,10 @@ interface SPARQLModalProps {
   onClose: () => void;
   nodes: Node<UMLNodeData>[];
   edges: Edge[];
+  onNavigate?: (view: string, id: string) => void;
 }
 
-const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges }) => {
+const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges, onNavigate }) => {
   const [query, setQuery] = useState(SPARQL_TEMPLATES[0].query);
   const [result, setResult] = useState<SparqlResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +57,47 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
       a.href = url;
       a.download = 'query_results.csv';
       a.click();
+  };
+
+  const renderCell = (value: string) => {
+    if (!value) return <span className="text-slate-600 italic">null</span>;
+    
+    // Attempt to find node
+    // Remove <> if present
+    const cleanVal = value.startsWith('<') && value.endsWith('>') ? value.slice(1, -1) : value;
+    
+    const node = nodes.find(n => 
+        n.id === cleanVal || 
+        n.data.label === cleanVal || 
+        n.data.iri === cleanVal ||
+        (n.data.label && cleanVal.includes(n.data.label)) // Loose match for prefixed like ex:Person
+    );
+
+    if (node && onNavigate) {
+        return (
+            <div className="flex items-center justify-between group/cell">
+                <span className="font-medium text-blue-200">{value}</span>
+                <div className="flex gap-1 opacity-0 group-hover/cell:opacity-100 transition-opacity bg-slate-800 rounded p-0.5 border border-slate-700 absolute right-2 top-1/2 -translate-y-1/2 shadow-lg z-10">
+                    <button 
+                        onClick={() => { onNavigate('design', node.id); onClose(); }}
+                        className="p-1 hover:bg-indigo-500/20 hover:text-indigo-400 rounded transition-colors"
+                        title="View in Graph"
+                    >
+                        <Layers size={12} />
+                    </button>
+                    <button 
+                        onClick={() => { onNavigate('entities', node.id); onClose(); }}
+                        className="p-1 hover:bg-blue-500/20 hover:text-blue-400 rounded transition-colors"
+                        title="View in Catalog"
+                    >
+                        <List size={12} />
+                    </button>
+                </div>
+            </div>
+        );
+    }
+    
+    return value;
   };
 
   if (!isOpen) return null;
@@ -174,8 +216,8 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
                                         {result.rows.map((row, i) => (
                                             <tr key={i} className="hover:bg-slate-800/30 transition-colors">
                                                 {result.columns.map(col => (
-                                                    <td key={col} className="p-3 text-slate-300">
-                                                        {row[col] || <span className="text-slate-600 italic">null</span>}
+                                                    <td key={col} className="p-3 text-slate-300 relative group/cell">
+                                                        {renderCell(row[col] || '')}
                                                     </td>
                                                 ))}
                                             </tr>

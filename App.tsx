@@ -795,6 +795,7 @@ function App() {
             onClose={() => setIsSPARQLOpen(false)} 
             nodes={nodes} 
             edges={edges} 
+            onNavigate={handleNavigate}
         />
         
         <ConfirmDialog 

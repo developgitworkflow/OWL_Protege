@@ -9,7 +9,7 @@ interface ImportUrlModalProps {
 }
 
 const ImportUrlModal: React.FC<ImportUrlModalProps> = ({ isOpen, onClose, onImport }) => {
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState('https://ontop-vkg.org/tutorial/basic/university.ttl');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +25,8 @@ const ImportUrlModal: React.FC<ImportUrlModalProps> = ({ isOpen, onClose, onImpo
     try {
         await onImport(url);
         onClose();
-        setUrl('');
+        // Reset to default after successful import
+        setUrl('https://ontop-vkg.org/tutorial/basic/university.ttl');
     } catch (err) {
         setError("Failed to load URL. Please check if the resource exists and supports CORS.");
     } finally {

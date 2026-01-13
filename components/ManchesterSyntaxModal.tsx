@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { X, Copy, Download, Database, User, ArrowRightLeft, Tag, FileType, Box, Circle } from 'lucide-react';
+import { X, Copy, Download, Database, User, ArrowRightLeft, Tag, FileType, Box, Circle, Filter, Eye, EyeOff } from 'lucide-react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ProjectData, ElementType } from '../types';
 import { generateManchesterSyntax } from '../services/manchesterSyntaxGenerator';
@@ -19,6 +19,13 @@ const MANCHESTER_KEYWORDS = [
 
 const ManchesterSyntaxModal: React.FC<ManchesterSyntaxModalProps> = ({ isOpen, onClose, nodes, edges, projectData }) => {
   const [copied, setCopied] = useState(false);
+  
+  // Filter States
+  const [showClasses, setShowClasses] = useState(true);
+  const [showObjProps, setShowObjProps] = useState(true);
+  const [showDataProps, setShowDataProps] = useState(true);
+  const [showIndividuals, setShowIndividuals] = useState(true);
+  const [showDatatypes, setShowDatatypes] = useState(true);
 
   // Background string generation for copy/download
   const code = useMemo(() => {
@@ -43,13 +50,18 @@ const ManchesterSyntaxModal: React.FC<ManchesterSyntaxModalProps> = ({ isOpen, o
 
   const getIcon = (type: ElementType) => {
       switch(type) {
-          // Using colors similar to Protege (Classes = Yellow/Orangeish in image, but standard Protege 5 uses Yellow)
-          case ElementType.OWL_CLASS: return <div className="w-4 h-4 rounded-full bg-[#e3c800] border border-[#bfa900] shadow-sm" />; 
-          case ElementType.OWL_NAMED_INDIVIDUAL: return <div className="w-4 h-4 transform rotate-45 bg-[#8b5cf6] border border-[#7c3aed] shadow-sm" />;
-          case ElementType.OWL_OBJECT_PROPERTY: return <div className="w-4 h-4 bg-[#3b82f6] border border-[#2563eb] rounded-sm shadow-sm" />;
-          case ElementType.OWL_DATA_PROPERTY: return <div className="w-4 h-4 bg-[#10b981] border border-[#059669] rounded-sm shadow-sm" />;
-          case ElementType.OWL_DATATYPE: return <div className="w-4 h-4 bg-[#f59e0b] border border-[#d97706] rounded-sm shadow-sm" />;
-          default: return <div className="w-4 h-4 bg-slate-500 rounded-sm" />;
+          case ElementType.OWL_CLASS: 
+              return <div className="p-1.5 bg-indigo-500/20 rounded border border-indigo-500/50 text-indigo-400"><Database size={14} /></div>;
+          case ElementType.OWL_NAMED_INDIVIDUAL: 
+              return <div className="p-1.5 bg-teal-500/20 rounded border border-teal-500/50 text-teal-400"><User size={14} /></div>;
+          case ElementType.OWL_OBJECT_PROPERTY: 
+              return <div className="p-1.5 bg-blue-500/20 rounded border border-blue-500/50 text-blue-400"><ArrowRightLeft size={14} /></div>;
+          case ElementType.OWL_DATA_PROPERTY: 
+              return <div className="p-1.5 bg-emerald-500/20 rounded border border-emerald-500/50 text-emerald-400"><Tag size={14} /></div>;
+          case ElementType.OWL_DATATYPE: 
+              return <div className="p-1.5 bg-amber-500/20 rounded border border-amber-500/50 text-amber-400"><FileType size={14} /></div>;
+          default: 
+              return <div className="p-1.5 bg-slate-700/50 rounded border border-slate-600 text-slate-400"><Box size={14} /></div>;
       }
   };
 
@@ -62,10 +74,8 @@ const ManchesterSyntaxModal: React.FC<ManchesterSyntaxModalProps> = ({ isOpen, o
                   if (MANCHESTER_KEYWORDS.includes(part.toLowerCase())) {
                       return <span key={i} className="text-[#d946ef] font-bold mx-1">{part}</span>; // Pink/Purple for keywords
                   }
-                  // Highlight Entity Names (Simple heuristic: capitalized words or contain :)
+                  // Highlight Entity Names (Simple heuristic)
                   if (part.trim().length > 1 && !part.match(/^\d+$/) && !part.match(/^[(){}\[\],]+$/)) {
-                      // Check if it matches a known class/prop for extra style? 
-                      // For now just standard text color
                       return <span key={i} className="text-slate-200">{part}</span>;
                   }
                   return <span key={i}>{part}</span>;
@@ -155,8 +165,8 @@ const ManchesterSyntaxModal: React.FC<ManchesterSyntaxModalProps> = ({ isOpen, o
                                   return (
                                       <div key={e.id} className="flex items-start px-4 py-2 hover:bg-white/5 transition-colors">
                                           <div className="w-6 mt-1 flex justify-center text-slate-500">
-                                              {/* Simple SubClass Icon */}
-                                              <div className="w-2 h-2 rounded-full bg-yellow-500/50" />
+                                              {/* Simple SubClass Icon - reusing generic style */}
+                                              <div className="w-1.5 h-1.5 rounded-full bg-yellow-500/50" />
                                           </div>
                                           <div className="flex-1"><span className="text-slate-200 font-bold">{label}</span></div>
                                       </div>
@@ -222,6 +232,16 @@ const ManchesterSyntaxModal: React.FC<ManchesterSyntaxModalProps> = ({ isOpen, o
       );
   };
 
+  const counts = useMemo(() => {
+      return {
+          classes: nodes.filter(n => n.data.type === ElementType.OWL_CLASS).length,
+          objProps: nodes.filter(n => n.data.type === ElementType.OWL_OBJECT_PROPERTY).length,
+          dataProps: nodes.filter(n => n.data.type === ElementType.OWL_DATA_PROPERTY).length,
+          individuals: nodes.filter(n => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL).length,
+          datatypes: nodes.filter(n => n.data.type === ElementType.OWL_DATATYPE).length
+      }
+  }, [nodes]);
+
   if (!isOpen) return null;
 
   return (
@@ -263,26 +283,111 @@ const ManchesterSyntaxModal: React.FC<ManchesterSyntaxModalProps> = ({ isOpen, o
           </div>
         </div>
 
+        {/* Filter Toolbar (Mini Topbar) */}
+        <div className="flex items-center gap-2 px-6 py-3 border-b border-slate-800 bg-slate-900/80 backdrop-blur-sm overflow-x-auto">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider mr-2">
+                <Filter size={12} /> Filters
+            </div>
+            
+            <button 
+                onClick={() => setShowClasses(!showClasses)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                    showClasses 
+                    ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30' 
+                    : 'bg-slate-900 text-slate-500 border-slate-800 opacity-60 hover:opacity-100'
+                }`}
+            >
+                <Database size={12} className={showClasses ? "text-indigo-400" : "text-slate-500"} />
+                Classes ({counts.classes})
+            </button>
+
+            <button 
+                onClick={() => setShowObjProps(!showObjProps)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                    showObjProps 
+                    ? 'bg-blue-500/10 text-blue-300 border-blue-500/30' 
+                    : 'bg-slate-900 text-slate-500 border-slate-800 opacity-60 hover:opacity-100'
+                }`}
+            >
+                <ArrowRightLeft size={12} className={showObjProps ? "text-blue-400" : "text-slate-500"} />
+                Obj. Props ({counts.objProps})
+            </button>
+
+            <button 
+                onClick={() => setShowDataProps(!showDataProps)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                    showDataProps 
+                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' 
+                    : 'bg-slate-900 text-slate-500 border-slate-800 opacity-60 hover:opacity-100'
+                }`}
+            >
+                <Tag size={12} className={showDataProps ? "text-emerald-400" : "text-slate-500"} />
+                Data Props ({counts.dataProps})
+            </button>
+
+            <button 
+                onClick={() => setShowIndividuals(!showIndividuals)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                    showIndividuals 
+                    ? 'bg-teal-500/10 text-teal-300 border-teal-500/30' 
+                    : 'bg-slate-900 text-slate-500 border-slate-800 opacity-60 hover:opacity-100'
+                }`}
+            >
+                <User size={12} className={showIndividuals ? "text-teal-400" : "text-slate-500"} />
+                Individuals ({counts.individuals})
+            </button>
+
+            <button 
+                onClick={() => setShowDatatypes(!showDatatypes)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                    showDatatypes 
+                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' 
+                    : 'bg-slate-900 text-slate-500 border-slate-800 opacity-60 hover:opacity-100'
+                }`}
+            >
+                <FileType size={12} className={showDatatypes ? "text-amber-400" : "text-slate-500"} />
+                Datatypes ({counts.datatypes})
+            </button>
+        </div>
+
         <div className="flex flex-1 overflow-hidden relative">
             {/* Main List Area */}
             <div className="flex-1 overflow-y-auto bg-slate-950 p-6 scrollbar-thin scrollbar-thumb-slate-700">
                  <div className="max-w-3xl mx-auto">
                     {/* Sort nodes: Classes first, then Props, then Indivs */}
-                    {nodes
+                    {showClasses && nodes
                         .sort((a,b) => a.data.label.localeCompare(b.data.label))
                         .filter(n => n.data.type === ElementType.OWL_CLASS)
                         .map(node => <EntityFrame key={node.id} node={node} />)
                     }
-                    {nodes
+                    {showObjProps && nodes
                         .sort((a,b) => a.data.label.localeCompare(b.data.label))
-                        .filter(n => n.data.type === ElementType.OWL_OBJECT_PROPERTY || n.data.type === ElementType.OWL_DATA_PROPERTY)
+                        .filter(n => n.data.type === ElementType.OWL_OBJECT_PROPERTY)
                         .map(node => <EntityFrame key={node.id} node={node} />)
                     }
-                    {nodes
+                    {showDataProps && nodes
+                        .sort((a,b) => a.data.label.localeCompare(b.data.label))
+                        .filter(n => n.data.type === ElementType.OWL_DATA_PROPERTY)
+                        .map(node => <EntityFrame key={node.id} node={node} />)
+                    }
+                    {showDatatypes && nodes
+                        .sort((a,b) => a.data.label.localeCompare(b.data.label))
+                        .filter(n => n.data.type === ElementType.OWL_DATATYPE)
+                        .map(node => <EntityFrame key={node.id} node={node} />)
+                    }
+                    {showIndividuals && nodes
                         .sort((a,b) => a.data.label.localeCompare(b.data.label))
                         .filter(n => n.data.type === ElementType.OWL_NAMED_INDIVIDUAL)
                         .map(node => <EntityFrame key={node.id} node={node} />)
                     }
+                    
+                    {/* Empty State */}
+                    {(!showClasses && !showObjProps && !showDataProps && !showIndividuals && !showDatatypes) && (
+                        <div className="flex flex-col items-center justify-center h-64 text-slate-600">
+                            <EyeOff size={48} className="opacity-20 mb-2" />
+                            <p className="text-sm">All filters are inactive.</p>
+                        </div>
+                    )}
                  </div>
             </div>
         </div>

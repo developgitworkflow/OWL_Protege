@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { X, Play, Code, Database, Table, FileJson, FileSpreadsheet, Layers, List, Tag, User, Copy, Check, Trash2, AlignLeft, Search as SearchIcon, Download, Box, ArrowRight, FolderTree, Network, Info, Globe, ExternalLink, Type, Braces } from 'lucide-react';
+import { X, Play, Code, Database, Table, FileJson, FileSpreadsheet, Layers, List, Tag, User, Copy, Check, Trash2, AlignLeft, Search as SearchIcon, Download, Box, ArrowRight, FolderTree, Network, Info, Globe, ExternalLink, Type, Braces, Sigma, Key, GitBranch } from 'lucide-react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
 import { executeSparql, SPARQL_TEMPLATES, SparqlResult } from '../services/sparqlService';
@@ -115,14 +115,18 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
       const viewportWidth = window.innerWidth;
       
       // Determine position (prefer bottom-right of cursor/element, flip if needed)
+      // Expanded width to 384px (w-96)
+      const CARD_HEIGHT = 400; 
+      const CARD_WIDTH = 384; 
+
       let y = rect.bottom + 10;
       let x = rect.left;
 
-      if (y + 300 > viewportHeight) {
-          y = rect.top - 300; // Flip up
+      if (y + CARD_HEIGHT > viewportHeight) {
+          y = rect.top - CARD_HEIGHT; // Flip up
       }
-      if (x + 280 > viewportWidth) {
-          x = viewportWidth - 300; // Flip left
+      if (x + CARD_WIDTH > viewportWidth) {
+          x = viewportWidth - CARD_WIDTH - 20; // Flip left/adjust
       }
 
       setHoverNode({ node, x, y });
@@ -256,7 +260,8 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
       if (!result) return [];
       if (!resultFilter) return result.rows;
       const lower = resultFilter.toLowerCase();
-      return result.rows.filter(row => Object.values(row).some(v => v.toLowerCase().includes(lower)));
+      // Fix: Explicitly cast value to string before toLowerCase
+      return result.rows.filter(row => Object.values(row).some(v => String(v).toLowerCase().includes(lower)));
   }, [result, resultFilter]);
 
   if (!isOpen) return null;
@@ -460,82 +465,114 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
         {/* Floating Tooltip for Entity Details */}
         {hoverNode && (
             <div 
-                className="fixed z-[100] w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                className="fixed z-[100] w-96 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
                 style={{ left: hoverNode.x, top: hoverNode.y }}
                 onMouseEnter={() => { if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current); }}
                 onMouseLeave={() => { setHoverNode(null); }}
             >
-                <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        {hoverNode.node.data.type === ElementType.OWL_CLASS && <Database size={14} className="text-indigo-400" />}
-                        {hoverNode.node.data.type === ElementType.OWL_NAMED_INDIVIDUAL && <User size={14} className="text-teal-400" />}
-                        {hoverNode.node.data.type === ElementType.OWL_OBJECT_PROPERTY && <ArrowRight size={14} className="text-blue-400" />}
-                        {hoverNode.node.data.type === ElementType.OWL_DATA_PROPERTY && <Tag size={14} className="text-emerald-400" />}
-                        <span className="text-xs font-bold text-slate-200">{hoverNode.node.data.label}</span>
+                {/* 1. Identity Header */}
+                <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                        <div className={`p-2 rounded-lg border bg-slate-900 ${
+                            hoverNode.node.data.type === ElementType.OWL_CLASS ? 'border-indigo-500/30 text-indigo-400' :
+                            hoverNode.node.data.type === ElementType.OWL_NAMED_INDIVIDUAL ? 'border-teal-500/30 text-teal-400' :
+                            hoverNode.node.data.type === ElementType.OWL_OBJECT_PROPERTY ? 'border-blue-500/30 text-blue-400' :
+                            'border-emerald-500/30 text-emerald-400'
+                        }`}>
+                            {hoverNode.node.data.type === ElementType.OWL_CLASS && <Database size={18} />}
+                            {hoverNode.node.data.type === ElementType.OWL_NAMED_INDIVIDUAL && <User size={18} />}
+                            {hoverNode.node.data.type === ElementType.OWL_OBJECT_PROPERTY && <ArrowRight size={18} />}
+                            {hoverNode.node.data.type === ElementType.OWL_DATA_PROPERTY && <Tag size={18} />}
+                        </div>
+                        <div>
+                            <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-0.5">
+                                {hoverNode.node.data.type.replace('owl_', '').replace('_', ' ')}
+                            </div>
+                            <div className="text-base font-bold text-white leading-tight">{hoverNode.node.data.label}</div>
+                        </div>
                     </div>
-                    <span className="text-[9px] uppercase font-bold text-slate-500 border border-slate-700 px-1.5 rounded bg-slate-950">
-                        {hoverNode.node.data.type.replace('owl_', '').replace('_', ' ')}
-                    </span>
                 </div>
-                <div className="p-4 space-y-3">
+
+                <div className="max-h-[320px] overflow-y-auto p-4 space-y-4 bg-slate-900">
+                    
+                    {/* 2. IRI */}
                     <div className="space-y-1">
-                        <div className="text-[10px] uppercase font-bold text-slate-500">Full IRI</div>
-                        <div className="text-[10px] text-slate-400 font-mono break-all leading-tight bg-slate-950 p-1.5 rounded border border-slate-800/50">
+                        <div className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1.5">
+                            <Globe size={10} /> Identifier (IRI)
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono break-all bg-slate-950 p-2 rounded border border-slate-800/50 select-all">
                             {hoverNode.node.data.iri || baseIri + hoverNode.node.data.label}
                         </div>
                     </div>
                     
-                    {hoverNode.node.data.description && (
-                        <div className="space-y-1">
-                            <div className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
-                                <Info size={10} /> Description
+                    {/* 3. Description/Annotations */}
+                    {(hoverNode.node.data.description || (hoverNode.node.data.annotations && hoverNode.node.data.annotations.length > 0)) && (
+                        <div className="space-y-2">
+                            <div className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1.5">
+                                <Info size={10} /> Definitions & Metadata
                             </div>
-                            <p className="text-xs text-slate-300 italic leading-snug line-clamp-3">
-                                {hoverNode.node.data.description}
-                            </p>
+                            <div className="space-y-1.5">
+                                {hoverNode.node.data.description && (
+                                    <div className="text-xs text-slate-300 italic leading-snug border-l-2 border-slate-700 pl-2">
+                                        {hoverNode.node.data.description}
+                                    </div>
+                                )}
+                                {hoverNode.node.data.annotations?.map((ann, i) => (
+                                    <div key={i} className="flex gap-2 text-[10px]">
+                                        <span className="font-mono text-slate-500 shrink-0">{ann.property}:</span>
+                                        <span className="text-slate-400 truncate">{ann.value.replace(/"/g, '')}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
 
-                    {(hoverNode.node.data.attributes?.length || 0) > 0 && (
-                        <div className="space-y-1 pt-2 border-t border-slate-800/50">
-                            <div className="text-[10px] uppercase font-bold text-slate-500">Attributes</div>
-                            <div className="flex flex-wrap gap-1">
-                                {hoverNode.node.data.attributes!.slice(0, 3).map((attr, i) => (
-                                    <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-800 rounded text-slate-300 border border-slate-700">
+                    {/* 4. Logic & Axioms */}
+                    {(hoverNode.node.data.methods && hoverNode.node.data.methods.length > 0) && (
+                        <div className="space-y-2">
+                            <div className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1.5">
+                                <Sigma size={10} /> Formal Axioms
+                            </div>
+                            <div className="space-y-1">
+                                {hoverNode.node.data.methods.slice(0, 4).map((m, i) => (
+                                    <div key={i} className="flex items-center gap-2 bg-slate-950/50 p-1.5 rounded border border-slate-800/50">
+                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                            m.name === 'SubClassOf' ? 'bg-indigo-900/30 text-indigo-400' : 
+                                            m.name === 'DisjointWith' ? 'bg-red-900/30 text-red-400' :
+                                            'bg-slate-800 text-slate-400'
+                                        }`}>{m.name}</span>
+                                        <span className="text-[10px] font-mono text-slate-300 truncate flex-1" title={m.returnType}>{m.returnType}</span>
+                                    </div>
+                                ))}
+                                {hoverNode.node.data.methods.length > 4 && (
+                                    <div className="text-[9px] text-slate-500 italic pl-1">
+                                        +{hoverNode.node.data.methods.length - 4} more axioms...
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 5. Data Properties / Characteristics */}
+                    {(hoverNode.node.data.attributes && hoverNode.node.data.attributes.length > 0) && (
+                        <div className="space-y-2">
+                            <div className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1.5">
+                                {hoverNode.node.data.type === ElementType.OWL_CLASS ? <Tag size={10} /> : <GitBranch size={10} />}
+                                {hoverNode.node.data.type === ElementType.OWL_CLASS ? 'Attributes' : 'Characteristics'}
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {hoverNode.node.data.attributes.slice(0, 6).map((attr, i) => (
+                                    <span key={i} className="text-[10px] px-2 py-1 bg-slate-800 rounded text-slate-300 border border-slate-700 flex items-center gap-1">
                                         {attr.name}
+                                        {attr.type && <span className="text-slate-500 text-[9px] opacity-70">({attr.type})</span>}
                                     </span>
                                 ))}
-                                {(hoverNode.node.data.attributes?.length || 0) > 3 && <span className="text-[10px] text-slate-500">...</span>}
+                                {hoverNode.node.data.attributes.length > 6 && <span className="text-[10px] text-slate-500">...</span>}
                             </div>
                         </div>
                     )}
 
-                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/50">
-                        <button 
-                            onClick={() => { if(onNavigate) onNavigate('design', hoverNode.node.id); onClose(); }}
-                            className="flex flex-col items-center gap-1 p-2 bg-slate-800 hover:bg-slate-700 rounded text-[10px] text-slate-300 hover:text-indigo-300 transition-colors"
-                        >
-                            <Layers size={14} /> Graph
-                        </button>
-                        <button 
-                            onClick={() => { if(onNavigate) onNavigate('entities', hoverNode.node.id); onClose(); }}
-                            className="flex flex-col items-center gap-1 p-2 bg-slate-800 hover:bg-slate-700 rounded text-[10px] text-slate-300 hover:text-blue-300 transition-colors"
-                        >
-                            <List size={14} /> Catalog
-                        </button>
-                        <button 
-                            onClick={() => { if(onNavigate) onNavigate('tree', hoverNode.node.id); onClose(); }}
-                            className="flex flex-col items-center gap-1 p-2 bg-slate-800 hover:bg-slate-700 rounded text-[10px] text-slate-300 hover:text-emerald-300 transition-colors"
-                        >
-                            <FolderTree size={14} /> Tree
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default SPARQLModal;
+                    {/* 6. Graph Topology Summary */}
+                    <div className="pt-2 border-t border-slate-800/50">
+                        <div className="text-[10px] text-slate-500 flex justify-between">
+                            <span>Relations: {edges.filter(e => e.source === hoverNode.node.id || e

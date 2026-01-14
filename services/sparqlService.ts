@@ -27,11 +27,18 @@ const resolveIRI = (val: string, prefixes: Record<string, string>): string => {
     const clean = val.trim();
     if (clean.startsWith('<') && clean.endsWith('>')) return clean.slice(1, -1);
     
+    // Handle "a" keyword for rdf:type
+    if (clean === 'a') return prefixes['rdf'] + 'type';
+
     const parts = clean.split(':');
     if (parts.length === 2) {
         const p = parts[0];
         const local = parts[1];
-        if (prefixes[p]) return prefixes[p] + local;
+        if (prefixes[p] !== undefined) return prefixes[p] + local;
+    } else if (clean.indexOf(':') === -1) {
+        // Empty prefix or base? Assumed logic handled elsewhere or treated as full IRI if no match
+        // If strict, we might check for empty prefix mapping
+        if (prefixes[':'] !== undefined) return prefixes[':'] + clean;
     }
     return clean;
 };
@@ -41,11 +48,14 @@ export const graphToTriples = (nodes: Node<UMLNodeData>[], edges: Edge[], defaul
     const triples: Triple[] = [];
     const labelMap: Record<string, string> = {}; // IRI -> Label
 
+    // Ensure base ends with # or /
+    const base = defaultBaseIRI.endsWith('#') || defaultBaseIRI.endsWith('/') ? defaultBaseIRI : defaultBaseIRI + '#';
+
     // Helper to get Node IRI
     const getNodeIRI = (n: Node<UMLNodeData>) => {
         if (n.data.iri) return n.data.iri;
         // Generate a local IRI based on label if missing
-        return `${defaultBaseIRI}${n.data.label.replace(/\s+/g, '_')}`;
+        return `${base}${n.data.label.replace(/\s+/g, '_')}`;
     };
 
     // Helper to register label
@@ -79,13 +89,13 @@ export const graphToTriples = (nodes: Node<UMLNodeData>[], edges: Edge[], defaul
             case ElementType.OWL_DATATYPE: typeIRI = STANDARD_PREFIXES.rdfs + 'Datatype'; break;
         }
 
-        triples.push({ s, p: STANDARD_PREFIXES.rdf + 'type', o: typeIRI });
-        triples.push({ s, p: STANDARD_PREFIXES.rdfs + 'label', o: label });
+        if (typeIRI) triples.push({ s, p: STANDARD_PREFIXES.rdf + 'type', o: typeIRI });
+        triples.push({ s, p: STANDARD_PREFIXES.rdfs + 'label', o: `"${label}"` });
         
         // Attributes
         if (n.data.attributes) {
             n.data.attributes.forEach(attr => {
-                triples.push({ s, p: defaultBaseIRI + 'hasAttribute', o: attr.name });
+                triples.push({ s, p: base + 'hasAttribute', o: `"${attr.name}"` });
             });
         }
     });
@@ -110,7 +120,7 @@ export const graphToTriples = (nodes: Node<UMLNodeData>[], edges: Edge[], defaul
                 pIRI = getNodeIRI(propNode);
             } else if (!pred.startsWith('http')) {
                 // Assume local property
-                pIRI = `${defaultBaseIRI}${pred.replace(/\s+/g, '_')}`;
+                pIRI = `${base}${pred.replace(/\s+/g, '_')}`;
             }
         }
 
@@ -121,49 +131,60 @@ export const graphToTriples = (nodes: Node<UMLNodeData>[], edges: Edge[], defaul
 };
 
 // 2. Query Engine
-export const executeSparql = (query: string, nodes: Node<UMLNodeData>[], edges: Edge[]): SparqlResult => {
+export const executeSparql = (query: string, nodes: Node<UMLNodeData>[], edges: Edge[], baseIri = 'http://example.org/ontology#'): SparqlResult => {
     const startTime = performance.now();
-    const { triples, labelMap } = graphToTriples(nodes, edges);
+    const { triples, labelMap } = graphToTriples(nodes, edges, baseIri);
 
     // 1. Parse Prefixes
     const queryPrefixes: Record<string, string> = { ...STANDARD_PREFIXES };
-    // Default base for this session (mock)
-    queryPrefixes[':'] = 'http://example.org/ontology#';
-    queryPrefixes['ex'] = 'http://example.org/ontology#';
+    // Default base
+    queryPrefixes[':'] = baseIri.endsWith('#') || baseIri.endsWith('/') ? baseIri : baseIri + '#';
+    queryPrefixes['ex'] = baseIri.endsWith('#') || baseIri.endsWith('/') ? baseIri : baseIri + '#';
 
-    const prefixLines = query.match(/PREFIX\s+([a-zA-Z0-9_-]*:)\s*<([^>]+)>/gi);
-    if (prefixLines) {
-        prefixLines.forEach(line => {
-            const match = line.match(/PREFIX\s+([a-zA-Z0-9_-]*:)\s*<([^>]+)>/i);
-            if (match) {
-                queryPrefixes[match[1].replace(':', '')] = match[2];
-            }
-        });
+    // Remove comments
+    const cleanQuery = query.replace(/#.*$/gm, '');
+
+    const prefixRegex = /PREFIX\s+([a-zA-Z0-9_-]*:)\s*<([^>]+)>/gi;
+    let prefixMatch;
+    while ((prefixMatch = prefixRegex.exec(cleanQuery)) !== null) {
+        const pName = prefixMatch[1].replace(':', '');
+        queryPrefixes[pName] = prefixMatch[2];
+        if (pName === '') queryPrefixes[':'] = prefixMatch[2]; // Handle empty prefix :
     }
 
-    // 2. Parse Variables & Limit
-    const selectMatch = query.match(/SELECT\s+(.+?)\s+(WHERE|FROM|LIMIT)/i);
+    // 2. Parse Variables & Limit & Distinct
+    const isDistinct = /SELECT\s+DISTINCT/i.test(cleanQuery);
+    
+    // Improved Regex for SELECT: Captures vars until { or WHERE or FROM or LIMIT
+    const selectMatch = cleanQuery.match(/SELECT\s+(?:DISTINCT\s+)?(.+?)(?=\s*\{|\s+WHERE|\s+FROM|\s+LIMIT|$)/i);
     if (!selectMatch) throw new Error("Invalid SPARQL: Missing SELECT clause");
     
     const varsRaw = selectMatch[1].trim();
     const isStar = varsRaw === '*';
     const variables = isStar ? [] : varsRaw.split(/\s+/).map(v => v.replace('?', ''));
 
-    const limitMatch = query.match(/LIMIT\s+(\d+)/i);
+    const limitMatch = cleanQuery.match(/LIMIT\s+(\d+)/i);
     const limit = limitMatch ? parseInt(limitMatch[1], 10) : Infinity;
 
-    // 3. Extract WHERE pattern
-    const whereMatch = query.match(/WHERE\s*\{([\s\S]*)\}/i);
-    if (!whereMatch) throw new Error("Invalid SPARQL: Missing WHERE clause");
+    // 3. Extract Pattern Block (implicit WHERE support)
+    // Matches { ... } that is not part of the prefix or select line
+    // We look for the first outer {
+    const blockStart = cleanQuery.indexOf('{');
+    const blockEnd = cleanQuery.lastIndexOf('}');
     
-    const patternBlock = whereMatch[1];
+    if (blockStart === -1 || blockEnd === -1) throw new Error("Invalid SPARQL: Missing pattern block { ... }");
     
+    const patternBlock = cleanQuery.substring(blockStart + 1, blockEnd);
+    
+    // Split patterns by dot, ignoring dots inside quotes
+    // Simple split for this mock engine (robust splitting is complex)
     const patterns = patternBlock.split('.')
         .map(p => p.trim())
-        .filter(p => p.length > 0 && !p.startsWith('#'))
+        .filter(p => p.length > 0)
         .map(p => {
-            const parts = p.split(/\s+/);
-            if (parts.length < 3) return null;
+            // Split by whitespace
+            const parts = p.match(/(?:[^\s"]+|"[^"]*")+/g);
+            if (!parts || parts.length < 3) return null;
             const s = parts[0];
             const pred = parts[1];
             const o = parts.slice(2).join(' '); 
@@ -187,6 +208,7 @@ export const executeSparql = (query: string, nodes: Node<UMLNodeData>[], edges: 
                 if (qP && t.p !== qP) return false;
                 if (qO) {
                     if (t.o === qO) return true;
+                    // Handle potential literal quoting differences
                     const cleanTO = t.o.replace(/^"|"$/g, '');
                     const cleanQO = qO.replace(/^"|"$/g, '');
                     if (cleanTO !== cleanQO) return false;
@@ -205,7 +227,26 @@ export const executeSparql = (query: string, nodes: Node<UMLNodeData>[], edges: 
         solutions = newSolutions;
     }
 
-    const finalVars = isStar ? Array.from(new Set(solutions.flatMap(Object.keys))) : variables;
+    let finalVars = isStar ? Array.from(new Set(solutions.flatMap(Object.keys))) : variables;
+    
+    // Filter out rows that don't have all requested variables (INNER JOIN semantic)
+    // Only if not star select (Star select usually implies all bound variables)
+    if (!isStar) {
+        solutions = solutions.filter(sol => finalVars.every(v => sol[v] !== undefined));
+    }
+
+    // Apply DISTINCT
+    if (isDistinct) {
+        const seen = new Set<string>();
+        solutions = solutions.filter(sol => {
+            // Create a key based on selected variables
+            const key = finalVars.map(v => sol[v]).join('||');
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
     const limitedSolutions = solutions.slice(0, limit);
     
     const rows = limitedSolutions.map(sol => {
@@ -228,8 +269,8 @@ export const SPARQL_TEMPLATES = [
         query: `PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX owl: <http://www.w3.org/2002/07/owl#>
 
-SELECT ?class WHERE {
-  ?class rdf:type owl:Class
+SELECT ?class {
+  ?class rdf:type owl:Class .
 }`
     },
     {
@@ -238,7 +279,7 @@ SELECT ?class WHERE {
         query: `PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
 SELECT ?sub ?super WHERE {
-  ?sub rdfs:subClassOf ?super
+  ?sub rdfs:subClassOf ?super .
 }`
     },
     {
@@ -247,9 +288,9 @@ SELECT ?sub ?super WHERE {
         query: `PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX owl: <http://www.w3.org/2002/07/owl#>
 
-SELECT ?indiv ?type WHERE {
+SELECT DISTINCT ?indiv ?type {
   ?indiv rdf:type ?type .
-  ?type rdf:type owl:Class
+  ?type rdf:type owl:Class .
 } LIMIT 50`
     }
 ];

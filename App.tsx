@@ -72,7 +72,7 @@ function App() {
   // State
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
-  const [projectData, setProjectData] = useState<ProjectData>({ name: 'Untitled Ontology', defaultPrefix: 'ex' });
+  const [projectData, setProjectData] = useState<ProjectData>({ name: 'Untitled Ontology', defaultPrefix: 'ex', baseIri: 'http://example.org/ontology#' });
   
   const [viewMode, setViewMode] = useState<'design' | 'code' | 'graph' | 'mindmap' | 'tree' | 'uml' | 'peirce' | 'entities' | 'owlviz' | 'workflow'>('design');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -290,6 +290,38 @@ function App() {
         }
     });
   };
+
+  const handleCreateIndividual = useCallback((clsId: string, name: string, dataValues?: Record<string, string>) => {
+      // 1. Construct IRI
+      const base = projectData.baseIri || 'http://example.org/ontology#';
+      const prefix = (base.endsWith('#') || base.endsWith('/')) ? base : base + '#';
+      const localName = name.trim().replace(/\s+/g, '_');
+      const iri = `${prefix}${localName}`;
+
+      // 2. Create Attributes from Data Properties
+      const attributes = dataValues ? Object.entries(dataValues).filter(([_, v]) => v).map(([k, v], i) => ({
+          id: `attr-${Date.now()}-${i}`,
+          name: `${k} = ${v}`,
+          type: 'Literal',
+          visibility: '+' as const
+      })) : [];
+
+      const newIndiv: Node<UMLNodeData> = {
+          id: `indiv-${Date.now()}`,
+          type: 'umlNode',
+          position: { x: Math.random() * 500, y: Math.random() * 500 },
+          data: { 
+              label: name, 
+              type: ElementType.OWL_NAMED_INDIVIDUAL,
+              iri: iri,
+              attributes: attributes, 
+              methods: [] 
+          }
+      };
+      setNodes(nds => [...nds, newIndiv]);
+      setEdges(eds => addEdge({ id: `e-${Date.now()}`, source: newIndiv.id, target: clsId, label: 'rdf:type', type: 'smoothstep' }, eds));
+      addToast(`Created Individual ${name}`, 'success');
+  }, [setNodes, setEdges, projectData.baseIri]);
 
   useEffect(() => {
       const handleFocusIn = (e: FocusEvent) => {
@@ -587,6 +619,8 @@ function App() {
                         searchTerm={searchTerm} 
                         selectedNodeId={selectedNodeId}
                         onNavigate={handleNavigate}
+                        onCreateIndividual={handleCreateIndividual}
+                        baseIri={projectData.baseIri}
                     />
                 )}
 
@@ -663,17 +697,7 @@ function App() {
                     onUpdateEdge={handleUpdateEdge}
                     onDeleteNode={handleDeleteNode}
                     onDeleteEdge={handleDeleteEdge}
-                    onCreateIndividual={(clsId, name) => {
-                        const newIndiv: Node<UMLNodeData> = {
-                            id: `indiv-${Date.now()}`,
-                            type: 'umlNode',
-                            position: { x: Math.random() * 500, y: Math.random() * 500 },
-                            data: { label: name, type: ElementType.OWL_NAMED_INDIVIDUAL, attributes: [], methods: [] }
-                        };
-                        setNodes(nds => [...nds, newIndiv]);
-                        setEdges(eds => addEdge({ id: `e-${Date.now()}`, source: newIndiv.id, target: clsId, label: 'rdf:type', type: 'smoothstep' }, eds));
-                        addToast(`Created Individual ${name}`, 'success');
-                    }}
+                    onCreateIndividual={handleCreateIndividual}
                     onClose={() => { setSelectedNodeId(null); setSelectedEdgeId(null); }}
                     onNavigate={handleNavigate}
                 />
@@ -764,6 +788,7 @@ function App() {
             nodes={nodes} 
             edges={edges} 
             onNavigate={handleNavigate}
+            baseIri={projectData.baseIri}
         />
         <ManchesterSyntaxModal
             isOpen={isManchesterOpen}

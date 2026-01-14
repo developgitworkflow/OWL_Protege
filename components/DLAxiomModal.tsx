@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { X, Sigma, BookOpen, Database, User, ArrowRightLeft, Info, Plus, Check, ListFilter, Tag, Command, Hash } from 'lucide-react';
+import { X, Sigma, BookOpen, Database, User, ArrowRightLeft, Info, Plus, Check, ListFilter, Tag, Command, Hash, Search } from 'lucide-react';
 import { Node, Edge } from 'reactflow';
 import { UMLNodeData, ElementType } from '../types';
 import { validateManchesterSyntax } from '../services/manchesterValidator';
@@ -119,6 +119,7 @@ const getCharacteristicExplanation = (prop: string, char: string) => {
 
 const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edges, onUpdateOntology }) => {
   const [activeTab, setActiveTab] = useState<'tbox' | 'abox' | 'rbox'>('tbox');
+  const [searchTerm, setSearchTerm] = useState('');
   const [tooltip, setTooltip] = useState<{x: number, y: number, text: string} | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -372,39 +373,51 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
       const tbox: React.ReactNode[] = [];
       const rbox: React.ReactNode[] = [];
       const abox: React.ReactNode[] = [];
+      
+      const term = searchTerm.toLowerCase();
 
-      const createRow = (key: string, content: React.ReactNode, label: string, explanation: string) => (
-          <div 
-            key={key} 
-            className="py-2.5 px-3 border-b border-slate-800 flex items-center justify-between group hover:bg-slate-800/50 transition-colors cursor-help rounded-md my-0.5"
-            onMouseMove={(e) => handleMouseMove(e, explanation)}
-            onMouseLeave={handleMouseLeave}
-          >
-              <div className="font-mono text-sm text-slate-300">
-                  {content}
+      const createRow = (key: string, content: React.ReactNode, label: string, explanation: string, rawText: string) => {
+          if (term && !rawText.toLowerCase().includes(term) && !explanation.toLowerCase().includes(term)) {
+              return null;
+          }
+          
+          return (
+              <div 
+                key={key} 
+                className="py-2.5 px-3 border-b border-slate-800 flex items-center justify-between group hover:bg-slate-800/50 transition-colors cursor-help rounded-md my-0.5"
+                onMouseMove={(e) => handleMouseMove(e, explanation)}
+                onMouseLeave={handleMouseLeave}
+              >
+                  <div className="font-mono text-sm text-slate-300">
+                      {content}
+                  </div>
+                  <span className="text-[9px] bg-slate-950 text-slate-500 px-1.5 py-0.5 rounded border border-slate-800 uppercase tracking-tight group-hover:border-slate-700 transition-colors">{label}</span>
               </div>
-              <span className="text-[9px] bg-slate-950 text-slate-500 px-1.5 py-0.5 rounded border border-slate-800 uppercase tracking-tight group-hover:border-slate-700 transition-colors">{label}</span>
-          </div>
-      );
+          );
+      };
 
       nodes.forEach(node => {
           const label = node.data.label;
           
           node.data.methods.forEach(m => {
               const explanation = getAxiomExplanation(label, m.name, m.returnType);
+              const rawText = `${label} ${m.name} ${m.returnType}`;
               const ax = createRow(
                   `${node.id}-${m.id}`, 
                   renderAxiom(label, m.name, m.returnType), 
                   m.name, 
-                  explanation
+                  explanation,
+                  rawText
               );
 
-              if (node.data.type === ElementType.OWL_CLASS) tbox.push(ax);
-              else if (node.data.type === ElementType.OWL_NAMED_INDIVIDUAL) {
-                  if (['sameas', 'differentfrom'].includes(m.name.toLowerCase())) abox.push(ax);
-                  else tbox.push(ax); 
+              if (ax) {
+                  if (node.data.type === ElementType.OWL_CLASS) tbox.push(ax);
+                  else if (node.data.type === ElementType.OWL_NAMED_INDIVIDUAL) {
+                      if (['sameas', 'differentfrom'].includes(m.name.toLowerCase())) abox.push(ax);
+                      else tbox.push(ax); 
+                  }
+                  else rbox.push(ax);
               }
-              else rbox.push(ax);
           });
 
           node.data.attributes.forEach(attr => {
@@ -419,7 +432,9 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                   
                   if (symbol) {
                       const explanation = getCharacteristicExplanation(label, char);
-                      rbox.push(createRow(`${node.id}-${attr.id}`, <div className="text-blue-300">{symbol}</div>, char, explanation));
+                      const rawText = `${label} ${char}`;
+                      const ax = createRow(`${node.id}-${attr.id}`, <div className="text-blue-300">{symbol}</div>, char, explanation, rawText);
+                      if (ax) rbox.push(ax);
                   }
               }
           });
@@ -468,15 +483,18 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
           }
 
           if (ax) {
-              const item = createRow(e.id, ax, p, explanation);
-              if (category === 'tbox') tbox.push(item);
-              if (category === 'abox') abox.push(item);
-              if (category === 'rbox') rbox.push(item);
+              const rawText = `${s} ${p} ${t} ${explanation}`;
+              const item = createRow(e.id, ax, p, explanation, rawText);
+              if (item) {
+                  if (category === 'tbox') tbox.push(item);
+                  if (category === 'abox') abox.push(item);
+                  if (category === 'rbox') rbox.push(item);
+              }
           }
       });
 
       return { tbox, rbox, abox };
-  }, [nodes, edges]);
+  }, [nodes, edges, searchTerm]);
 
   const getSuggestionIcon = (type: string) => {
       switch(type) {
@@ -533,7 +551,19 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                 <p className="text-xs text-slate-400">Formal definitions (TBox, RBox, ABox)</p>
              </div>
           </div>
-          <div className="flex items-center gap-2">
+          
+          <div className="flex items-center gap-4">
+              <div className="relative group">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input 
+                      type="text"
+                      placeholder="Filter axioms..."
+                      className="bg-slate-800 border border-slate-700 rounded-full pl-9 pr-4 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all w-48"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+              </div>
+              <div className="h-6 w-px bg-slate-800" />
               {!isAdding && (
                   <button 
                     onClick={() => setIsAdding(true)}
@@ -763,7 +793,7 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                             {axioms.tbox.length > 0 ? axioms.tbox : (
                                 <div className="flex flex-col items-center justify-center py-10 text-slate-600 gap-2">
                                     <ListFilter size={24} className="opacity-20" />
-                                    <span className="italic text-xs">No Class axioms defined.</span>
+                                    <span className="italic text-xs">No Class axioms found.</span>
                                 </div>
                             )}
                         </div>
@@ -773,7 +803,7 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                             {axioms.rbox.length > 0 ? axioms.rbox : (
                                 <div className="flex flex-col items-center justify-center py-10 text-slate-600 gap-2">
                                     <ListFilter size={24} className="opacity-20" />
-                                    <span className="italic text-xs">No Property axioms defined.</span>
+                                    <span className="italic text-xs">No Property axioms found.</span>
                                 </div>
                             )}
                         </div>
@@ -783,7 +813,7 @@ const DLAxiomModal: React.FC<DLAxiomModalProps> = ({ isOpen, onClose, nodes, edg
                             {axioms.abox.length > 0 ? axioms.abox : (
                                 <div className="flex flex-col items-center justify-center py-10 text-slate-600 gap-2">
                                     <ListFilter size={24} className="opacity-20" />
-                                    <span className="italic text-xs">No Individual assertions defined.</span>
+                                    <span className="italic text-xs">No Individual assertions found.</span>
                                 </div>
                             )}
                         </div>

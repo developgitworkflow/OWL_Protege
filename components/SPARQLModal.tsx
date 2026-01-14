@@ -575,4 +575,38 @@ const SPARQLModal: React.FC<SPARQLModalProps> = ({ isOpen, onClose, nodes, edges
                     {/* 6. Graph Topology Summary */}
                     <div className="pt-2 border-t border-slate-800/50">
                         <div className="text-[10px] text-slate-500 flex justify-between">
-                            <span>Relations: {edges.filter(e => e.source === hoverNode.node.id || e
+                            <span>Relations: {edges.filter(e => e.source === hoverNode.node.id || e.target === hoverNode.node.id).length}</span>
+                            <span>Axioms: {hoverNode.node.data.methods?.length || 0}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer Actions */}
+                <div className="grid grid-cols-3 gap-1 p-2 bg-slate-950 border-t border-slate-800">
+                    <button 
+                        onClick={() => { if(onNavigate) onNavigate('design', hoverNode.node.id); onClose(); }}
+                        className="flex flex-col items-center gap-1 p-2 hover:bg-slate-800 rounded text-[10px] text-slate-400 hover:text-indigo-400 transition-colors"
+                    >
+                        <Layers size={14} /> Graph Focus
+                    </button>
+                    <button 
+                        onClick={() => { if(onNavigate) onNavigate('entities', hoverNode.node.id); onClose(); }}
+                        className="flex flex-col items-center gap-1 p-2 hover:bg-slate-800 rounded text-[10px] text-slate-400 hover:text-blue-400 transition-colors"
+                    >
+                        <List size={14} /> Catalog Edit
+                    </button>
+                    <button 
+                        onClick={() => { if(onNavigate) onNavigate('tree', hoverNode.node.id); onClose(); }}
+                        className="flex flex-col items-center gap-1 p-2 hover:bg-slate-800 rounded text-[10px] text-slate-400 hover:text-emerald-400 transition-colors"
+                    >
+                        <FolderTree size={14} /> Taxonomy
+                    </button>
+                </div>
+            </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default SPARQLModal;

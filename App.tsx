@@ -14,7 +14,8 @@ import ReactFlow, {
   MiniMap,
   useReactFlow,
   ConnectionMode,
-  Panel
+  Panel,
+  NodeChange
 } from 'reactflow';
 
 import TopBar from './components/TopBar';
@@ -338,8 +339,6 @@ function App() {
       return () => document.removeEventListener('focusin', handleFocusIn);
   }, []);
 
-  // ... (Keyboard Shortcuts logic remains the same)
-
   const handleAddNode = (type: ElementType, label: string) => {
       const newNode: Node<UMLNodeData> = {
           id: `node-${Date.now()}`,
@@ -396,52 +395,88 @@ function App() {
   const handleLoadContent = async (content: string, fileName: string) => {
       try {
           let result: any = null;
-          const lowerName = fileName.toLowerCase();
+          const trimmed = content.trim();
+
+          // Robust Content Detection Strategy
+          // 1. JSON
+          if (trimmed.startsWith('{')) {
+              try {
+                  result = JSON.parse(content);
+              } catch (e) {
+                  console.warn("Attempted JSON parse failed", e);
+              }
+          } 
           
-          if (lowerName.endsWith('.json')) {
-              result = JSON.parse(content);
-          } else if (lowerName.endsWith('.ofn')) {
-              result = parseFunctionalSyntax(content);
-          } else if (lowerName.endsWith('.owl') || lowerName.endsWith('.rdf') || lowerName.endsWith('.xml')) {
+          // 2. RDF/XML (Often .owl) - Check for XML tag
+          else if (trimmed.startsWith('<')) {
               try {
                   result = parseRdfXml(content);
               } catch (xmlError) {
-                  console.warn("XML parse failed, trying Turtle/N-Triples fallback for OWL file", xmlError);
-                  result = await parseTurtle(content);
+                  console.warn("XML parse failed, attempting Turtle fallback", xmlError);
+                  // Fallback to Turtle if XML fails (some .owl files are actually Turtle)
+                  try {
+                      result = await parseTurtle(content);
+                  } catch (e) {
+                      throw new Error("Failed to parse as RDF/XML or Turtle.");
+                  }
               }
-          } else if (lowerName.endsWith('.ttl') || lowerName.endsWith('.nt') || lowerName.endsWith('.n3')) {
-              result = await parseTurtle(content);
-          } else if (lowerName.endsWith('.omn') || lowerName.endsWith('.manchester')) {
+          }
+          
+          // 3. Functional Syntax (Prefix(...) or Ontology(...))
+          else if (/^Prefix\s*\(/.test(trimmed) || /^Ontology\s*\(/.test(trimmed)) {
+              result = parseFunctionalSyntax(content);
+          }
+          
+          // 4. Manchester Syntax (Prefix: ...)
+          else if (/^Prefix:/.test(trimmed) || /^Ontology:/.test(trimmed) || /^Class:/.test(trimmed)) {
               result = parseManchesterSyntax(content);
-          } else {
-              // Fallback chain
-              try { result = parseFunctionalSyntax(content); }
-              catch {
-                  try { result = await parseTurtle(content); }
-                  catch { result = parseRdfXml(content); }
+          }
+          
+          // 5. Turtle / N-Triples (Default fallback for text based RDF)
+          else if (trimmed.includes('@prefix') || trimmed.includes('@base') || trimmed.includes(' a ') || trimmed.includes(' .')) {
+              result = await parseTurtle(content);
+          }
+          
+          // 6. Extension-based Fallback (if content sniffing is ambiguous)
+          else {
+              const lowerName = fileName.toLowerCase();
+              if (lowerName.endsWith('.json')) result = JSON.parse(content);
+              else if (lowerName.endsWith('.ofn')) result = parseFunctionalSyntax(content);
+              else if (lowerName.endsWith('.omn') || lowerName.endsWith('.manchester')) result = parseManchesterSyntax(content);
+              else {
+                  // Final attempt as Turtle
+                  result = await parseTurtle(content);
               }
           }
 
           if (result && result.nodes) {
-              const validNodeIds = new Set(result.nodes.map((n: any) => n.id));
+              // Sanitize Nodes: Ensure array properties exist
+              const sanitizedNodes = result.nodes.map((n: any) => ({
+                  ...n,
+                  data: {
+                      ...n.data,
+                      attributes: n.data.attributes || [],
+                      methods: n.data.methods || [],
+                      annotations: n.data.annotations || [],
+                      showAnnotations: showAnnotations // Preserve current view setting
+                  }
+              }));
+
+              const validNodeIds = new Set(sanitizedNodes.map((n: any) => n.id));
               const validEdges = (result.edges || []).filter((e: any) => 
                   validNodeIds.has(e.source) && validNodeIds.has(e.target)
               );
 
-              // Preserve showAnnotations state on import
-              const nodesWithState = result.nodes.map((n: any) => ({
-                  ...n,
-                  data: { ...n.data, showAnnotations: showAnnotations }
-              }));
-
-              setNodes(nodesWithState);
+              setNodes(sanitizedNodes);
               setEdges(validEdges);
               
               if (result.metadata) setProjectData(prev => ({ ...prev, ...result.metadata }));
-              addToast(`Imported ${result.nodes.length} entities.`, 'success');
+              addToast(`Imported ${sanitizedNodes.length} entities successfully.`, 'success');
               
-              setRepository(initRepository({ nodes: result.nodes, edges: validEdges, metadata: result.metadata || projectData }));
+              setRepository(initRepository({ nodes: sanitizedNodes, edges: validEdges, metadata: result.metadata || projectData }));
               setTimeout(() => fitView(), 100);
+          } else {
+              throw new Error("Parser returned no nodes.");
           }
       } catch (e) {
           console.error(e);
@@ -458,7 +493,19 @@ function App() {
       reader.readAsText(file);
   };
 
-  // ... (handleLoadUrl, handleRestoreSnapshot remains the same)
+  const handleLoadUrl = async (url: string) => {
+      try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const text = await res.text();
+          // Use filename from URL if possible
+          const fileName = url.split('/').pop() || 'import.ttl';
+          handleLoadContent(text, fileName);
+      } catch (e) {
+          console.error(e);
+          addToast(`Failed to fetch URL: ${(e as Error).message}`, 'error');
+      }
+  };
 
   const visibleNodes = useMemo(() => {
       return showIndividuals 
@@ -810,7 +857,7 @@ function App() {
         <ImportUrlModal 
             isOpen={isImportUrlOpen} 
             onClose={() => setIsImportUrlOpen(false)} 
-            onImport={(url) => { /* logic in handleLoadUrl */ }}
+            onImport={handleLoadUrl}
         />
         
         <Toast toasts={toasts} onDismiss={removeToast} />
